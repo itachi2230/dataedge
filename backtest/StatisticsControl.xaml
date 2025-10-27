@@ -1,0 +1,284 @@
+﻿<UserControl 
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:backtest"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" x:Class="backtest.StatisticsControl" 
+             d:DesignWidth="1170" d:DesignHeight="695"
+             >
+    <UserControl.Resources>
+        <!-- Animation pour la première ellipse -->
+        <Storyboard x:Key="RotateEllipse1Storyboard" RepeatBehavior="Forever">
+            <DoubleAnimation 
+                Storyboard.TargetName="RotatingEllipse1" 
+                Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                From="0" To="360" Duration="0:0:5" />
+        </Storyboard>
+
+        <!-- Animation pour la deuxième ellipse -->
+        <Storyboard x:Key="RotateEllipse2Storyboard" RepeatBehavior="Forever">
+            <DoubleAnimation 
+                Storyboard.TargetName="RotatingEllipse2" 
+                Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                From="0" To="360" Duration="0:0:10" />
+        </Storyboard>
+    </UserControl.Resources>
+
+    <UserControl.Triggers>
+        <!-- Démarrer les animations au chargement du UserControl -->
+        <EventTrigger RoutedEvent="UserControl.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource RotateEllipse1Storyboard}"/>
+            <BeginStoryboard Storyboard="{StaticResource RotateEllipse2Storyboard}"/>
+        </EventTrigger>
+    </UserControl.Triggers>
+    <!-- Fond général futuriste avec dégradé -->
+    <Grid x:Name="statisticsDashboard" Margin="0,30,0,0">
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#001F3F" Offset="0.0" />
+                <GradientStop Color="#021B79" Offset="1.0" />
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <TextBox Name="nomText" Text="Nom de la Stratégie"
+                   Foreground="White"
+                   FontSize="30"
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Top"
+                   Margin="260,0,264,0" BorderBrush="{x:Null}" Background="{x:Null}" SelectionBrush="{x:Null}"/>
+
+        <!-- Section des statistiques clés -->
+
+        <DataGrid x:Name="TradesDataGrid"
+          AutoGenerateColumns="False"
+          HeadersVisibility="Column"
+          Background="#011627"
+          Foreground="White"
+          GridLinesVisibility="None"
+          BorderThickness="1"
+          BorderBrush="#01405F"
+          RowHeight="30"
+          RowBackground="#012945"
+          AlternatingRowBackground="#01355A"
+          Margin="10,338,360,10"
+          FontSize="11"
+          MouseRightButtonDown="addTrade"
+          ColumnWidth="*"
+          CanUserResizeRows="False"
+          CanUserSortColumns="True"  SelectionChanged="TradesDataGrid_SelectionChanged" MouseDoubleClick="TradesDataGrid_SelectionChanged_1" KeyUp="TradesDataGrid_KeyUp" IsReadOnly="True">
+
+            <!-- Style pour les lignes -->
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Margin" Value="2,0" />
+                    <Setter Property="VerticalAlignment" Value="Center" />
+                    <Setter Property="Background" Value="#012945" />
+                    <Setter Property="BorderBrush" Value="#01405F" />
+                    <Setter Property="BorderThickness" Value="0,0,0,1" />
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect ShadowDepth="2" BlurRadius="4" Color="Black" Opacity="0.5" />
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <!-- Effet de survol -->
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#014C75" />
+                            <Setter Property="Foreground" Value="White" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+
+            <!-- Style pour les en-têtes des colonnes -->
+            <DataGrid.ColumnHeaderStyle>
+                <Style TargetType="{x:Type DataGridColumnHeader}">
+                    <Setter Property="Background" Value="#013355" />
+                    <Setter Property="Foreground" Value="White" />
+                    <Setter Property="FontWeight" Value="Bold" />
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Padding" Value="8,4" />
+                    <Setter Property="BorderBrush" Value="#01405F" />
+                    <Setter Property="BorderThickness" Value="0,0,0,2" />
+                </Style>
+            </DataGrid.ColumnHeaderStyle>
+
+            <!-- Définition des colonnes -->
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Date" Binding="{Binding Date}" Width="*" />
+                <DataGridTextColumn Header="Instrument" Binding="{Binding Instrument}" Width="*" />
+                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="*" />
+                <DataGridTextColumn Header="Montant" Binding="{Binding Amount}" Width="*" />
+                <DataGridTextColumn Header="Résultat" Binding="{Binding Result}" Width="*" />
+            </DataGrid.Columns>
+
+            <!-- Style de sélection -->
+            <DataGrid.Resources>
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#015A8F" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="White" />
+                <Style TargetType="TextBlock">
+                    <Setter Property="HorizontalAlignment" Value="Center" />
+                    <Setter Property="VerticalAlignment" Value="Center" />
+                </Style>
+            </DataGrid.Resources>
+        </DataGrid>
+
+        <Button HorizontalAlignment="Left"
+        VerticalAlignment="Top"
+        Width="46"
+        Height="40"
+       
+        Background="#FF002137"
+        Foreground="White"
+        BorderBrush="Transparent"
+        Click="BackToDashboard_Click">
+            <Button.Style>
+                <Style TargetType="{x:Type Button}">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type Button}">
+                                <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="5"
+                                Padding="1" Margin="0,0,7.2,0">
+                                    <Grid>
+                                        <!-- Flèche pour le retour -->
+                                        <Path Data="M 10,20 L 30,10 L 30,15 L 50,15 L 50,25 L 30,25 L 30,30 Z"
+                                      Fill="{TemplateBinding Foreground}" />
+                                    </Grid>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Button.Style>
+        </Button>
+
+        <StackPanel Orientation="Horizontal"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Margin="23,189,347,0" Name="MyStackPanel1"
+                    >
+
+            <!-- Carte pour une statistique individuelle -->
+            <Border Background="#02204F" CornerRadius="10" Width="160" Height="90" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Jour le plus favorable" Foreground="LightGray" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="mardi" Foreground="Lime" FontSize="24" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="#02204F" CornerRadius="10" Width="161" Height="83" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Jour le moins favorable" Foreground="LightGray" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="lundi" Foreground="Red" FontSize="24" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="#02204F" CornerRadius="10" Width="162" Height="82" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Trades Gagnants" Foreground="LightGray" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="34" Foreground="Lime" FontSize="24" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="#02204F" CornerRadius="10" Width="136" Height="87" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Trades Perdus" Foreground="LightGray" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="64" Foreground="Red" FontSize="24" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="Plus >>>>" FontSize="14" FontWeight="Bold" TextAlignment="Center" Height="26" Background="Black" MouseUp="NbreTrade_MouseUp">
+                <TextBlock.Foreground>
+                    <LinearGradientBrush EndPoint="0.5,1" MappingMode="RelativeToBoundingBox" StartPoint="0.5,0">
+                        <GradientStop Color="#FF2EFF00" Offset="0.126"/>
+                        <GradientStop Color="White" Offset="0.925"/>
+                    </LinearGradientBrush>
+                </TextBlock.Foreground>
+            </TextBlock>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal"
+             HorizontalAlignment="Center"
+            VerticalAlignment="Top" Name="MyStackPanel2"
+            Margin="23,50,347,0" 
+                    >
+
+            <!-- Carte pour une statistique individuelle -->
+            <Border Background="#02204F" CornerRadius="10" Width="180" Height="100" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="X trade gagnants et x trade perdant">
+                    <TextBlock Foreground="LightGray" FontSize="14" FontWeight="Bold" Text="WINRATE" />
+                    <TextBlock Text="79%" Foreground="Lime" FontSize="36" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="#02204F" CornerRadius="10" Width="180" Height="100" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="RR MOYEN" Foreground="LightGray" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="5" Foreground="Red" FontSize="36" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="#02204F" CornerRadius="10" Width="180" Height="100" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="RR MAX" Foreground="LightGray" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="5" Foreground="Lime" FontSize="36" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="#02204F" CornerRadius="10" Width="180" Height="100" Margin="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="RR MIN" Foreground="LightGray" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="2" Foreground="Red" FontSize="36" FontWeight="Bold" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+        <Grid   HorizontalAlignment="Right" Margin="0,10"  Width="347">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="302*"/>
+                <RowDefinition Height="343*"/>
+            </Grid.RowDefinitions>
+            <StackPanel Height="322" VerticalAlignment="Top" Grid.RowSpan="2">
+                <TextBlock Text="NOMBRE DE TRADE" Foreground="LightGray" FontSize="14" FontWeight="Bold" TextAlignment="Center" Margin="62,0,0,0" />
+                <Grid>
+                    <StackPanel Height="302" VerticalAlignment="Top" Margin="0,10,10,0">
+                        <Grid Height="267" Margin="57,0,10,0" HorizontalAlignment="Center" Width="270" VerticalAlignment="Center">
+
+                            <!-- Ellipse en fond -->
+                            <Ellipse Fill="Gray" Opacity="0.3" Margin="0,10,0,15" StrokeThickness="0"/>
+
+                            <!-- Première ellipse avec animation de rotation -->
+                            <Ellipse x:Name="RotatingEllipse1" Stroke="#00BFFF" StrokeThickness="18" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform Angle="0"/>
+                                </Ellipse.RenderTransform>
+                                <Ellipse.Effect>
+                                    <DropShadowEffect Color="#00BFFF" BlurRadius="10" ShadowDepth="0" />
+                                </Ellipse.Effect>
+                            </Ellipse>
+
+                            <!-- Deuxième ellipse avec une autre vitesse de rotation -->
+                            <Ellipse x:Name="RotatingEllipse2" Stroke="#1E90FF" StrokeThickness="22" RenderTransformOrigin="0.5,0.5" Margin="10,14,9,15">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform Angle="0"/>
+                                </Ellipse.RenderTransform>
+                                <Ellipse.Effect>
+                                    <DropShadowEffect Color="#1E90FF" BlurRadius="10" ShadowDepth="0" />
+                                </Ellipse.Effect>
+                            </Ellipse>
+
+                            <!-- TextBlock au centre -->
+                            <TextBlock Name="nbreTrade" Text="75" FontSize="60" FontWeight="Bold" Foreground="LightGreen"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="31,90,31,105"
+                    Height="72" Width="208" TextAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+            <Border CornerRadius="8" Background="#FF013355" Margin="0,0,0,0" Grid.Row="1">
+                <RichTextBox x:Name="richTextBox" Margin="9,9,9,0" Background="{x:Null}" BorderBrush="{x:Null}" Foreground="#FFCDCBCB" FontSize="14">
+                    <FlowDocument/>
+                </RichTextBox>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

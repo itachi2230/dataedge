@@ -1,0 +1,20 @@
+﻿<UserControl x:Class="backtest.ControlStat"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:backtest" 
+             mc:Ignorable="d" >
+    <Border Width="501" BorderThickness="0,0,1,1"  >
+        <Border.BorderBrush>
+            <LinearGradientBrush EndPoint="0.5,1" MappingMode="RelativeToBoundingBox" StartPoint="0.5,0">
+                <GradientStop Color="Black" Offset="1"/>
+                <GradientStop Color="#FF005DFF" Offset="0.93"/>
+            </LinearGradientBrush>
+        </Border.BorderBrush>
+        <WrapPanel Orientation="Horizontal" Height="21" Margin="0,0,0.333,0"  >
+            <TextBlock x:Name="controlLabel" Margin="8,0,3,0" FontWeight="Bold" Foreground="#FFCDCDCD" Text="Hqhq" FontSize="16" Width="241"  />
+            <TextBlock x:Name="controlBar" Margin="8,0,3,0" FontWeight="Bold" Foreground="#FF3AF909" Text="Hqhq" FontSize="16" Width="235"  />
+        </WrapPanel>
+    </Border>
+</UserControl>

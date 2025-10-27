@@ -1,0 +1,69 @@
+﻿<Window x:Class="backtest.AjoutTrade"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:backtest"
+        xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+        mc:Ignorable="d"
+        Title="Ajout Trade" Height="694.725" Width="524" Background="#1E1E2F" WindowStyle="ToolWindow" WindowStartupLocation="CenterScreen">
+
+    <Grid Margin="10,0,10,2">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition/>
+            <RowDefinition Height="Auto" MinHeight="110" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="AJOUTER UN TRADE" FontSize="18" Foreground="#FFAAA7A7" HorizontalAlignment="Center" Margin="131,10,118,20" Width="247" TextAlignment="Center"/>
+
+        <ScrollViewer Name="conteneurPrinc" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical" VerticalAlignment="Top" Margin="0,0,0,10">
+                <!-- Paire de devises -->
+                <TextBox x:Name="PaireTextBox" Text="Paire de devises" Width="400" Height="30" Background="#333344" Foreground="#FFDEDEDE" ToolTip="La paire de devises" BorderBrush="Transparent" Margin="0,5"/>
+
+                <!-- Type d'ordre et résultat -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5">
+                    <ComboBox x:Name="TypeOrdreComboBox" Width="185" Height="30" Background="#444455" Foreground="Black" Margin="0,5"/>
+                    <ComboBox x:Name="ResultComboBox" Width="185" Height="30" Background="#444455" Foreground="Black" Margin="5,5,0,5"/>
+                </StackPanel>
+
+                <!-- Dates et heures -->
+                <StackPanel Orientation="Horizontal" Width="377">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,1,0" Width="209">
+                        <DatePicker x:Name="DateEntreePicker" Width="100" Background="#444455" Foreground="#FF616161" Margin="0,5" ToolTip="Date d'entrée"/>
+                        <xctk:TimePicker x:Name="TimeEntreePicker" Width="71" Background="#444455" Foreground="White" Margin="5,5,0,5"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,1,0" Width="165">
+                        <DatePicker x:Name="DateSortiePicker" Width="82" Background="#444455" Foreground="#FF616161" Margin="0,5" ToolTip="Date de sortie"/>
+                        <xctk:TimePicker x:Name="TimeSortiePicker" Width="77" Background="#444455" Foreground="White" Margin="5,5,0,5"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- RR, LTF, HTF et Description -->
+                <TextBox x:Name="RrTextBox" Text="Risk/Reward" Width="380" Height="30" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="0,5" ToolTip="Ratio Risque/Rendement"/>
+                <StackPanel Orientation="Horizontal" Width="378">
+                    <TextBox x:Name="ImageLtfTextBox" Text="Lien image LTF" Height="30" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="5,0" Width="192" ToolTip="Lien Tradingview LTF"/>
+                    <TextBox x:Name="ImageHtfTextBox" Text="Lien image HTF" Height="30" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="5,0" Width="169" ToolTip="Lien Tradingview HTF"/>
+                </StackPanel>
+                <TextBox x:Name="descriptionTextbox" Text="Description" Width="380" Height="98" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="0,5" ToolTip="Description ou notes du trade (optionnel)"/>
+                <TextBox x:Name="profitTxt" Text="0" Height="30" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="5,0" Width="146" ToolTip="Lien Tradingview LTF" Visibility="Collapsed"/>
+
+                <!-- Champs personnalisés dynamiques de la stratégie -->
+                <TextBlock Text="Champs Personnalisés" FontSize="16" Foreground="#FFAAA7A7" Margin="0,20,0,5"/>
+                <StackPanel x:Name="DynamicFieldsPanel" Orientation="Vertical" Margin="0,10,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Buttons Enregistrer / Annuler -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="109,2.4,108.6,49" Width="280">
+            <Border CornerRadius="10" Background="#4CAF50" Width="120" Height="40" Margin="9">
+                <Button Content="Enregistrer" Background="Transparent" Foreground="#FFFFF2F2" BorderBrush="Transparent" Click="SaveTrade_Click"/>
+            </Border>
+            <Border CornerRadius="10" Background="#FF5252" Width="120" Height="40" Margin="9">
+                <Button Content="Fermer" Background="Transparent" Foreground="#FFFFF2F2" BorderBrush="Transparent" Click="Cancel_Click"/>
+            </Border>
+        </StackPanel>
+        <TextBlock Name="texetat" HorizontalAlignment="Left" Margin="28,16,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Height="21" Width="55" Foreground="#FF0EFF22" TextAlignment="Center" Visibility="Collapsed"><Run Text="Success"/><Run Text="!"/></TextBlock>
+    </Grid>
+</Window>

@@ -1,0 +1,92 @@
+﻿    private void LoadDayPerformanceChart()
+        {
+            var dayOfWeekStats = stats.DayOfWeekStats;
+
+            var model = new PlotModel
+            {
+                Title = "Performance par jour de la semaine",
+                TextColor = OxyColors.White,
+                PlotAreaBorderColor = OxyColors.White,
+                Background = OxyColors.Black
+            };
+
+            // Ajouter une légende
+            model.LegendPlacement = LegendPlacement.Outside;
+            model.LegendPosition = LegendPosition.BottomCenter;
+            model.LegendOrientation = LegendOrientation.Horizontal;
+            model.LegendTextColor = OxyColors.White;
+
+            // Liste ordonnée des jours de la semaine
+            var orderedDays = new List<DayOfWeek>
+    {
+        DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+        DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+    };
+
+            // Axe X : Catégories pour les jours de la semaine
+            var categoryAxis = new CategoryAxis
+            {
+                Position = AxisPosition.Bottom,
+                TextColor = OxyColors.White,
+                Title = "Jours de la semaine",
+                TitleColor = OxyColors.White
+            };
+
+            // Ajouter les noms français des jours dans l'axe X
+            foreach (var day in orderedDays)
+            {
+                categoryAxis.Labels.Add(TranslateDayToFrench(day.ToString()));
+            }
+
+            // Axe Y : Pourcentage TP/SL
+            var valueAxis = new LinearAxis
+            {
+                Position = AxisPosition.Left,
+                Minimum = 0,
+                Maximum = 100,
+                Title = "Pourcentage (%)",
+                TitleColor = OxyColors.White,
+                TextColor = OxyColors.White,
+                MajorGridlineColor = OxyColor.FromArgb(50, 255, 255, 255), // Gridlines discrètes
+                MinorGridlineColor = OxyColor.FromArgb(30, 255, 255, 255)
+            };
+
+            model.Axes.Add(categoryAxis);
+            model.Axes.Add(valueAxis);
+
+            // Série TP (Take Profit)
+            var tpSeries = new ColumnSeries
+            {
+                Title = "TP (%)",
+                FillColor = OxyColor.FromAColor(180, OxyColors.LimeGreen)
+            };
+
+            // Série SL (Stop Loss)
+            var slSeries = new ColumnSeries
+            {
+                Title = "SL (%)",
+                FillColor = OxyColor.FromAColor(180, OxyColors.Red)
+            };
+
+            // Ajouter les valeurs en respectant l'ordre des jours
+            for (int i = 0; i < orderedDays.Count; i++)
+            {
+                var dayEnum = orderedDays[i];
+
+                if (dayOfWeekStats.TryGetValue(dayEnum, out var stat))
+                {
+                    tpSeries.Items.Add(new ColumnItem(stat.PercentTP, i)); // Ajout avec index explicite
+                    slSeries.Items.Add(new ColumnItem(stat.PercentSL, i));
+                }
+                else
+                {
+                    tpSeries.Items.Add(new ColumnItem(0, i));
+                    slSeries.Items.Add(new ColumnItem(0, i));
+                }
+            }
+
+            model.Series.Add(tpSeries);
+            model.Series.Add(slSeries);
+
+            DayPerformancePlot.Model = model;
+        }

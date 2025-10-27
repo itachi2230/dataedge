@@ -1,0 +1,35 @@
+﻿<Window x:Class="backtest.VisuelTrade"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VisuelTrade" Height="596" Width="973" WindowStartupLocation="CenterScreen" WindowStyle="ToolWindow">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="2*" />
+            <!-- Première zone pour le WebBrowser HTF -->
+            <RowDefinition Height="5" />
+            <!-- Hauteur du GridSplitter -->
+            <RowDefinition Height="2*" />
+            <!-- Deuxième zone pour le WebBrowser LTF -->
+        </Grid.RowDefinitions>
+
+        <!-- WebBrowser pour l'image HTF -->
+        <WebBrowser x:Name="WebBrowserHtf" 
+                    Grid.Row="0" 
+                    ScrollViewer.VerticalScrollBarVisibility="Hidden" 
+                    ScrollViewer.HorizontalScrollBarVisibility="Hidden" />
+
+        <!-- GridSplitter pour redimensionner les zones -->
+        <GridSplitter Grid.Row="1"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      Height="5"
+                      Background="Gray"
+                      ShowsPreview="True" />
+
+        <!-- WebBrowser pour l'image LTF -->
+        <WebBrowser x:Name="WebBrowserLtf" 
+                    Grid.Row="2" 
+                    ScrollViewer.VerticalScrollBarVisibility="Hidden" 
+                    ScrollViewer.HorizontalScrollBarVisibility="Hidden" />
+    </Grid>
+</Window>

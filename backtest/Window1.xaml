@@ -1,0 +1,113 @@
+﻿<Window x:Class="backtest.Window1"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:oxy="http://oxyplot.org/wpf"
+        mc:Ignorable="d"
+        Title="Statistiques de la stratégie" Height="900" Width="1186"
+        Background="#1E1E2F" WindowState="Maximized" WindowStartupLocation="CenterScreen">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20">
+
+                <!-- Performance par jour de la semaine -->
+                <TextBlock Text="Performance par jour de la semaine"
+                           FontSize="20" Foreground="White" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                <oxy:PlotView x:Name="DayPerformancePlot" Height="400" Margin="30"/>
+
+                <!-- Performance par session de trading -->
+                <TextBlock Text="Performance par session de trading"
+                           FontSize="20" Foreground="#FFAFAFAF" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,30,0,20"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Height="374">
+                    <StackPanel>
+                        <TextBlock Text="Session Asiatique" Foreground="#FF95C610" FontSize="16"
+                                   HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        <oxy:PlotView x:Name="AsianSessionPlot" Height="300" Width="350"/>
+                    </StackPanel>
+
+                    <StackPanel>
+                        <TextBlock Text="Session Européenne" Foreground="#FF21A1EA" FontSize="16"
+                                   HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        <oxy:PlotView x:Name="EuropeanSessionPlot" Height="300" Width="350"/>
+                    </StackPanel>
+
+                    <StackPanel>
+                        <TextBlock Text="Session Américaine" Foreground="#FFBE29FF" FontSize="16"
+                                   HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        <oxy:PlotView x:Name="AmericanSessionPlot" Height="300" Width="350"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Performance par paire de trading -->
+                <TextBlock Text="Performance par paire de trading"
+                           FontSize="20" Foreground="White" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,30,0,20"/>
+
+                <ItemsControl x:Name="PairStatsContainer">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel HorizontalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="10">
+                                <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
+                                           HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                <oxy:PlotView Height="200" Width="200" Model="{Binding Value}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- 🔹 Performance par type d'ordre -->
+                <TextBlock Text="Performance par type d'ordre"
+                           FontSize="20" Foreground="White" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,30,0,20"/>
+
+                <ItemsControl x:Name="OrderTypeStatsContainer">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel HorizontalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="10">
+                                <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
+                                           HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                <oxy:PlotView Height="250" Width="250" Model="{Binding Value}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- Performance par champs dynamiques -->
+                <TextBlock Text="Statistiques des Champs Dynamiques"
+           FontSize="20" Foreground="White" FontWeight="Bold"
+           HorizontalAlignment="Center" Margin="0,30,0,20"/>
+
+                <ItemsControl x:Name="DynamicStatsContainer">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel HorizontalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="5">
+                                <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
+                           HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                <oxy:PlotView Height="250" Width="300" Model="{Binding Value}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

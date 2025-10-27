@@ -1,0 +1,40 @@
+﻿<Window x:Class="backtest.opening"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DataEdge - Démarrage"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Height="364" Width="689" Icon="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico" >
+    <Grid>
+        <!-- Fond dégradé -->
+        <Border>
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#FF285497" Offset="0" />
+                    <GradientStop Color="Black" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <!-- Logo et titre -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="185,273,174.333,58" Height="33" Width="330">
+            <TextBlock Text="La puissance des données, à votre portée."
+                       FontSize="16" 
+                       Foreground="White"
+                       TextAlignment="Center" 
+                       Opacity="0.8"/>
+        </StackPanel>
+
+        <!-- Barre de progression -->
+
+        <!-- Bouton pour fermer la fenêtre -->
+        <Canvas HorizontalAlignment="Left" Height="300" Margin="185,0,0,0" VerticalAlignment="Top" Width="316">
+            <Canvas.Background>
+                <ImageBrush ImageSource="logo copie.png"/>
+            </Canvas.Background>
+        </Canvas>
+    </Grid>
+</Window>
