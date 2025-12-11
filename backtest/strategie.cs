@@ -23,7 +23,9 @@ namespace backtest
     {
         public static string dataFolder = "data";
         public static string metadataFolder = "metadata";
-        public static string strategies = ""+metadataFolder+"/strategies.txt";
+        public static string etudeFolder = "Etudes";
+        public static string strategies = "" + metadataFolder + "/strategies.txt";
+
         public string Nom { get; set; }
         public string description { get; set; }
         public string filePath;

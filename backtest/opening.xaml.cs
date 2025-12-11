@@ -17,7 +17,7 @@ namespace backtest
             // Timer pour fermer la fenêtre et lancer l'application principale
             var timer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(5)
+                Interval = TimeSpan.FromSeconds(1)
             };
             timer.Tick += (s, e) =>
             {

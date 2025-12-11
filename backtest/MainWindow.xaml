@@ -468,11 +468,27 @@
 
 
                 </Border>
-                <Border x:Name="Notes_Copy" HorizontalAlignment="Right" BorderThickness="4" Margin="0,310,4,20" Width="106" BorderBrush="#FF02162B" CornerRadius="18">
-                    <Grid >
-                        
+                <Border x:Name="outils"
+        HorizontalAlignment="Right"
+        BorderThickness="4"
+        Margin="0,310,4,20"
+        Width="106"
+        BorderBrush="#FF02162B"
+        CornerRadius="18">
+
+                    <Grid Background="#0B1E33">
+                        <Button Style="{StaticResource TileButtonStyle}" Content="Études"  VerticalAlignment="Top" Margin="10,10,10,0" Height="69" Width="Auto" Click="Button_Click_3">
+                            <Button.Tag>
+                                <Path Data="M3 6 H9 L11 8 H21 V20 H3 Z"
+              Fill="#00AEEF"
+              
+              VerticalAlignment="Center" Height="26.001" Stretch="Fill" Width="29.666"/>
+                            </Button.Tag>
+                        </Button>
+
                     </Grid>
                 </Border>
+
 
 
             </Grid>

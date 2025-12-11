@@ -1,0 +1,196 @@
+﻿<Window x:Class="backtest.EtudesView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:backtest"
+        mc:Ignorable="d"
+        Title="DataEdge - Gestion des Études" 
+        Height="800" Width="1200"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" 
+        AllowsTransparency="True" 
+        Background="Transparent" WindowState="Maximized">
+
+    <Window.Resources>
+            <ContextMenu x:Key="StudiesContextMenu">
+
+                <MenuItem Header="✏️ Renommer" Click="Rename_Click" />
+                <Separator/>
+                <MenuItem Header="🗑️ Supprimer" Click="Delete_Click" />
+
+                <Separator/>
+                <MenuItem Header="💾 Sauvegarder" Click="SaveStudy_Click" />
+                <MenuItem Header="📄 Exporter RTF" Click="ExportRTF_Click" />
+
+            </ContextMenu>
+
+            <Style TargetType="TreeViewItem">
+                <Setter Property="ContextMenu" Value="{StaticResource StudiesContextMenu}"/>
+            </Style>
+
+        <Style x:Key="HeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#00AEEF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="35"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#1A477A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#00AEEF"/>
+                                <Setter Property="Foreground" Value="#061A34"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ActionButtonStyle" TargetType="Button" BasedOn="{StaticResource HeaderButtonStyle}">
+            <Setter Property="Background" Value="#154B7C"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5,0"/>
+            <Setter Property="Width" Value="Auto"/>
+            <Setter Property="Height" Value="Auto"/>
+            <Setter Property="BorderBrush" Value="#00AEEF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="5"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#00AEEF"/>
+                                <Setter Property="Foreground" Value="#061A34"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CompactFormatButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Background" Value="#1A477A"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+    </Window.Resources>
+
+
+    <Border CornerRadius="15" Background="#0C254C" BorderBrush="#015A8F" BorderThickness="2">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="35"/>
+                <RowDefinition Height="50"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" Background="#061A34" MouseDown="TitleBar_MouseDown">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="—" Style="{StaticResource HeaderButtonStyle}" Click="MinimizeButton_Click"/>
+                    <Button Content="☐" Style="{StaticResource HeaderButtonStyle}" Click="MaximizeRestoreButton_Click"/>
+                    <Button Content="✕" Style="{StaticResource HeaderButtonStyle}" Foreground="#FF6B6B" Click="CloseButton_Click"/>
+                </StackPanel>
+                <TextBlock Text="DataEdge – Gestion des Études" 
+                           FontSize="18" FontWeight="SemiBold" Foreground="White"
+                           VerticalAlignment="Center" Margin="15,0,0,0" />
+            </DockPanel>
+
+            <DockPanel Grid.Row="1" Background="#061A34" Margin="0,1,0,4">
+
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" Margin="10,0,0,0">
+                    <Button Content="📁 Dossier+" Style="{StaticResource ActionButtonStyle}" Click="NewFolder_Click"/>
+                    <Button Content="📝 Étude+" Style="{StaticResource ActionButtonStyle}" Click="NewStudy_Click"/>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Background="#015A8F" Margin="10,0"/>
+                    <Button Content="💾 Sauvegarder" Foreground="LightGreen" Style="{StaticResource ActionButtonStyle}" Click="SaveStudy_Click"/>
+                    <Button Content="📄 Exporter" Style="{StaticResource ActionButtonStyle}" Click="ExportRTF_Click"/>
+                </StackPanel>
+
+                <TextBlock x:Name="StudiesTitle" 
+                           Text="Fichier: [Nom de l'étude]" 
+                           Foreground="#80AEEF" FontSize="12" FontStyle="Italic"
+                           VerticalAlignment="Center" HorizontalAlignment="Center" Margin="10,0"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="10,7">
+
+                    <ComboBox x:Name="FontSizeComboBox" Width="50" 
+                              SelectedIndex="2" SelectedValuePath="Content" 
+                              SelectionChanged="FontSize_SelectionChanged" 
+                              VerticalAlignment="Center" Margin="0,0,10,0">
+                        <ComboBoxItem Content="10"/>
+                        <ComboBoxItem Content="12"/>
+                        <ComboBoxItem Content="14"/>
+                        <ComboBoxItem Content="16"/>
+                        <ComboBoxItem Content="18"/>
+                        <ComboBoxItem Content="24"/>
+                    </ComboBox>
+
+                    <Button Content="G" FontWeight="Bold" Style="{StaticResource CompactFormatButtonStyle}" Click="Bold_Click"/>
+                    <Button Content="I" FontStyle="Italic" Style="{StaticResource CompactFormatButtonStyle}" Click="Italic_Click"/>
+                    <Button Content="S" Style="{StaticResource CompactFormatButtonStyle}" Click="Underline_Click"/>
+
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Background="#015A8F" Margin="10,0"/>
+
+                    <Button Content="AL" Style="{StaticResource CompactFormatButtonStyle}" Click="AlignLeft_Click"/>
+                    <Button Content="AC" Style="{StaticResource CompactFormatButtonStyle}" Click="AlignCenter_Click"/>
+                    <Button Content="AR" Style="{StaticResource CompactFormatButtonStyle}" Click="AlignRight_Click"/>
+
+                </StackPanel>
+            </DockPanel>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="#041223" Padding="10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Text="Structure des Analyses" Foreground="#00AEEF" FontWeight="Bold" FontSize="14" Margin="0,0,0,5"/>
+
+                        <TreeView x:Name="StudiesTreeView" Grid.Row="1" Background="Transparent" 
+                                  BorderThickness="0" Foreground="LightGray" KeyDown="StudiesTreeView_KeyDown"
+                                  SelectedItemChanged="StudiesTreeView_SelectedItemChanged"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Background="#041223" Margin="1,0,0,0" Padding="15">
+                    <RichTextBox x:Name="StudyContentRichTextBox" 
+                                 Background="Transparent" 
+                                 BorderThickness="0" 
+                                 Foreground="White" 
+                                 AcceptsTab="True"
+                                 SpellCheck.IsEnabled="True" 
+                                 VerticalScrollBarVisibility="Auto">
+                        <FlowDocument>
+                            <Paragraph Foreground="LightGray" FontSize="14" LineHeight="24">
+                                <Run Text="Sélectionnez un fichier d'étude à gauche ou utilisez les outils d'édition ci-dessus."/>
+                            </Paragraph>
+                        </FlowDocument>
+                    </RichTextBox>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
