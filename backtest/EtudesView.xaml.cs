@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32; // NÉCESSAIRE POUR SAVEFILEDIALOG
+using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -6,7 +7,6 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging; // Nécessaire pour BitmapImage
-using Microsoft.Win32; // NÉCESSAIRE POUR SAVEFILEDIALOG
 
 namespace backtest
 {
@@ -14,7 +14,8 @@ namespace backtest
     {
         // Chemin d'accès où les études seront stockées
         private const string StudiesRootPath = "Etudes";
-
+        private bool IsStudyModified = false;
+        private string CurrentStudyPath = null;
         // Nom de l'assemblage (votre projet)
         private const string AssemblyName = "backtest";
 
@@ -114,7 +115,7 @@ namespace backtest
         {
             if (StudyContentRichTextBox != null && FontSizeComboBox != null && FontSizeComboBox.SelectedItem != null)
             {
-                double fontSize = (double)FontSizeComboBox.SelectedItem;
+                double fontSize = Convert.ToDouble(FontSizeComboBox.Text);
                 StudyContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, fontSize);
             }
         }
@@ -134,6 +135,55 @@ namespace backtest
             StudyContentRichTextBox.Selection.ApplyPropertyValue(Block.TextAlignmentProperty, TextAlignment.Right);
         }
 
+        private void FontColor_Click(object sender, RoutedEventArgs e)
+        {
+            using (System.Windows.Forms.ColorDialog colorDialog = new System.Windows.Forms.ColorDialog())
+            {
+                object currentForeground = StudyContentRichTextBox.Selection.GetPropertyValue(TextElement.ForegroundProperty);
+                if (currentForeground is SolidColorBrush solidColor)
+                {
+                    System.Drawing.Color currentClr = System.Drawing.Color.FromArgb(
+                        solidColor.Color.A, solidColor.Color.R, solidColor.Color.G, solidColor.Color.B
+                    );
+                    colorDialog.Color = currentClr;
+                }
+
+                if (colorDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    System.Drawing.Color selectedClr = colorDialog.Color;
+                    System.Windows.Media.Color wpfColor = System.Windows.Media.Color.FromArgb(
+                        selectedClr.A, selectedClr.R, selectedClr.G, selectedClr.B
+                    );
+
+                    SolidColorBrush newColorBrush = new SolidColorBrush(wpfColor);
+
+                    // Appliquer la nouvelle couleur au texte sélectionné
+                    StudyContentRichTextBox.Selection.ApplyPropertyValue(
+                        TextElement.ForegroundProperty,
+                        newColorBrush
+                    );
+
+                    // Mise à jour de l'indicateur
+                    if (SelectedColorIndicator != null)
+                    {
+                        SelectedColorIndicator.Fill = newColorBrush;
+                    }
+                }
+            }
+        }
+
+        private void Numbering_Click(object sender, RoutedEventArgs e)
+        {
+            // Exécute la commande native pour basculer la numérotation.
+            // Le second argument (target) est le RichTextBox lui-même.
+            EditingCommands.ToggleNumbering.Execute(null, StudyContentRichTextBox);
+        }
+
+        private void Bullets_Click(object sender, RoutedEventArgs e)
+        {
+            // Exécute la commande native pour basculer les puces.
+            EditingCommands.ToggleBullets.Execute(null, StudyContentRichTextBox);
+        }
         private void StudyContentRichTextBox_SelectionChanged(object sender, RoutedEventArgs e)
         {
             object currentSize = StudyContentRichTextBox.Selection.GetPropertyValue(TextElement.FontSizeProperty);
@@ -142,13 +192,182 @@ namespace backtest
                 FontSizeComboBox.SelectedValue = (double)currentSize;
             }
         }
+        private void StudyContentRichTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
+        {
+            // 1. Annuler la commande de coller par défaut si nous gérons le contenu
+            bool handled = false;
 
+            if (e.DataObject.GetDataPresent(typeof(System.Windows.Media.Imaging.BitmapSource)))
+            {
+                // CAS 1: Image BitmapSource (Captures d'écran, Coller depuis Photoshop)
+                System.Windows.Media.Imaging.BitmapSource image = e.DataObject.GetData(typeof(System.Windows.Media.Imaging.BitmapSource)) as System.Windows.Media.Imaging.BitmapSource;
+                if (image != null)
+                {
+                    TreeViewItem selectedStudy = StudiesTreeView.SelectedItem as TreeViewItem;
+                    if (selectedStudy != null && selectedStudy.Tag is string studyPath)
+                    {
+                        InsertImage(image, studyPath); // Maintenant avec studyPath
+                    }
+                    handled = true;
+                }
+            }
+            else if (e.DataObject.GetDataPresent(System.Windows.DataFormats.FileDrop))
+            {
+                // CAS 2: Fichier déposé ou copié depuis l'explorateur (Ctrl+C sur un fichier .jpg)
+                string[] files = e.DataObject.GetData(System.Windows.DataFormats.FileDrop) as string[];
+                if (files != null && files.Length > 0)
+                {
+                    string filePath = files[0];
+                    string extension = Path.GetExtension(filePath)?.ToLower();
+
+                    // Vérifier si c'est un format d'image que WPF peut charger
+                    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".gif")
+                    {
+                        // Charger l'image à partir du fichier
+                        System.Windows.Media.Imaging.BitmapImage image = new System.Windows.Media.Imaging.BitmapImage(new Uri(filePath));
+                        TreeViewItem selectedStudy = StudiesTreeView.SelectedItem as TreeViewItem;
+                        if (selectedStudy != null && selectedStudy.Tag is string studyPath)
+                        {
+                            InsertImage(image, studyPath); // Maintenant avec studyPath
+                        }
+                        handled = true;
+                    }
+                }
+            }
+
+            if (handled)
+            {
+                e.CancelCommand(); // Annuler si nous avons géré l'insertion d'une image
+            }
+        }
+        private string GetStudyResourceFolder(string studyPath)
+        {
+            string studyFileName = Path.GetFileNameWithoutExtension(studyPath);
+            // Ex: "MonEtude.rtf" -> "MonEtude_files"
+            string resourceFolderName = $"{studyFileName}_fichiers";
+            string resourceFolderPath = Path.Combine(Path.GetDirectoryName(studyPath), resourceFolderName);
+
+            if (!Directory.Exists(resourceFolderPath))
+            {
+                Directory.CreateDirectory(resourceFolderPath);
+            }
+            return resourceFolderPath;
+        }
+        private void StudyContentRichTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // Si l'étude est chargée et que l'utilisateur tape, marquer comme modifié.
+           if (!IsStudyModified)
+            {
+                IsStudyModified = true;
+               
+            }
+        }
+        private void StudyContentRichTextBox_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+
+            /// 2. Déterminer la position du curseur au clic
+            TextPointer clickPosition = StudyContentRichTextBox.GetPositionFromPoint(e.GetPosition(StudyContentRichTextBox), true);
+
+            if (clickPosition == null) return;
+
+            // 3. Obtenir le parent Inline (l'élément logique contenant le contenu à la position du clic)
+            Inline parentInline = clickPosition.Parent as Inline;
+
+            // Si l'élément Inline est un InlineUIContainer, il contient un contrôle WPF (comme notre Image)
+            if (parentInline is InlineUIContainer container)
+            {
+                if (container.Child is Image clickedImage)
+                {
+                    // Image trouvée !
+                    if (clickedImage.Source is System.Windows.Media.Imaging.BitmapSource source)
+                    {
+                        // Ouvrir la fenêtre d'aperçu
+                        ImageViewer viewer = new ImageViewer(source);
+                        viewer.ShowDialog();
+
+                        // Marquer l'événement comme géré
+                        e.Handled = true;
+                    }
+                }
+            }
+        }
+        private bool SaveCurrentStudy(string filePathToSave)
+        {
+            if (string.IsNullOrEmpty(filePathToSave)) return false;
+
+            try
+            {
+                // 1. Récupérer le contenu du RichTextBox
+                TextRange range = new TextRange(StudyContentRichTextBox.Document.ContentStart, StudyContentRichTextBox.Document.ContentEnd);
+
+                // 2. Sauvegarder en RTF dans le fichier spécifié
+                using (FileStream fStream = new FileStream(filePathToSave, FileMode.Create))
+                {
+                    range.Save(fStream, System.Windows.DataFormats.Rtf);
+                }
+
+                IsStudyModified = false; // Marquer comme non modifié après succès
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Afficher une erreur si la sauvegarde échoue (par exemple, si le fichier est verrouillé)
+                MessageBox.Show($"Erreur lors de la sauvegarde automatique : {ex.Message}", "Erreur Critique de Sauvegarde", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+        private void EnsureSavedState(string studyPathToSave)
+        {
+            // Si l'étude a été modifiée ET que nous avons un chemin valide (pas null)
+            if (IsStudyModified && !string.IsNullOrEmpty(studyPathToSave))
+            {
+                SaveCurrentStudy(studyPathToSave);
+            }
+        }
+        /// <summary>
+        /// Remonte l'arborescence visuelle pour trouver le contrôle Image parent.
+        /// </summary>
+        private void InsertImage(BitmapSource imageSource, string studyPath)
+        {
+            try
+            {
+                string resourceFolder = GetStudyResourceFolder(studyPath);
+                string imageFileName = $"image_{DateTime.Now.Ticks}.png"; // Nom unique
+                string imageFilePath = Path.Combine(resourceFolder, imageFileName);
+
+                // 1. Sauvegarder l'image sur le disque (format PNG pour la qualité)
+                using (var fileStream = new FileStream(imageFilePath, FileMode.Create))
+                {
+                    BitmapEncoder encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(imageSource));
+                    encoder.Save(fileStream);
+                }
+
+                // 2. Création de l'élément Image WPF
+                Image imageControl = new Image
+                {
+                    // La source est maintenant le chemin du fichier sur le disque
+                    Source = imageSource,
+                    MaxWidth = 400,
+                    MaxHeight = 400,
+                    Stretch = Stretch.Uniform,
+                    Cursor = Cursors.Hand,
+
+                    // Le Tag stocke le chemin relatif pour la sauvegarde/rechargement futur
+                    Tag = imageFileName
+                };
+              
+
+                InlineUIContainer container = new InlineUIContainer(imageControl, StudyContentRichTextBox.CaretPosition);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Erreur lors de l'insertion de l'image : {ex.Message}", "Erreur d'Image", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
         // =================================================================
         // 3. GESTION DES ÉTUDES (Logique de Fichier et de TreeView)
         // =================================================================
-
-        // --- Fonctions d'Aide pour l'Esthétique du TreeView (Icônes Images) ---
-
         /// <summary>
         /// Crée un contrôle Image à partir d'une ressource URI.
         /// </summary>
@@ -225,8 +444,6 @@ namespace backtest
 
             return stackPanel;
         }
-
-
         // --- Fonctions de Gestion du TreeView ---
 
         private void LoadStudiesTree()
@@ -285,37 +502,76 @@ namespace backtest
                 MessageBox.Show($"Erreur lors du chargement des études : {ex.Message}", "Erreur Système de Fichier", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+        private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // Obtenez l'instance de EtudesView (vous devrez peut-être la passer en argument ou la chercher)
+            // EtudesView etudesView = ...
 
+            EnsureSavedState(CurrentStudyPath);
+        }
         private void StudiesTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         {
+            // L'ancien chemin (l'étude que l'on quitte)
+            string oldStudyPath = CurrentStudyPath;
+
+            // Déterminer le chemin de la NOUVELLE sélection
+            string newStudyPath = null;
             if (e.NewValue is TreeViewItem selectedItem)
             {
-                string path = selectedItem.Tag as string;
+                newStudyPath = selectedItem.Tag as string;
+            }
 
-                if (File.Exists(path) && Path.GetExtension(path).ToLower() == ".rtf")
+            // --- Étape 1 : Auto-Sauvegarde de l'ancienne étude ---
+
+            // Si nous quittons un fichier RTF pour aller vers un autre élément (fichier ou dossier)
+            if (oldStudyPath != null && oldStudyPath != newStudyPath )
+            {
+                // Sauvegarde forcée de l'étude que nous sommes en train de quitter (oldStudyPath)
+                EnsureSavedState(oldStudyPath);
+            }
+
+            // --- Étape 2 : Chargement du nouvel élément ---
+
+            if (newStudyPath != null)
+            {
+                if (File.Exists(newStudyPath))
                 {
-                    LoadStudyFile(path);
-                    StudiesTitle.Text = $"Fichier: {Path.GetFileNameWithoutExtension(path)}";
+                    LoadStudyFile(newStudyPath); // Ceci mettra à jour CurrentStudyPath
+                    StudiesTitle.Text = $"Fichier: {Path.GetFileNameWithoutExtension(newStudyPath)}";
                 }
-                else if (Directory.Exists(path))
+                else if (Directory.Exists(newStudyPath))
                 {
-                    StudiesTitle.Text = $"Dossier: {Path.GetFileName(path)}";
+                    StudiesTitle.Text = $"Dossier: {Path.GetFileName(newStudyPath)}";
+                    // Important : Si c'est un dossier, nous ne sommes sur aucun fichier RTF actif.
+                    CurrentStudyPath = null;
                 }
             }
         }
-
+        /// <summary>
+        /// Sauvegarde automatiquement l'étude courante si elle a été modifiée.
+        /// </summary>
         private void LoadStudyFile(string filePath)
         {
             // Logique pour charger le contenu RTF dans le RichTextBox
             try
             {
-                // 1. Effacer tout contenu précédent
-                StudyContentRichTextBox.Document.Blocks.Clear(); 
+                // 1. Charger le contenu RTF et initialiser l'état
+                StudyContentRichTextBox.Document.Blocks.Clear();
                 TextRange range = new TextRange(StudyContentRichTextBox.Document.ContentStart, StudyContentRichTextBox.Document.ContentEnd);
+                range.ApplyPropertyValue(TextElement.FontSizeProperty, 14.0); // Assurer la lisibilité du texte
+
                 using (FileStream fStream = new FileStream(filePath, FileMode.Open))
                 {
                     range.Load(fStream, DataFormats.Rtf);
+                    // Une fois le chargement terminé :
+                    CurrentStudyPath = filePath;
+                    IsStudyModified = false;
                 }
+
+                // === CORRECTION DE TAILLE DES IMAGES (Sécurisée) ===
+                // Cette fonction réapplique la taille Max/Min aux images après le chargement.
+                ApplyImageSizingAndEvents();
+
             }
             catch (Exception ex)
             {
@@ -323,6 +579,60 @@ namespace backtest
             }
         }
 
+        /// <summary>
+        /// Parcourt le FlowDocument pour trouver les images et réappliquer les contraintes de taille 
+        /// et les événements, en gérant de manière sécurisée les différents types de blocs (Paragraphs, Lists).
+        /// </summary>
+        private void ApplyImageSizingAndEvents()
+        {
+            // Fonction locale pour le traitement d'une liste d'Inlines
+            Action<InlineCollection> processInlines = (inlines) =>
+            {
+                foreach (Inline inline in inlines)
+                {
+                    if (inline is InlineUIContainer container)
+                    {
+                        if (container.Child is Image imageControl)
+                        {
+                            // Appliquer la correction de taille et le curseur cliquable
+                            imageControl.MaxWidth = 400;
+                            imageControl.MaxHeight = 400;
+                            imageControl.Stretch = System.Windows.Media.Stretch.Uniform;
+                            imageControl.Cursor = Cursors.Hand;
+
+                            // Note : Nous n'attachons pas l'événement MouseLeftButtonDown ici, 
+                            // car le gestionnaire global du RichTextBox le capte déjà (la solution la plus fiable).
+                        }
+                    }
+                }
+            };
+
+            // Parcourir tous les blocs du document
+            foreach (Block block in StudyContentRichTextBox.Document.Blocks)
+            {
+                if (block is Paragraph paragraph)
+                {
+                    // CAS 1 : C'est un paragraphe (texte normal)
+                    processInlines(paragraph.Inlines);
+                }
+                else if (block is System.Windows.Documents.List list)
+                {
+                    // CAS 2 : C'est une liste (puces/numérotée)
+                    foreach (ListItem listItem in list.ListItems)
+                    {
+                        // Les list items contiennent eux-mêmes des blocs (souvent des Paragraphs)
+                        foreach (Block itemBlock in listItem.Blocks)
+                        {
+                            if (itemBlock is Paragraph listParagraph)
+                            {
+                                processInlines(listParagraph.Inlines);
+                            }
+                        }
+                    }
+                }
+                // Ignorer les Table, Section, etc.
+            }
+        }
         // --- Gestion des Boutons de la Barre d'Outils ---
 
         // La fonction NewFolder_Click est mise à jour pour utiliser CreateHeaderContent
@@ -542,6 +852,8 @@ namespace backtest
                 {
                     // Enregistre le contenu au format RTF
                     range.Save(fStream, DataFormats.Rtf);
+                    // Une fois la sauvegarde réussie :
+                    IsStudyModified = false;
                 }
 
                 // 4. Feedback
@@ -799,7 +1111,7 @@ namespace backtest
                 string headerType = isDirectory ? "FOLDER" : "FILE";
                 selectedItem.Header = CreateHeaderContent(newName, headerType);
 
-                
+
                 // Mettre à jour le Tag (le chemin complet)
                 selectedItem.Tag = newPath;
 
@@ -810,10 +1122,10 @@ namespace backtest
                     // Si ce fichier était sélectionné et ouvert:
                     if (wasSelected)
                     {
-                     
+
                         selectedItem.IsSelected = true;
 
-                       
+
                         LoadStudiesTree();
                         LoadStudyFile(newPath);
                     }

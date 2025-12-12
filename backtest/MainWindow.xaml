@@ -5,7 +5,7 @@
         xmlns:cef="clr-namespace:CefSharp.Wpf;assembly=CefSharp.Wpf"
         Title="Tableau de Bord - Performances" Height="705" Width="1181.675"
         Background="Transparent" WindowStartupLocation="CenterScreen"
-        AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip" Icon="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico">
+        AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip" Icon="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico" WindowState="Maximized">
 
     <Window.Resources>
         <local:ChampPersonnaliseConverter x:Key="ChampPersonnaliseConverter" />

@@ -1,0 +1,19 @@
+﻿<Window x:Class="backtest.ImageViewer"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Aperçu Image" 
+        Height="Auto" Width="Auto"
+        AllowsTransparency="True" 
+        WindowStyle="None" 
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown" WindowState="Maximized">
+    <Grid Background="#CC000000">
+        <Image x:Name="FullScreenImage" 
+               MaxWidth="{Binding Source={x:Static SystemParameters.PrimaryScreenWidth}}"
+               MaxHeight="{Binding Source={x:Static SystemParameters.PrimaryScreenHeight}}"
+               Margin="20"/>
+    </Grid>
+</Window>

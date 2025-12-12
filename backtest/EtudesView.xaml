@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:backtest"
-        mc:Ignorable="d"
+        mc:Ignorable="d" Closing="MainWindow_Closing"
         Title="DataEdge - Gestion des Études" 
         Height="800" Width="1200"
         WindowStartupLocation="CenterScreen"
@@ -13,21 +13,21 @@
         Background="Transparent" WindowState="Maximized">
 
     <Window.Resources>
-            <ContextMenu x:Key="StudiesContextMenu">
+        <ContextMenu x:Key="StudiesContextMenu">
 
-                <MenuItem Header="✏️ Renommer" Click="Rename_Click" />
-                <Separator/>
-                <MenuItem Header="🗑️ Supprimer" Click="Delete_Click" />
+            <MenuItem Header="✏️ Renommer" Click="Rename_Click" />
+            <Separator/>
+            <MenuItem Header="🗑️ Supprimer" Click="Delete_Click" />
 
-                <Separator/>
-                <MenuItem Header="💾 Sauvegarder" Click="SaveStudy_Click" />
-                <MenuItem Header="📄 Exporter RTF" Click="ExportRTF_Click" />
+            <Separator/>
+            <MenuItem Header="💾 Sauvegarder" Click="SaveStudy_Click" />
+            <MenuItem Header="📄 Exporter RTF" Click="ExportRTF_Click" />
 
-            </ContextMenu>
+        </ContextMenu>
 
-            <Style TargetType="TreeViewItem">
-                <Setter Property="ContextMenu" Value="{StaticResource StudiesContextMenu}"/>
-            </Style>
+        <Style TargetType="TreeViewItem">
+            <Setter Property="ContextMenu" Value="{StaticResource StudiesContextMenu}"/>
+        </Style>
 
         <Style x:Key="HeaderButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
@@ -129,16 +129,17 @@
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="10,7">
 
-                    <ComboBox x:Name="FontSizeComboBox" Width="50" 
-                              SelectedIndex="2" SelectedValuePath="Content" 
-                              SelectionChanged="FontSize_SelectionChanged" 
-                              VerticalAlignment="Center" Margin="0,0,10,0">
+                    <ComboBox x:Name="FontSizeComboBox" Width="50"  
+              SelectedIndex="2" SelectedValuePath="Content"  
+              SelectionChanged="FontSize_SelectionChanged"  
+              VerticalAlignment="Center" Margin="0,0,10,0">
                         <ComboBoxItem Content="10"/>
                         <ComboBoxItem Content="12"/>
                         <ComboBoxItem Content="14"/>
                         <ComboBoxItem Content="16"/>
                         <ComboBoxItem Content="18"/>
                         <ComboBoxItem Content="24"/>
+                        <ComboBoxItem Content="36"/>
                     </ComboBox>
 
                     <Button Content="G" FontWeight="Bold" Style="{StaticResource CompactFormatButtonStyle}" Click="Bold_Click"/>
@@ -147,9 +148,56 @@
 
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Background="#015A8F" Margin="10,0"/>
 
-                    <Button Content="AL" Style="{StaticResource CompactFormatButtonStyle}" Click="AlignLeft_Click"/>
-                    <Button Content="AC" Style="{StaticResource CompactFormatButtonStyle}" Click="AlignCenter_Click"/>
-                    <Button Content="AR" Style="{StaticResource CompactFormatButtonStyle}" Click="AlignRight_Click"/>
+                    <Button Style="{StaticResource CompactFormatButtonStyle}" 
+            Click="FontColor_Click" 
+            ToolTip="Couleur de la police"
+            Padding="8,4">
+
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Center" Height="25" Width="16">
+
+                            <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" 
+                  Data="M12 2L4.2 21h2.1l1.8-5h7.8l1.8 5h2.1L12 2zm-2 12L12 7.3 14 14H10z" Height="14.293" Margin="0.667,0,3.333,2" Stretch="Fill"/>
+
+                            <Rectangle x:Name="SelectedColorIndicator"  Fill="#FF6B6B"  Height="3" 
+                       Width="18"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Background="#015A8F" Margin="10,0"/>
+
+                    <Button Content="1." 
+            Style="{StaticResource CompactFormatButtonStyle}" 
+            Click="Numbering_Click" 
+            ToolTip="Numérotation (Liste Ordonnée)"/>
+
+                    <Button Style="{StaticResource CompactFormatButtonStyle}" 
+            Click="Bullets_Click" 
+            ToolTip="Puces (Liste Non Ordonnée)">
+                        <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+              Data="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 15h2v2H7zm0-4h2v2H7zm0-4h2v2H7zm4 8h8v2h-8zm0-4h8v2h-8zm0-4h8v2h-8z" 
+              Width="16" Height="16"/>
+                    </Button>
+
+
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Background="#015A8F" Margin="10,0"/>
+
+                    <Button Style="{StaticResource CompactFormatButtonStyle}" Click="AlignLeft_Click" ToolTip="Aligner à Gauche">
+                        <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+              Data="M3 21h18v-2H3v2zm0-4h12v-2H3v2zm0-4h18v-2H3v2zm0-4h12V7H3v2zm0-4h18V3H3v2z" 
+              Width="16" Height="16"/>
+                    </Button>
+
+                    <Button Style="{StaticResource CompactFormatButtonStyle}" Click="AlignCenter_Click" ToolTip="Centrer">
+                        <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+              Data="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6h10V7H7v2zm-4-4h18V3H3v2z" 
+              Width="16" Height="16"/>
+                    </Button>
+
+                    <Button Style="{StaticResource CompactFormatButtonStyle}" Click="AlignRight_Click" ToolTip="Aligner à Droite">
+                        <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+              Data="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z" 
+              Width="16" Height="16"/>
+                    </Button>
 
                 </StackPanel>
             </DockPanel>
@@ -179,10 +227,12 @@
                     <RichTextBox x:Name="StudyContentRichTextBox" 
                                  Background="Transparent" 
                                  BorderThickness="0" 
-                                 Foreground="White" 
+                                 Foreground="White" TextChanged="StudyContentRichTextBox_TextChanged"
                                  AcceptsTab="True"
+                                 CaretBrush="White" SelectionBrush="#00AEEF"
                                  SpellCheck.IsEnabled="True" 
-                                 VerticalScrollBarVisibility="Auto">
+                                 DataObject.Pasting="StudyContentRichTextBox_Pasting"
+                                 VerticalScrollBarVisibility="Auto" MouseDoubleClick="StudyContentRichTextBox_MouseLeftButtonDown">
                         <FlowDocument>
                             <Paragraph Foreground="LightGray" FontSize="14" LineHeight="24">
                                 <Run Text="Sélectionnez un fichier d'étude à gauche ou utilisez les outils d'édition ci-dessus."/>
