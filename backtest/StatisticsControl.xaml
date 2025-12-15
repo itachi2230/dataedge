@@ -1,4 +1,4 @@
-﻿<UserControl 
+﻿ <UserControl 
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:backtest"
@@ -123,37 +123,88 @@
                 </Style>
             </DataGrid.Resources>
         </DataGrid>
+        <WrapPanel Margin="0,0,752,625" Orientation="Horizontal">
 
-        <Button HorizontalAlignment="Left"
-        VerticalAlignment="Top"
-        Width="46"
-        Height="40"
-       
-        Background="#FF002137"
-        Foreground="White"
-        BorderBrush="Transparent"
-        Click="BackToDashboard_Click">
-            <Button.Style>
-                <Style TargetType="{x:Type Button}">
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="{x:Type Button}">
-                                <Border Background="{TemplateBinding Background}" 
-                                CornerRadius="5"
-                                Padding="1" Margin="0,0,7.2,0">
-                                    <Grid>
-                                        <!-- Flèche pour le retour -->
-                                        <Path Data="M 10,20 L 30,10 L 30,15 L 50,15 L 50,25 L 30,25 L 30,30 Z"
-                                      Fill="{TemplateBinding Foreground}" />
-                                    </Grid>
-                                </Border>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </Button.Style>
-        </Button>
+            <Button HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Width="46"
+            Height="40"
+            Background="#FF002137"
+            Foreground="White"
+            BorderBrush="Transparent"
+            Click="BackToDashboard_Click"
+            ToolTip="Retour au Tableau de Bord">
+                <Button.Style>
+                    <Style TargetType="{x:Type Button}">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="{x:Type Button}">
+                                    <Border x:Name="ButtonBorder" 
+                                    Background="{TemplateBinding Background}" 
+                                    CornerRadius="5"
+                                    Padding="1" 
+                                    Margin="0,0,7.2,0">
+                                        <Grid>
+                                            <Path Data="M 10,20 L 30,10 L 30,15 L 50,15 L 50,25 L 30,25 L 30,30 Z"
+                                          Fill="{TemplateBinding Foreground}" />
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ButtonBorder" Property="Background" Value="#014C75"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Button.Style>
+            </Button>
 
+            <Button HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Width="46"
+            Height="40" Margin="2"
+            Background="#014C75"
+            Foreground="White"
+            BorderBrush="Transparent"
+            Click="NbreTrade_MouseUp"
+            ToolTip="Statistiques Avancées (Heatmaps, Distribution)">
+                <Button.Style>
+                    <Style TargetType="{x:Type Button}">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="{x:Type Button}">
+                                    <Border x:Name="StatsBorder" 
+                                    Background="{TemplateBinding Background}" 
+                                    CornerRadius="5"
+                                    Padding="1">
+                                        <Grid>
+                                            <Path Data="M10 30 L10 10 L15 10 L15 30 Z M20 30 L20 15 L25 15 L25 30 Z M30 30 L30 5 L35 5 L35 30 Z M40 30 L40 20 L45 20 L45 30 Z"
+                                          Fill="{TemplateBinding Foreground}"
+                                          Stretch="Uniform" 
+                                          Width="30" 
+                                          Height="30"
+                                          HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="StatsBorder" Property="Background" Value="#016AA0"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="StatsBorder" Property="Background" Value="#013A60"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                       </Style>
+                </Button.Style>
+            </Button>
+
+        </WrapPanel>
         <StackPanel Orientation="Horizontal"
             HorizontalAlignment="Center"
             VerticalAlignment="Top"
@@ -188,14 +239,6 @@
                     <TextBlock Text="64" Foreground="Red" FontSize="24" FontWeight="Bold" TextAlignment="Center" />
                 </StackPanel>
             </Border>
-            <TextBlock Text="Plus >>>>" FontSize="14" FontWeight="Bold" TextAlignment="Center" Height="26" Background="Black" MouseUp="NbreTrade_MouseUp">
-                <TextBlock.Foreground>
-                    <LinearGradientBrush EndPoint="0.5,1" MappingMode="RelativeToBoundingBox" StartPoint="0.5,0">
-                        <GradientStop Color="#FF2EFF00" Offset="0.126"/>
-                        <GradientStop Color="White" Offset="0.925"/>
-                    </LinearGradientBrush>
-                </TextBlock.Foreground>
-            </TextBlock>
         </StackPanel>
         <StackPanel Orientation="Horizontal"
              HorizontalAlignment="Center"

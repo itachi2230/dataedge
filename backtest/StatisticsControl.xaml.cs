@@ -196,7 +196,7 @@ namespace backtest
 
         }
 
-        private void NbreTrade_MouseUp(object sender, MouseButtonEventArgs e)
+        private void NbreTrade_MouseUp(object sender, RoutedEventArgs e)
         {
             strategie.CalculateStatistics();
             strategie.CalculateStatsPlus();

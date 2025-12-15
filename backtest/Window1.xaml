@@ -5,48 +5,91 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:oxy="http://oxyplot.org/wpf"
         mc:Ignorable="d"
-        Title="Statistiques de la stratégie" Height="900" Width="1186"
-        Background="#1E1E2F" WindowState="Maximized" WindowStartupLocation="CenterScreen">
+        Title="Statistiques Avancées de la Stratégie" 
+        Height="900" Width="1186"
+        Background="#1E1E2F" 
+        WindowState="Maximized" 
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,0,30"/>
+        </Style>
+
+        <DropShadowEffect x:Key="CardShadowEffect" 
+                          ShadowDepth="2" 
+                          BlurRadius="10" 
+                          Color="Black" 
+                          Opacity="0.4"/>
+    </Window.Resources>
+
     <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#1E1E2F" Offset="0.0"/>
+                <GradientStop Color="#151525" Offset="1.0"/>
+            </LinearGradientBrush>
+        </Grid.Background>
+
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="20">
 
-                <!-- Performance par jour de la semaine -->
-                <TextBlock Text="Performance par jour de la semaine"
-                           FontSize="20" Foreground="White" FontWeight="Bold"
-                           HorizontalAlignment="Center" Margin="0,0,0,20"/>
-                <oxy:PlotView x:Name="DayPerformancePlot" Height="400" Margin="30"/>
+                <TextBlock Text="Rapport d'Analyse Avancée: "
+                           FontSize="28"  Name="titre"
+                           Foreground="#FF2EFF00" 
+                           FontWeight="ExtraBold"
+                           HorizontalAlignment="Center" 
+                           Margin="0,0,0,40"/>
+                
 
-                <!-- Performance par session de trading -->
-                <TextBlock Text="Performance par session de trading"
-                           FontSize="20" Foreground="#FFAFAFAF" FontWeight="Bold"
-                           HorizontalAlignment="Center" Margin="0,30,0,20"/>
+                <TextBlock Text="Performance par jour de la semaine" 
+                           Style="{StaticResource SectionTitleStyle}"/>
+                <oxy:PlotView x:Name="DayPerformancePlot" 
+                              Height="400" 
+                              Margin="10,0,10,0"/>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Height="374">
-                    <StackPanel>
-                        <TextBlock Text="Session Asiatique" Foreground="#FF95C610" FontSize="16"
-                                   HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                        <oxy:PlotView x:Name="AsianSessionPlot" Height="300" Width="350"/>
+                <Separator Margin="0,40,0,40" Background="#01405F" Height="2"/>
+
+                <TextBlock Text="Performance par session de trading" 
+                           Style="{StaticResource SectionTitleStyle}"/>
+
+                <Grid HorizontalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="380"/>
+                        <ColumnDefinition Width="380"/>
+                        <ColumnDefinition Width="380"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="10,0">
+                        <TextBlock Text="Session Asiatique" 
+                                   Foreground="#FF95C610" FontSize="18"
+                                   FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        <oxy:PlotView x:Name="AsianSessionPlot" Height="300"/>
                     </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Text="Session Européenne" Foreground="#FF21A1EA" FontSize="16"
-                                   HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                        <oxy:PlotView x:Name="EuropeanSessionPlot" Height="300" Width="350"/>
+                    <StackPanel Grid.Column="1" Margin="10,0">
+                        <TextBlock Text="Session Européenne" 
+                                   Foreground="#FF21A1EA" FontSize="18"
+                                   FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        <oxy:PlotView x:Name="EuropeanSessionPlot" Height="300"/>
                     </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Text="Session Américaine" Foreground="#FFBE29FF" FontSize="16"
-                                   HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                        <oxy:PlotView x:Name="AmericanSessionPlot" Height="300" Width="350"/>
+                    <StackPanel Grid.Column="2" Margin="10,0">
+                        <TextBlock Text="Session Américaine" 
+                                   Foreground="#FFBE29FF" FontSize="18"
+                                   FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        <oxy:PlotView x:Name="AmericanSessionPlot" Height="300"/>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
 
-                <!-- Performance par paire de trading -->
-                <TextBlock Text="Performance par paire de trading"
-                           FontSize="20" Foreground="White" FontWeight="Bold"
-                           HorizontalAlignment="Center" Margin="0,30,0,20"/>
+                <Separator Margin="0,40,0,40" Background="#01405F" Height="2"/>
 
+                <TextBlock Text="Performance par paire de trading" 
+                           Style="{StaticResource SectionTitleStyle}"/>
                 <ItemsControl x:Name="PairStatsContainer">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -55,20 +98,25 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="10">
-                                <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
-                                           HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                                <oxy:PlotView Height="200" Width="200" Model="{Binding Value}"/>
-                            </StackPanel>
+                            <Border Background="#02204F" 
+                                    CornerRadius="8" 
+                                    Padding="10" 
+                                    Margin="10" 
+                                    Effect="{StaticResource CardShadowEffect}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
+                                               FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                    <oxy:PlotView Height="180" Width="180" Model="{Binding Value}"/>
+                                </StackPanel>
+                            </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- 🔹 Performance par type d'ordre -->
-                <TextBlock Text="Performance par type d'ordre"
-                           FontSize="20" Foreground="White" FontWeight="Bold"
-                           HorizontalAlignment="Center" Margin="0,30,0,20"/>
+                <Separator Margin="0,40,0,40" Background="#01405F" Height="2"/>
 
+                <TextBlock Text="Performance par type d'ordre" 
+                           Style="{StaticResource SectionTitleStyle}"/>
                 <ItemsControl x:Name="OrderTypeStatsContainer">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -77,19 +125,25 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="10">
-                                <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
-                                           HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                                <oxy:PlotView Height="250" Width="250" Model="{Binding Value}"/>
-                            </StackPanel>
+                            <Border Background="#02204F" 
+                                    CornerRadius="8" 
+                                    Padding="10" 
+                                    Margin="10" 
+                                    Effect="{StaticResource CardShadowEffect}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
+                                               FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                    <oxy:PlotView Height="200" Width="200" Model="{Binding Value}"/>
+                                </StackPanel>
+                            </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <!-- Performance par champs dynamiques -->
-                <TextBlock Text="Statistiques des Champs Dynamiques"
-           FontSize="20" Foreground="White" FontWeight="Bold"
-           HorizontalAlignment="Center" Margin="0,30,0,20"/>
 
+                <Separator Margin="0,40,0,40" Background="#01405F" Height="2"/>
+
+                <TextBlock Text="Statistiques des Champs Dynamiques" 
+                           Style="{StaticResource SectionTitleStyle}"/>
                 <ItemsControl x:Name="DynamicStatsContainer">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -98,11 +152,17 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="5">
-                                <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
-                           HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                                <oxy:PlotView Height="250" Width="300" Model="{Binding Value}"/>
-                            </StackPanel>
+                            <Border Background="#02204F" 
+                                    CornerRadius="8" 
+                                    Padding="10" 
+                                    Margin="10" 
+                                    Effect="{StaticResource CardShadowEffect}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Key}" Foreground="White" FontSize="16"
+                                               FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                    <oxy:PlotView Height="250" Width="300" Model="{Binding Value}"/>
+                                </StackPanel>
+                            </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

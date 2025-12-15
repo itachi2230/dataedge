@@ -13,7 +13,7 @@ namespace backtest
     public partial class EtudesView : Window
     {
         // Chemin d'accès où les études seront stockées
-        private const string StudiesRootPath = "Etudes";
+        private const string StudiesRootPath = "etudes";
         private bool IsStudyModified = false;
         private string CurrentStudyPath = null;
         // Nom de l'assemblage (votre projet)

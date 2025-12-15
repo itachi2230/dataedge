@@ -23,6 +23,7 @@ namespace backtest
             LoadPairPerformanceCharts(); // Charger les stats des paires de trading
             LoadOrderTypePerformanceCharts(); // Charger les stats par type d'ordre
             LoadDynamicFieldCharts();
+            titre.Text += strategie.Nom;
 
         }
 
@@ -318,5 +319,6 @@ namespace backtest
                 _ => "Inconnu"
             };
         }
+
     }
 }
