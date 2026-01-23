@@ -1,0 +1,893 @@
+﻿<Window x:Class="backtest.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:backtest"
+        xmlns:cef="clr-namespace:CefSharp.Wpf;assembly=CefSharp.Wpf"
+        Title="Performance Dashboard" Height="750" Width="1250"
+        Background="Transparent" WindowStartupLocation="CenterScreen"
+        AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="BgDark" Color="#0B1118"/>
+        <SolidColorBrush x:Key="CardBg" Color="#151E29"/>
+        <SolidColorBrush x:Key="AccentBlue" Color="#00BFFF"/>
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBg}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="8"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.3"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BoutonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#1E90FF"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource BgDark}" CornerRadius="15" BorderBrush="#222" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="60"/>
+                <RowDefinition Height="180"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="60"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" MouseDown="TitleBar_MouseDown">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
+                    <Ellipse Width="35" Height="35" Fill="{StaticResource AccentBlue}"/>
+                    <StackPanel VerticalAlignment="Center" Margin="12,0">
+                        <TextBlock Text="Trader Pro" Foreground="White" FontWeight="Bold" FontSize="14"/>
+                        <TextBlock Text="Connecté" Foreground="LightGreen" FontSize="10"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock Text="DASHBOARD PERFORMANCES" Foreground="White" Opacity="0.7" 
+                           HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Thin" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,0">
+                    <Button Content="⚙" Background="Transparent" Foreground="White" FontSize="20" Margin="0,0,15,0" BorderThickness="0"/>
+                    <Button Content="—" Click="MinimizeButton_Click" Style="{StaticResource BoutonStyle}" Background="Transparent" Width="30"/>
+                    <Button Content="✕" Click="CloseButton_Click" Style="{StaticResource BoutonStyle}" Background="#E74C3C" Width="30" Margin="5,0,0,0"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource CardStyle}" Grid.Column="0">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="SUCCÈS BUY" Foreground="Gray" HorizontalAlignment="Center" FontSize="10"/>
+                        <Grid Margin="0,10">
+                            <Ellipse Stroke="#222" StrokeThickness="5" Width="80" Height="80"/>
+                            <Ellipse x:Name="RingBuy" Stroke="{StaticResource AccentBlue}" StrokeThickness="5" Width="80" Height="80" StrokeDashArray="10,2"/>
+                            <TextBlock x:Name="tauxBuy" Text="75%" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Grid.Column="1">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="SUCCÈS SELL" Foreground="Gray" HorizontalAlignment="Center" FontSize="10"/>
+                        <Grid Margin="0,10">
+                            <Ellipse Stroke="#222" StrokeThickness="5" Width="80" Height="80"/>
+                            <Ellipse x:Name="RingSell" Stroke="#FFCD63A6" StrokeThickness="5" Width="80" Height="80" StrokeDashArray="10,2"/>
+                            <TextBlock x:Name="tauxSell" Text="25%" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Grid.Column="2">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="TOTAL TRADES" Foreground="Gray" HorizontalAlignment="Center" FontSize="10"/>
+                        <TextBlock x:Name="nbreText" Text="75" Foreground="{StaticResource AccentBlue}" FontSize="40" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,10"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Grid.Column="3">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="MEILLEURE PAIRE" Foreground="Gray" HorizontalAlignment="Center" FontSize="10"/>
+                        <TextBlock x:Name="meilleurePaire" Text="EURUSD" Foreground="LightGreen" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,15"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Grid.Column="4">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="PIRE PAIRE" Foreground="Gray" HorizontalAlignment="Center" FontSize="10"/>
+                        <TextBlock x:Name="PirePaire" Text="NZDUSD" Foreground="#FF6A02" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,15"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.Row="2" Margin="8,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource CardStyle}" Grid.Column="0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="JOURNAL DE TRADING" FontWeight="Bold" Foreground="White" Opacity="0.5" Margin="0,0,0,10"/>
+                        <DataGrid x:Name="TradesDataGri" Grid.Row="1" Background="Transparent" BorderThickness="0" 
+                                  AutoGenerateColumns="False" HeadersVisibility="Column" IsReadOnly="True"
+                                  RowBackground="Transparent" Foreground="White" AlternatingRowBackground="#1A2432">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Paire" Binding="{Binding Paire}" Width="*"/>
+                                <DataGridTextColumn Header="Type" Binding="{Binding TypeOrdre}" Width="*"/>
+                                <DataGridTextColumn Header="Résultat" Binding="{Binding Result}" Width="*"/>
+                                <DataGridTextColumn Header="Profit" Binding="{Binding Profit}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Style="{StaticResource CardStyle}" Grid.Row="0">
+                        <StackPanel>
+                            <TextBlock Text="STRATÉGIES" FontWeight="Bold" Foreground="White" Opacity="0.5" Margin="0,0,0,5"/>
+                            <ListBox x:Name="StrategieListBox1" Height="150" Background="Transparent" BorderThickness="0" Foreground="White"/>
+                            <Button Content="+ Nouvelle Stratégie" Click="Button_Click_2" Style="{StaticResource BoutonStyle}" Margin="0,10,0,0" HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}" Grid.Row="1">
+                        <Grid>
+                            <TextBlock Text="NOTES &amp; PLANNING" FontWeight="Bold" Foreground="White" Opacity="0.5" VerticalAlignment="Top"/>
+                            <RichTextBox x:Name="richTextBoxNotesWeeks" Margin="0,25,0,0" Background="#1A2432" Foreground="White" BorderThickness="0"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button x:Name="AddTradeButton" Content="+ AJOUTER UN TRADE" Click="AddTradeButton_Click" Style="{StaticResource BoutonStyle}" Width="200" Height="40" Margin="10,0"/>
+                <Button Content="CALENDRIER NEWS" Click="Button_Click" Style="{StaticResource BoutonStyle}" Background="#34495E" Width="150" Height="40" Margin="10,0"/>
+                <Button Content="ÉTUDES" Click="Button_Click_3" Style="{StaticResource BoutonStyle}" Background="#34495E" Width="100" Height="40" Margin="10,0"/>
+            </StackPanel>
+
+            <Popup x:Name="StrategyPopup" PlacementTarget="{Binding ElementName=AddTradeButton}" StaysOpen="False" AllowsTransparency="True">
+                <Border Background="{StaticResource CardBg}" BorderBrush="{StaticResource AccentBlue}" BorderThickness="1" CornerRadius="5">
+                    <ListBox x:Name="StrategyListBox" SelectionChanged="StrategyListBox_SelectionChanged" Width="200" Background="Transparent" Foreground="White"/>
+                </Border>
+            </Popup>
+
+            <Border x:Name="annoncesInvesting" Grid.Row="1" Grid.RowSpan="2" Style="{StaticResource CardStyle}" Margin="50" Visibility="Collapsed" Panel.ZIndex="100">
+                <cef:ChromiumWebBrowser x:Name="InvestingCalendarBrowser"/>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
+
+non ce design me convient pas je prefere le premier que tu mas proposé tu va essayer de lajuster avec mon code source , tu suprime les animations ;tout ce qui conerne les habitudes journaliere;et sil ya dautre chose pas trop cool tu efface voici le code behind:using System;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+
+namespace backtest
+{
+    public partial class MainWindow : Window
+    {
+        private DateTime currentWeekStart;
+        private readonly string notesFolderPath = Path.Combine(Environment.CurrentDirectory, "Notes");
+        private ObservableCollection<Trade> Journal;
+        private HabitsManager habitsManager;
+        public MainWindow()
+        {
+            InitializeComponent();
+            currentWeekStart = GetStartOfWeek(DateTime.Now);
+            LoadNotesForCurrentWeek();
+            LoadInvestingCalendar();
+            
+            loadStrategies();//charge les strategies et le journal
+            habitsManager = new HabitsManager();
+            DisplayHabitsInBorder();
+            // LoadInvestingCalendarAsync(); // Appel de la méthode asynchrone
+        }
+
+        private void DisplayHabitsInBorder()
+        {
+            // Nettoyer le contenu précédent
+            if (croissance.Child is StackPanel panel)
+            {
+                panel.Children.Clear();
+            }
+            else
+            {
+                panel = new StackPanel { Margin = new Thickness(10),CanVerticallyScroll=true };
+                croissance.Child = panel;
+            }
+
+            // Ajouter un titre
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Checklist quotidienne",
+                FontSize = 18,
+                Foreground=Brushes.Black,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(0, 0, 0, 10),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+
+            // Ajouter les CheckBox pour chaque habitude
+            foreach (var habitState in habitsManager.DailyHabitStates)
+            {
+                // Créez une StackPanel pour regrouper CheckBox et bouton de suppression
+                var habitPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    CanVerticallyScroll=true,
+                    Margin = new Thickness(5)
+                };
+
+                // Créez la CheckBox
+                var checkBox = new CheckBox
+                {
+                    Content = habitState.HabitName,
+                    IsChecked = habitState.IsChecked,
+                    Style = (Style)FindResource("CustomCheckBoxStyle")
+                };
+
+                checkBox.Checked += (s, e) => habitsManager.UpdateHabitState(habitState.HabitName, true);
+                checkBox.Unchecked += (s, e) => habitsManager.UpdateHabitState(habitState.HabitName, false);
+
+                // Créez le bouton de suppression
+                var deleteButton = new Button
+                {
+                    Content = "🗑️", // Icône ou texte pour le bouton
+                    Width = 30,
+                    Height = 30,
+                    Margin = new Thickness(5, 0, 0, 0),
+                    Background = Brushes.Transparent,
+                    BorderThickness = new Thickness(0),
+                    Foreground = Brushes.White,
+                    HorizontalAlignment=HorizontalAlignment.Right,
+                    Cursor = Cursors.Hand
+                };
+
+                // Événement de suppression
+                deleteButton.Click += (s, e) =>
+                {
+                    // Supprimer l'habitude de la liste
+                    habitsManager.RemoveHabit(habitState.HabitName);
+
+                    // Rafraîchir l'affichage
+                    RefreshHabitsDisplay();
+                };
+
+                // Ajoutez la CheckBox et le bouton dans le panel
+                habitPanel.Children.Add(checkBox);
+                habitPanel.Children.Add(deleteButton);
+
+                // Ajoutez le panel à l'affichage principal
+                panel.Children.Add(habitPanel);
+            }
+
+
+
+            // Ajouter un bouton pour ajouter une nouvelle habitude
+            var addButton = new Button
+            {
+                Content = "     +      ",
+                Margin = new Thickness(5),
+                FontSize = 20,
+                Background=Brushes.Black,
+                Foreground=Brushes.White,
+                Padding = new Thickness(5),
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+
+            addButton.Click += AddHabit_Click;
+            panel.Children.Add(addButton);
+
+        }
+        private void RefreshHabitsDisplay()
+        {
+            habitsManager.LoadDailyHabits(); // Recharge les habitudes
+            DisplayHabitsInBorder(); // Réaffiche les habitudes
+        }
+       
+        private void AddHabit_Click(object sender, RoutedEventArgs e)
+        {
+            var newHabitName = Microsoft.VisualBasic.Interaction.InputBox("Entrez le nom de l'habitude :", "Nouvelle habitude", "Nouvelle habitude");
+            if (!string.IsNullOrWhiteSpace(newHabitName))
+            {
+                habitsManager.AddHabit(newHabitName);
+                DisplayHabitsInBorder();
+            }
+        }
+        private void TitleBar_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            // Vérifie si l'utilisateur a double-cliqué avec le bouton gauche de la souris
+           
+                // Alterne entre Maximisé et Normal
+                if (this.WindowState == WindowState.Normal)
+                {
+                    this.WindowState = WindowState.Maximized;
+                }
+                else if (this.WindowState == WindowState.Maximized)
+                {
+                    this.WindowState = WindowState.Normal;
+                }
+
+        }
+        private void LoadNotesForCurrentWeek()
+        {
+            Directory.CreateDirectory(notesFolderPath);
+            string filePath = GetNotesFilePath(currentWeekStart);
+
+            if (File.Exists(filePath))
+            {
+                TextRange textRange = new TextRange(richTextBoxNotesWeeks.Document.ContentStart, richTextBoxNotesWeeks.Document.ContentEnd);
+                using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    textRange.Load(fs, DataFormats.Rtf);
+                }
+            }
+            else
+            {
+                
+                SaveNotes(); // Crée un fichier vide pour la semaine courante
+            }
+            UpdateWeekStartDateDisplay(); //  pour actualiser la date affichée
+        }
+        private void SaveNotes()
+        {
+            string filePath = GetNotesFilePath(currentWeekStart);
+            TextRange textRange = new TextRange(richTextBoxNotesWeeks.Document.ContentStart, richTextBoxNotesWeeks.Document.ContentEnd);
+
+            using (FileStream fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+            {
+                textRange.Save(fs, DataFormats.Rtf);
+            }
+        }
+        private string GetNotesFilePath(DateTime weekStart)
+        {
+            return Path.Combine(notesFolderPath, $"Notes_{weekStart:yyyyMMdd}.rtf");
+        }
+        private DateTime GetStartOfWeek(DateTime date)
+        {
+            int daysToSubtract = (int)date.DayOfWeek - (int)DayOfWeek.Monday;
+            return date.AddDays(-daysToSubtract).Date;
+        }
+
+        // Sauvegarde lors du raccourci CTRL+S
+        private void RichTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                SaveNotes();
+            }
+        }
+
+        // Sauvegarde automatique quand le RichTextBox perd le focus
+        private void RichTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            SaveNotes();
+        }
+
+        // Chargement de la semaine précédente
+        private void PreviousWeek_Click(object sender, RoutedEventArgs e)
+        {
+            richTextBoxNotesWeeks.Document.Blocks.Clear();
+            currentWeekStart = currentWeekStart.AddDays(-7);
+            LoadNotesForCurrentWeek();
+        }
+
+        // Chargement de la semaine suivante
+        private void NextWeek_Click(object sender, RoutedEventArgs e)
+        {
+            richTextBoxNotesWeeks.Document.Blocks.Clear();
+            currentWeekStart = currentWeekStart.AddDays(7);
+            LoadNotesForCurrentWeek();
+        }
+
+        //charger les strategies
+        public void loadStrategies()
+        {
+            var strategy= utils.getStrategies();
+            StrategieListBox1.ItemsSource = strategy;
+            StrategieListBox1.DisplayMemberPath = "Nom";
+            //charger le journal
+            Journal = new ObservableCollection<Trade>();
+            foreach(Strategie st in strategy)
+            {
+                foreach(Trade tr in st.GetJournal())
+                {
+                    tr.strategie = st.Nom;
+                    Journal.Add(tr);
+                }
+            }
+            TradesDataGri.ItemsSource = Journal;
+            var column = TradesDataGri.Columns.FirstOrDefault(c => c.Header.ToString() == "Date IN");
+            if (column != null)
+            {
+                TradesDataGri.Items.SortDescriptions.Clear(); // Supprime les tris existants
+                TradesDataGri.Items.SortDescriptions.Add(new System.ComponentModel.SortDescription("DateEntree",
+                    System.ComponentModel.ListSortDirection.Descending));
+
+                // Applique visuellement l'indicateur de tri à la colonne
+                column.SortDirection = System.ComponentModel.ListSortDirection.Descending;
+            }
+            nbreText.Text = Journal.Count.ToString();
+            Statistics stats = utils.CalculateStatistics(Journal);
+            tauxBuy.Text = stats.SuccessRateBuy.ToString()+"%";
+            tauxSell.Text = stats.SuccessRateSell.ToString() + "%";
+            meilleurePaire.Text = stats.BestPair;
+            PirePaire.Text = stats.WorstPair;
+            perfStrat.Children.Clear();
+            foreach ( var statStr in stats.StrategyPerformance)
+            {
+                perfStrat.Children.Add(new ControlStat(statStr.Key, statStr.Value));
+            }
+            
+        }
+        private void InitialiserCefSharp()
+        {
+            //var settings = new CefSettings();
+            // settings.IgnoreCertificateErrors = true;
+            // settings.CefCommandLineArgs.Add("disable-web-security", "1");
+
+            //CefSharp.Cef.Initialize(settings);
+        }
+
+        private void LoadInvestingCalendar()
+        {
+            InvestingCalendarBrowser.Address = "https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=110,17,25,34,32,6,37,26,5,22,39,93,14,48,10,35,105,43,38,4,36,12,72&calType=week&timeZone=55&lang=5";
+        }
+
+        private void VoirDonnees_Click(object sender, RoutedEventArgs e)
+        {
+            // Ouvrir une fenêtre pour voir les données de backtest
+            MessageBox.Show("Fenêtre pour voir les données de backtest.");
+        }
+
+        private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.WindowState = WindowState.Minimized;
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
+        }
+        // Mise à jour de l'affichage de la date de début de la semaine
+        private void UpdateWeekStartDateDisplay()
+        {
+            weekStartDateText.Text = $"Semaine du {currentWeekStart:dd/MM/yy}";
+        }
+
+        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+            {
+                this.DragMove();
+            }
+        }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (annoncesInvesting.Visibility == Visibility.Visible)
+            {
+                annoncesInvesting.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                annoncesInvesting.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            if (croissance.Visibility == Visibility.Visible)
+            {
+                croissance.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                croissance.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void Button_Click_2(object sender, RoutedEventArgs e)
+        {
+            new addStrategieWindow().ShowDialog();
+            loadStrategies();
+        }
+        private void ShowStatisticsControl_Click(object sender, RoutedEventArgs e)
+        {
+            
+                // Animation de sortie glissement et fondu pour le dashboard actuel
+                var slideOut = new ThicknessAnimation
+                {
+                    From = new Thickness(0),
+                    To = new Thickness(-MainGrid.ActualWidth, 0, MainGrid.ActualWidth, 0),
+                    Duration = TimeSpan.FromSeconds(0.1),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+                };
+
+                var fadeOut = new DoubleAnimation
+                {
+                    From = 1,
+                    To = 0,
+                    Duration = TimeSpan.FromSeconds(0.1)
+                };
+
+                slideOut.Completed += (s, ev) =>
+                {
+                // Remplace le dashboard par le StatisticsControl après l'animation de sortie
+                MainGrid.Children.Clear();
+                    var statisticsControl = new StatisticsControl();
+
+                // Animation d'entrée glissement et fondu pour le StatisticsControl
+                statisticsControl.Margin = new Thickness(MainGrid.ActualWidth, 0, -MainGrid.ActualWidth, 0); // Position de départ hors écran
+                MainGrid.Children.Add(statisticsControl);
+
+                    var slideIn = new ThicknessAnimation
+                    {
+                        From = new Thickness(MainGrid.ActualWidth, 0, -MainGrid.ActualWidth, 0),
+                        To = new Thickness(0),
+                        Duration = TimeSpan.FromSeconds(0.4),
+                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                    };
+
+                    var fadeIn = new DoubleAnimation
+                    {
+                        From = 0,
+                        To = 1,
+                        Duration = TimeSpan.FromSeconds(0.4)
+                    };
+
+                    statisticsControl.BeginAnimation(MarginProperty, slideIn);
+                    statisticsControl.BeginAnimation(OpacityProperty, fadeIn);
+                };
+
+                // Applique les animations de sortie si le dashboard est actuellement affiché
+                if (MainGrid.Children.Count > 0)
+                {
+                    var currentControl = MainGrid.Children[0] as UIElement;
+                    currentControl?.BeginAnimation(MarginProperty, slideOut);
+                    currentControl?.BeginAnimation(OpacityProperty, fadeOut);
+                }
+                else
+                {
+                    // Si aucun contrôle n'est affiché, passe directement au StatisticsControl
+
+                    ShowStatisticsDirect();
+                }
+            
+        }
+
+        // Fonction pour revenir au dashboard avec la même animation
+        public void ShowDashboard()
+        {
+            var slideOut = new ThicknessAnimation
+            {
+                From = new Thickness(0),
+                To = new Thickness(-MainGrid.ActualWidth, 0, MainGrid.ActualWidth, 0),
+                Duration = TimeSpan.FromSeconds(0.1),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
+
+            var fadeOut = new DoubleAnimation
+            {
+                From = 1,
+                To = 0,
+                Duration = TimeSpan.FromSeconds(0.1)
+            };
+
+            slideOut.Completed += (s, ev) =>
+            {
+                MainGrid.Children.Clear();
+                MainGrid.Children.Add(dashboard);
+
+            // Animation d'entrée glissement et fondu pour le Dashboard
+            dashboard.Margin = new Thickness(MainGrid.ActualWidth, 0, -MainGrid.ActualWidth, 0);
+                var slideIn = new ThicknessAnimation
+                {
+                    From = new Thickness(MainGrid.ActualWidth, 0, -MainGrid.ActualWidth, 0),
+                    To = new Thickness(0),
+                    Duration = TimeSpan.FromSeconds(0.1),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+
+                var fadeIn = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromSeconds(0.1)
+                };
+
+                dashboard.BeginAnimation(MarginProperty, slideIn);
+                dashboard.BeginAnimation(OpacityProperty, fadeIn);
+            };
+
+            if (MainGrid.Children.Count > 0)
+            {
+                var currentControl = MainGrid.Children[0] as UIElement;
+                currentControl?.BeginAnimation(MarginProperty, slideOut);
+                currentControl?.BeginAnimation(OpacityProperty, fadeOut);
+            }
+        }
+        // Fonction directe si le dashboard est masqué et qu'on veut montrer les statistiques
+        private void ShowStatisticsDirect(object sender=null, MouseButtonEventArgs e=null)
+        {
+            if (StrategieListBox1.SelectedItem != null)
+            {
+                var statisticsControl = new StatisticsControl((Strategie)StrategieListBox1.SelectedItem);
+                MainGrid.Children.Clear();
+                MainGrid.Children.Add(statisticsControl);
+
+                // Animation de fondu entrant pour StatisticsControl
+                var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.3));
+                statisticsControl.BeginAnimation(OpacityProperty, fadeIn);
+            }
+        }
+
+
+        private void StrategieListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+
+        }
+
+        private void ShowStatisticsControl_Click(object sender, MouseButtonEventArgs e)
+        {
+
+        }
+        private void AddTradeButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Récupérer les stratégies
+            var strategies = utils.getStrategies();
+
+            // Peupler la ListBox dans le Popup
+            StrategyListBox.ItemsSource = strategies;
+            StrategyListBox.DisplayMemberPath = "Nom"; // Affiche le nom des stratégies
+
+            // Afficher le Popup
+            StrategyPopup.IsOpen = true;
+        }
+
+        private void StrategyListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (StrategyListBox.SelectedItem is Strategie selectedStrategy)
+            {
+                // Ouvrir la fenêtre d'ajout de trade
+                new AjoutTrade(selectedStrategy, true).ShowDialog();
+
+                // Réinitialiser la sélection pour éviter des actions répétées
+                StrategyListBox.SelectedItem = null;
+
+                // Fermer le Popup
+                StrategyPopup.IsOpen = false;
+                loadStrategies();
+            }
+        }
+
+        private void TradesDataGri_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+
+            if (TradesDataGri.SelectedItem is Trade selectedTrade)
+            {
+                VisuelTrade visuelTradeWindow = new VisuelTrade(selectedTrade);
+                visuelTradeWindow.Show();
+            }
+
+        }
+
+        private void StrategieListBox1_KeyDown(object sender, KeyEventArgs e)
+        {
+            // Vérifie si la touche appuyée est "Delete"
+            if (e.Key == Key.Delete)
+            {
+                // Vérifie si un élément est sélectionné et qu'il s'agit d'une stratégie
+                if (StrategieListBox1.SelectedItem is Strategie str)
+                {
+                    // Confirmer la suppression avec l'utilisateur
+                    MessageBoxResult result = MessageBox.Show(
+                        $"Voulez-vous vraiment supprimer la stratégie '{str.Nom}' ?",
+                        "Confirmation de suppression",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning
+                    );
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        // Appeler la méthode de suppression
+                        str.SupprimerStrategie();
+                        loadStrategies();
+                        // Supprimer la stratégie de l'interface utilisateur
+                       // ((ObservableCollection<Strategie>)StrategieListBox1.ItemsSource)?.Remove(str);
+                    }
+                }
+            }
+        }
+        private void TradesDataGri_KeyUp(object sender, KeyEventArgs e)
+        {
+            // Vérifie si la touche appuyée est "Delete"
+            if (e.Key == Key.Delete)
+            {
+                // Vérifie si un élément est sélectionné et qu'il s'agit d'un trade
+                if (TradesDataGri.SelectedItem is Trade trade)
+                {
+                    // Trouve la stratégie correspondante en utilisant le nom de la stratégie du trade
+                    Strategie strategieAssociee = null;
+
+                    foreach (Strategie strategie in StrategieListBox1.Items)
+                    {
+                        if (strategie.Nom == trade.strategie)
+                        {
+                            strategieAssociee = strategie;
+                            break;
+                        }
+                    }
+
+                    // Vérifie si une stratégie correspondante a été trouvée
+                    if (strategieAssociee != null)
+                    {
+                        // Affiche une boîte de confirmation
+                        MessageBoxResult result = MessageBox.Show(
+                            $"Êtes-vous sûr de vouloir supprimer le trade avec l'ID {trade.Id} de la stratégie '{trade.strategie}' ?",
+                            "Confirmation de suppression",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning
+                        );
+
+                        // Vérifie si l'utilisateur a confirmé la suppression
+                        if (result == MessageBoxResult.Yes)
+                        {
+                            // Supprime le trade de la stratégie associée
+                            strategieAssociee.RemoveJournalById(trade.Id);
+
+                            loadStrategies();
+                        }
+                    }
+                    else
+                    {
+                        // Si aucune stratégie correspondante n'est trouvée, affiche un message d'erreur
+                        MessageBox.Show(
+                            "Impossible de trouver la stratégie associée au trade sélectionné.",
+                            "Erreur",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error
+                        );
+                    }
+                }
+            }
+
+
+        }
+
+        private void StrategieListBox1_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if(StrategieListBox1.SelectedItem is Strategie st)
+            {
+                string fullPath = Path.Combine(Directory.GetCurrentDirectory(), st.filePath);
+                // Vérifiez si le fichier existe avant d'essayer de l'ouvrir
+
+                if (!string.IsNullOrEmpty(st.filePath) && File.Exists(fullPath))
+                {
+                    try
+                    {
+                        // Lancer le fichier avec l'application par défaut (Excel dans ce cas)
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = fullPath,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        // Gérez les exceptions si le fichier ne peut pas être ouvert
+                        MessageBox.Show($"Une erreur est survenue lors de l'ouverture du fichier : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Le fichier spécifié n'existe pas ou le chemin est vide.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+        }
+
+        private void TradesDataGri_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            // Vérifie si un élément est sélectionné et qu'il s'agit d'un trade
+            if (TradesDataGri.SelectedItem is Trade trade)
+            {
+                // Trouve la stratégie correspondante en utilisant le nom de la stratégie du trade
+                Strategie st = null;
+
+                foreach (Strategie strategie in StrategieListBox1.Items)
+                {
+                    if (strategie.Nom == trade.strategie)
+                    {
+                        st = strategie;
+                        break;
+                    }
+                }
+
+                // Vérifie si une stratégie correspondante a été trouvée
+                if (st != null)
+                {
+                    string fullPath = Path.Combine(Directory.GetCurrentDirectory(), st.journalFilePath);
+                    if (!string.IsNullOrEmpty(st.journalFilePath) && File.Exists(fullPath))
+                    {
+                        try
+                        {
+                            // Lancer le fichier avec l'application par défaut (Excel dans ce cas)
+                            Process.Start(new ProcessStartInfo
+                            {
+                                FileName = fullPath,
+                                UseShellExecute = true
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            // Gérez les exceptions si le fichier ne peut pas être ouvert
+                            MessageBox.Show($"Une erreur est survenue lors de l'ouverture du fichier : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Le fichier spécifié n'existe pas ou le chemin est vide.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                else
+                {
+                    // Si aucune stratégie correspondante n'est trouvée, affiche un message d'erreur
+                    MessageBox.Show(
+                        "Impossible de trouver la stratégie associée au trade sélectionné.",
+                        "Erreur",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error
+                    );
+                }
+            }
+        }
+
+        private void Button_Click_3(object sender, RoutedEventArgs e)
+        {
+            new EtudesView().ShowDialog();
+
+        }
+    }
+}

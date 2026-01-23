@@ -648,7 +648,6 @@ namespace backtest
                 _ => "Inconnu"
             };
         }
-
         public List<string> GetDynamicHeaders()
         {
             return tradeHeaders;
@@ -881,7 +880,6 @@ namespace backtest
                 Console.WriteLine($"Erreur lors de la suppression du trade : {ex.Message}");
             }
         }
-
         public void AddTrade(Trade trade)
         {
             trade.Id = GetNextId(); // Assigne l'ID suivant au trade
@@ -920,7 +918,6 @@ namespace backtest
             }
             catch { }
         }
-
         public void AddJournal(Trade trade)
         {
             trade.Id = GetNextId("j"); // Assigne l'ID suivant au trade
@@ -959,7 +956,6 @@ namespace backtest
             }
             catch { }
         }
-
         public List<Trade> GetTrades()
         {
             List<Trade> trades = new List<Trade>();
@@ -1082,7 +1078,6 @@ namespace backtest
             }
             return trades;
         }
-
         private void CreateNewExcelWithHeaders(Trade trade)
         {
             try
