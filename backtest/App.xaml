@@ -66,37 +66,41 @@
             <SolidColorBrush x:Key="NeonPink" Color="#FFCD63A6"/>
             <local:TypeToColorConverter x:Key="TypeToColorConverter"/>
             <local:ProfitToColorConverter x:Key="ProfitToColorConverter"/>
-            <Style x:Key="CircleNavButton" TargetType="Button">
-                <Setter Property="Width" Value="40"/>
-                <Setter Property="Height" Value="40"/>
-                <Setter Property="Margin" Value="0,10"/>
-                <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="Background" Value="#1A2432"/>
-                <Setter Property="Foreground" Value="White"/>
-                <Setter Property="FontSize" Value="18"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="20" BorderBrush="#333" BorderThickness="1">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="#253245"/>
-                                    <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBlue}"/>
-                                    <Setter TargetName="border" Property="Effect">
-                                        <Setter.Value>
-                                            <DropShadowEffect Color="{StaticResource AccentBlueColor}" BlurRadius="10" ShadowDepth="0" Opacity="0.5"/>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <Style x:Key="CardStyle" TargetType="Border">
+        <Style x:Key="CircleNavButton" TargetType="Button">
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Margin" Value="0,10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="#1A2432"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="20" BorderBrush="#333" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#253245"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBlue}"/>
+                                <Setter TargetName="border" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="{StaticResource AccentBlueColor}" BlurRadius="10" ShadowDepth="0" Opacity="0.5"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <DropShadowEffect x:Key="NeonGlowBlue" 
+                      Color="{StaticResource AccentBlueColor}" 
+                      BlurRadius="20" 
+                      ShadowDepth="0" 
+                      Opacity="0.8"/>
+        <Style x:Key="CardStyle" TargetType="Border">
                 <Setter Property="Background" Value="{StaticResource CardBg}"/>
                 <Setter Property="CornerRadius" Value="15"/>
                 <Setter Property="Padding" Value="12"/>

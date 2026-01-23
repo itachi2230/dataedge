@@ -1,0 +1,21 @@
+﻿<Window x:Class="backtest.ZoomImageWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Zoom" WindowStyle="None" AllowsTransparency="True" 
+        Background="#CC000000" WindowState="Maximized"
+        MouseDown="Window_MouseDown">
+    <Grid>
+        <Border Margin="40" Background="Black" CornerRadius="10" 
+                BorderBrush="{StaticResource AccentBlue}" BorderThickness="1"
+                VerticalAlignment="Center" HorizontalAlignment="Center"
+                Effect="{StaticResource NeonGlowBlue}">
+            <Grid>
+                <Image x:Name="FullImage" Stretch="Uniform" Cursor="Hand"/>
+
+                <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top" 
+                        Background="Transparent" Foreground="White" BorderThickness="0"
+                        Margin="10" FontSize="20" Click="Close_Click"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -213,11 +213,17 @@
       <DependentUpon>StatisticsControl.xaml</DependentUpon>
     </Compile>
     <Compile Include="strategie.cs" />
+    <Compile Include="TradeVisualizerControl.xaml.cs">
+      <DependentUpon>TradeVisualizerControl.xaml</DependentUpon>
+    </Compile>
     <Compile Include="VisuelTrade.xaml.cs">
       <DependentUpon>VisuelTrade.xaml</DependentUpon>
     </Compile>
     <Compile Include="Window1.xaml.cs">
       <DependentUpon>Window1.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ZoomImageWindow.xaml.cs">
+      <DependentUpon>ZoomImageWindow.xaml</DependentUpon>
     </Compile>
     <Page Include="addStrategieWindow.xaml">
       <SubType>Designer</SubType>
@@ -267,11 +273,19 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="TradeVisualizerControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="VisuelTrade.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Window1.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ZoomImageWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

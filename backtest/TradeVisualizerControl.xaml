@@ -1,0 +1,29 @@
+﻿<UserControl x:Class="backtest.TradeVisualizerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#050505">
+    <Grid x:Name="MainGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition x:Name="RowHtf" Height="1*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="RowLtf" Height="1*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="Black" Margin="2" CornerRadius="4" 
+                ClipToBounds="True" MouseDown="Image_MouseDown" Cursor="Hand">
+            <Image x:Name="ImgHtf" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+        </Border>
+
+        <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch" 
+                      Background="#111" ShowsPreview="True" VerticalAlignment="Center"/>
+
+        <Border Grid.Row="2" Background="Black" Margin="2" CornerRadius="4" 
+                ClipToBounds="True" MouseDown="Image_MouseDown" Cursor="Hand">
+            <Image x:Name="ImgLtf" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+        </Border>
+
+        <TextBlock x:Name="NoImageText" Text="AUCUN VISUEL" 
+                   Grid.RowSpan="3" Foreground="#222" FontSize="20" FontWeight="Black"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+    </Grid>
+</UserControl>

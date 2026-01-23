@@ -143,7 +143,12 @@ namespace backtest
         {
             if (TradesDataGrid.SelectedItem is Trade selectedTrade)
             {
-                new VisuelTrade(selectedTrade).Show();
+                // 1. Mise à jour de la description
+                richTextBox.Document.Blocks.Clear();
+                richTextBox.Document.Blocks.Add(new Paragraph(new Run(selectedTrade.description)));
+
+                // 2. Mise à jour du visuel TradingView
+                TradeVisualizer.DisplayTrade(selectedTrade);
             }
         }
         private void TradesDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
