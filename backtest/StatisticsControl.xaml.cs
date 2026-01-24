@@ -6,6 +6,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Data;
+using System.Collections.Generic;
 
 namespace backtest
 {
@@ -32,22 +33,29 @@ namespace backtest
             LoadTradesDataGrid();
         }
 
-        // Changement ici : On accepte Panel1 et Panel2 qui sont maintenant des UniformGrid
         public void LoadStatistics(Panel panel1, Panel panel2)
         {
             var stats = strategie.GetStatistics();
 
-            // Mise à jour du Panel 1 (TOP/PIRE JOUR) - 2 éléments
-            UpdateStatCard(panel1, 0, "TOP JOUR", stats["Most Favorable Day"].ToString(), Colors.White);
-            UpdateStatCard(panel1, 1, "PIRE JOUR", stats["Least Favorable Day"].ToString(), Colors.White);
+            // Gestion sécurisée des valeurs (évite le crash si stats vides)
+            string topDay = stats.ContainsKey("Most Favorable Day") ? stats["Most Favorable Day"].ToString() : "N/A";
+            string pireDay = stats.ContainsKey("Least Favorable Day") ? stats["Least Favorable Day"].ToString() : "N/A";
+            string winrate = stats.ContainsKey("Winrate") ? $"{stats["Winrate"]:0.##}%" : "0%";
+            string avgRR = stats.ContainsKey("Average RR") ? $"{stats["Average RR"]:0.##}" : "0";
+            string maxRR = stats.ContainsKey("Max RR") ? $"{stats["Max RR"]:0.##}" : "0";
+            string minRR = stats.ContainsKey("Min RR") ? $"{stats["Min RR"]:0.##}" : "0";
 
-            // Mise à jour du Panel 2 (WINRATE, RR...) - 4 éléments
-            UpdateStatCard(panel2, 0, "WINRATE", $"{stats["Winrate"]:0.##}%", Colors.Lime);
-            UpdateStatCard(panel2, 1, "RR MOYEN", $"{stats["Average RR"]:0.##}", Colors.White);
-            UpdateStatCard(panel2, 2, "RR MAX", $"{stats["Max RR"]:0.##}", Colors.Lime);
-            UpdateStatCard(panel2, 3, "RR MIN", $"{stats["Min RR"]:0.##}", Colors.Red); // Ajouté car présent dans le XAML
+            // Mise à jour du Panel 1 (TOP/PIRE JOUR)
+            UpdateStatCard(panel1, 0, "TOP JOUR", topDay, Colors.White);
+            UpdateStatCard(panel1, 1, "PIRE JOUR", pireDay, Colors.White);
+
+            // Mise à jour du Panel 2 (WINRATE, RR...)
+            UpdateStatCard(panel2, 0, "WINRATE", winrate, Colors.Lime);
+            UpdateStatCard(panel2, 1, "RR MOYEN", avgRR, Colors.White);
+            UpdateStatCard(panel2, 2, "RR MAX", maxRR, Colors.Lime);
+            UpdateStatCard(panel2, 3, "RR MIN", minRR, Colors.Red);
         }
-        // On utilise 'Panel' pour être compatible avec StackPanel ET UniformGrid
+
         private void UpdateStatCard(Panel container, int index, string title, string value, Color valueColor)
         {
             if (index < container.Children.Count && container.Children[index] is Border border &&
@@ -61,7 +69,7 @@ namespace backtest
                 }
             }
         }
-        // Focus sur le DataGrid (cache le visuel)
+
         private void ToggleDataGrid_Click(object sender, RoutedEventArgs e)
         {
             if (ColVisual.Width != new GridLength(0))
@@ -76,7 +84,7 @@ namespace backtest
                 VisualContainer.Visibility = Visibility.Visible;
             }
         }
-        // Focus sur le Visuel (cache le DataGrid)
+
         private void ToggleVisual_Click(object sender, RoutedEventArgs e)
         {
             if (ColDataGrid.Width != new GridLength(0))
@@ -91,38 +99,45 @@ namespace backtest
                 DataGridContainer.Visibility = Visibility.Visible;
             }
         }
+
         private void LoadTradesDataGrid()
         {
             TradesDataGrid.Columns.Clear();
 
-            // Configuration des colonnes
+            // Configuration des colonnes de base
             TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "PAIRE", Binding = new Binding("Paire"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
             TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "RESULT", Binding = new Binding("Result"), Width = 80 });
             TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "RR", Binding = new Binding("RR"), Width = 60 });
             TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "ENTRÉE", Binding = new Binding("DateEntree") { StringFormat = "dd/MM/yy" }, Width = 100 });
 
-            // Colonnes dynamiques
-            foreach (var header in strategie.GetDynamicHeaders())
+            // Remplacement de GetDynamicHeaders par l'analyse des stats JSON
+            var advancedStats = strategie.RetrieveStats();
+            if (advancedStats != null && advancedStats.PerformanceStats != null)
             {
-                TradesDataGrid.Columns.Add(new DataGridTextColumn
+                foreach (var header in advancedStats.PerformanceStats.Keys)
                 {
-                    Header = header,
-                    Binding = new Binding("ChampsPersonnalises")
+                    TradesDataGrid.Columns.Add(new DataGridTextColumn
                     {
-                        Converter = new ChampPersonnaliseConverter(),
-                        ConverterParameter = header
-                    }
-                });
+                        Header = header,
+                        Binding = new Binding("ChampsPersonnalises")
+                        {
+                            Converter = new ChampPersonnaliseConverter(),
+                            ConverterParameter = header
+                        }
+                    });
+                }
             }
 
-            TradesDataGrid.ItemsSource = strategie.GetTrades();
+            var trades = strategie.GetTrades();
+            TradesDataGrid.ItemsSource = trades;
 
-            // Tri et Compteur
-            nbreTrade.Text = strategie.GetTrades().Count.ToString();
+            // Compteur de trades
+            nbreTrade.Text = trades.Count.ToString();
 
-            // On passe les UniformGrid définis dans le XAML
+            // Mise à jour des cartes de stats
             LoadStatistics(MyStackPanel1, MyStackPanel2);
         }
+
         private void BackToDashboard_Click(object sender, RoutedEventArgs e)
         {
             if (Application.Current.MainWindow is MainWindow mainWindow)
@@ -130,56 +145,51 @@ namespace backtest
                 mainWindow.ShowDashboard();
             }
         }
+
         private void addTrade(object sender, MouseButtonEventArgs e)
         {
-            // Ouvre la fenêtre d'ajout et rafraîchit
             var fenetreAjout = new AjoutTrade(this.strategie);
             if (fenetreAjout.ShowDialog() == true || fenetreAjout.DialogResult == null)
             {
                 LoadTradesDataGrid();
             }
         }
-        private void TradesDataGrid_SelectionChanged_1(object sender, MouseButtonEventArgs e)
-        {
-            if (TradesDataGrid.SelectedItem is Trade selectedTrade)
-            {
-                // 1. Mise à jour de la description
-                richTextBox.Document.Blocks.Clear();
-                richTextBox.Document.Blocks.Add(new Paragraph(new Run(selectedTrade.description)));
 
-                // 2. Mise à jour du visuel TradingView
-                TradeVisualizer.DisplayTrade(selectedTrade);
-            }
-        }
         private void TradesDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (TradesDataGrid.SelectedItem is Trade selectedTrade)
             {
                 richTextBox.Document.Blocks.Clear();
                 richTextBox.Document.Blocks.Add(new Paragraph(new Run(selectedTrade.description)));
+
+                // Si TradeVisualizer est présent dans ton projet
+                try { TradeVisualizer.DisplayTrade(selectedTrade); } catch { }
             }
             else
             {
-                // Si rien n'est sélectionné, on remet la description de la stratégie
                 richTextBox.Document.Blocks.Clear();
                 richTextBox.Document.Blocks.Add(new Paragraph(new Run(strategie.description)));
             }
         }
+
         private void TradesDataGrid_KeyUp(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Delete && TradesDataGrid.SelectedItem is Trade tr)
             {
-                if (MessageBox.Show($"Supprimer l'ID {tr.Id} ?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                if (MessageBox.Show($"Supprimer le trade {tr.Paire} du {tr.DateEntree:dd/MM} ?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     this.strategie.RemoveTradeById(tr.Id);
                     LoadTradesDataGrid();
                 }
             }
         }
+
         private void NbreTrade_MouseUp(object sender, RoutedEventArgs e)
         {
+            // CalculateStatistics met déjà à jour les stats avancées dans le JSON
             strategie.CalculateStatistics();
-            strategie.CalculateStatsPlus();
+
+            // Ouvre la fenêtre de stats détaillées
             new Window1(this.strategie).ShowDialog();
         }
     }

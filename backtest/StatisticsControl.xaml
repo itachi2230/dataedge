@@ -114,7 +114,7 @@
                         <DataGrid x:Name="TradesDataGrid" RowStyle="{StaticResource FuturisticRowStyle}" 
                                   ColumnHeaderStyle="{StaticResource FuturisticColumnHeader}"
                                   Background="Transparent" BorderThickness="0" AutoGenerateColumns="False" IsReadOnly="True"
-                                  MouseRightButtonDown="addTrade" MouseDoubleClick="TradesDataGrid_SelectionChanged_1" 
+                                  MouseRightButtonDown="addTrade" 
                                   SelectionChanged="TradesDataGrid_SelectionChanged" KeyUp="TradesDataGrid_KeyUp"/>
                     </DockPanel>
                 </Border>

@@ -158,7 +158,7 @@
                             <ColumnDefinition Width="233*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="0" Margin="8,8,5.2,7.8">
+                        <Border Style="{StaticResource CardStyle}" Grid.Column="0" Margin="8,15,5.2,0">
                             <UniformGrid Columns="2">
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="BUY" Foreground="Gray" HorizontalAlignment="Center" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
@@ -179,7 +179,7 @@
                             </UniformGrid>
                         </Border>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="1" Margin="10.8,8,4.4,7.8">
+                        <Border Style="{StaticResource CardStyle}" Grid.Column="1" Margin="10.8,15,4.4,0">
                             <UniformGrid Columns="2" VerticalAlignment="Center">
                                 <StackPanel>
                                     <TextBlock Text="BEST" Foreground="Gray" FontSize="14" HorizontalAlignment="Center"/>
@@ -192,11 +192,31 @@
                             </UniformGrid>
                         </Border>
 
-                        <Grid Grid.Column="2" Margin="15.6,0,3.8,-0.2">
+                        <Grid Grid.Column="2" Margin="14.6,0,3.8,-0.2">
                             <DockPanel>
-                                <TextBlock Text="STRATEGIES" Foreground="Gray" FontSize="12" FontWeight="Bold" DockPanel.Dock="Top" Margin="5,10,0,0"/>
-                                <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden">
-                                    <StackPanel x:Name="perfStrat" Orientation="Vertical" VerticalAlignment="Center"/>
+                                <Grid DockPanel.Dock="Top" Margin="5,0,5,0">
+                                    <TextBlock Text="STRATÉGIES" 
+                       Foreground="Gray" 
+                       FontSize="12" 
+                       FontWeight="Bold" 
+                       VerticalAlignment="Center"/>
+
+                                    <Button HorizontalAlignment="Right" 
+                    Width="30" Height="30"
+                    Content="+" 
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Style="{StaticResource CircleNavButton}" 
+                    Click="AddStrategy_Click"
+                    ToolTip="Ajouter une nouvelle stratégie" Background="#FF478DF0"/>
+                                </Grid>
+
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled" 
+                      VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="perfStrat" 
+                        Orientation="Vertical" 
+                        VerticalAlignment="Top" 
+                        Margin="0,0,0,0"/>
                                 </ScrollViewer>
                             </DockPanel>
                         </Grid>
@@ -223,8 +243,36 @@
 
                         <Border Style="{StaticResource CardStyle}" Grid.Column="0">
                             <DockPanel>
-                                <TextBlock Text="Journal de trading" Foreground="Gray" FontSize="14" FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,10"/>
-                                <DataGrid x:Name="TradesDataGri" Background="Transparent" BorderThickness="0" AutoGenerateColumns="False" HeadersVisibility="Column" IsReadOnly="True" GridLinesVisibility="None" RowStyle="{StaticResource FuturisticRowStyle}" ColumnHeaderStyle="{StaticResource FuturisticColumnHeader}" MouseDoubleClick="TradesDataGri_MouseDoubleClick" VerticalScrollBarVisibility="Visible">
+                                <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                                    <TextBlock Text="JOURNAL DE TRADING" 
+                   Foreground="SlateGray" 
+                   FontSize="14" 
+                   FontWeight="Bold" 
+                   VerticalAlignment="Center"/>
+
+                                    <Button x:Name="AddTradeButton" 
+                Content="+" 
+                HorizontalAlignment="Right" 
+                VerticalAlignment="Center"
+                Width="28" Height="28"
+                FontSize="18"
+                FontWeight="Bold"
+                Style="{StaticResource CircleNavButton}" 
+                Click="AddTradeButton_Click"
+                ToolTip="Ajouter un nouveau trade" Background="#FF7C456F"/>
+                                </Grid>
+
+                                <DataGrid x:Name="TradesDataGri" 
+              Background="Transparent" 
+              BorderThickness="0" 
+              AutoGenerateColumns="False" 
+              HeadersVisibility="Column" 
+              IsReadOnly="True" 
+              GridLinesVisibility="None" 
+              RowStyle="{StaticResource FuturisticRowStyle}" 
+              ColumnHeaderStyle="{StaticResource FuturisticColumnHeader}" 
+              MouseDoubleClick="TradesDataGri_MouseDoubleClick" 
+              VerticalScrollBarVisibility="Visible">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="PAIRE" Binding="{Binding Paire}" Width="*" FontWeight="Bold"/>
                                         <DataGridTemplateColumn Header="TYPE" Width="80">
@@ -269,17 +317,9 @@
                     </Grid>
                 </Grid>
             </ContentControl>
-            
+
             <Grid Grid.Row="3" Margin="25,0.4,0,0">
-                <Button x:Name="AddTradeButton" Content="+ AJOUT TRADE" Click="AddTradeButton_Click" Background="{StaticResource AccentBlue}" Foreground="Black" FontWeight="Bold" Width="150" Height="36" Cursor="Hand" HorizontalAlignment="Left">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border Background="{TemplateBinding Background}" CornerRadius="18">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
+                
 
                 <Button Content="CALENDRIER ECO" Click="Button_Click" Background="#1A2432" Foreground="White" Width="120" Height="36" HorizontalAlignment="Right" Margin="0,0,70,0">
                     <Button.Template>

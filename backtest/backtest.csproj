@@ -206,12 +206,16 @@
     <Compile Include="InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="newvisu.xaml.cs">
+      <DependentUpon>newvisu.xaml</DependentUpon>
+    </Compile>
     <Compile Include="opening.xaml.cs">
       <DependentUpon>opening.xaml</DependentUpon>
     </Compile>
     <Compile Include="StatisticsControl.xaml.cs">
       <DependentUpon>StatisticsControl.xaml</DependentUpon>
     </Compile>
+    <Content Include="strategie - Copy.txt" />
     <Compile Include="strategie.cs" />
     <Compile Include="TradeVisualizerControl.xaml.cs">
       <DependentUpon>TradeVisualizerControl.xaml</DependentUpon>
@@ -265,6 +269,10 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="newvisu.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="opening.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>

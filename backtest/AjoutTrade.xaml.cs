@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using backtest;
+using System.Windows.Media;
 
 namespace backtest
 {
@@ -10,47 +11,73 @@ namespace backtest
     {
         private Strategie _strategie;
         private bool modeJournal;
-        public AjoutTrade(Strategie strategie,bool modeJournal=false)
+
+        public AjoutTrade(Strategie strategie, bool modeJournal = false)
         {
             InitializeComponent();
             _strategie = strategie;
             this.modeJournal = modeJournal;
-            if (modeJournal == true)
-            {
-                profitTxt.Visibility = Visibility.Visible;
-            }
-            // Initialiser les combobox avec les options disponibles
-            TypeOrdreComboBox.ItemsSource = Enum.GetValues(typeof(TypeOrdre)).Cast<TypeOrdre>();
-            ResultComboBox.ItemsSource = Enum.GetValues(typeof(Resultat)).Cast<Resultat>();
 
-            // Charger les champs dynamiques spécifiques à la stratégie
+            // Configuration de l'interface
+            if (profitTxt != null)
+                stackprofit.Visibility = modeJournal ? Visibility.Visible : Visibility.Collapsed;
+
+            // Initialisation des Enums
+            TypeOrdreComboBox.ItemsSource = Enum.GetValues(typeof(TypeOrdre));
+            ResultComboBox.ItemsSource = Enum.GetValues(typeof(Resultat));
+
+            // Setup des placeholders (comme dans addStrategieWindow)
+            SetupPlaceholders(MainStack);
+
+            // Chargement de la structure dynamique
             ChargerChampsDynamique();
+        }
+
+        private void SetupPlaceholders(Panel container)
+        {
+            foreach (var child in container.Children)
+            {
+                if (child is TextBox tb)
+                {
+                    tb.GotFocus += (s, e) =>
+                    {
+                        if (tb.Tag?.ToString() == "placeholder")
+                        {
+                            tb.Text = "";
+                            tb.Foreground = Brushes.White;
+                            tb.Tag = "";
+                        }
+                    };
+                }
+                else if (child is Panel p) SetupPlaceholders(p); // Récursivité pour les Grids/StackPanels
+            }
         }
 
         private void ChargerChampsDynamique()
         {
-            foreach (var header in _strategie.GetDynamicHeaders())
+            DynamicFieldsPanel.Children.Clear();
+            List<string> structure = _strategie.GetStructure();
+
+            foreach (var header in structure)
             {
-                var label = new TextBlock
+                TextBlock lbl = new TextBlock
                 {
-                    Text = header,
-                    Foreground = System.Windows.Media.Brushes.White,
-                    Margin = new Thickness(0, 5, 0, 5)
+                    Text = header.ToUpper(),
+                    Foreground = Brushes.Gray,
+                    FontSize = 9,
+                    Margin = new Thickness(0, 10, 0, 5)
                 };
 
-                var textBox = new TextBox
+                TextBox txt = new TextBox
                 {
-                    Width = 380,
-                    Height = 30,
-                    Background = System.Windows.Media.Brushes.Gray,
-                    Foreground = System.Windows.Media.Brushes.White,
-                    BorderBrush = System.Windows.Media.Brushes.Transparent,
-                    Margin = new Thickness(0, 5, 0, 5),
-                    Tag = header // Utilisé pour identifier le champ
+                    Style = (Style)this.FindResource("ModernField"),
+                    Height = 35,
+                    Tag = header, // Utilisé pour mapper la sauvegarde
+                    Margin = new Thickness(0, 0, 0, 10)
                 };
 
-                DynamicFieldsPanel.Children.Add(label);
-                DynamicFieldsPanel.Children.Add(textBox);
+                DynamicFieldsPanel.Children.Add(lbl);
+                DynamicFieldsPanel.Children.Add(txt);
             }
         }
 
@@ -58,76 +85,61 @@ namespace backtest
         {
             try
             {
-                // Récupérer les informations du formulaire
-                var paire = PaireTextBox.Text.ToUpper();
-                var typeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem;
-                var result = (Resultat)ResultComboBox.SelectedItem;
-                var dateEntree = CombineDateTime(DateEntreePicker.SelectedDate, TimeEntreePicker.Value);
-                var dateSortie = CombineDateTime(DateSortiePicker.SelectedDate, TimeSortiePicker.Value);
-                var rr = float.Parse(RrTextBox.Text);
-                var imageLtf = ImageLtfTextBox.Text;
-                var imageHtf = ImageHtfTextBox.Text;
-                var description = descriptionTextbox.Text;
-                var profit = Int64.Parse(profitTxt.Text);
-                // Champs personnalisés
-                var champsPersonnalises = DynamicFieldsPanel.Children
-                    .OfType<TextBox>()
-                    .Select(tb => new ChampPersonnalise(tb.Tag.ToString(), tb.Text.ToLower()))
-                    .ToList();
-
-                // Créer le nouvel objet Trade
-                var trade = new Trade(profit)
+                if (TypeOrdreComboBox.SelectedItem == null || ResultComboBox.SelectedItem == null)
                 {
-                    Paire = paire,
-                    TypeOrdre = typeOrdre,
-                    Result = result,
-                    DateEntree = dateEntree,
-                    DateSortie = dateSortie,
-                    RR = rr,
-                    ImageLtf = imageLtf,
-                    ImageHtf = imageHtf,
-                    description = description,
-                    ChampsPersonnalises = champsPersonnalises
-                    
+                    MessageBox.Show("Sélectionnez le type et le résultat.", "Champs manquants", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                double profitValue = 0;
+                if (modeJournal && profitTxt.Tag?.ToString() != "placeholder")
+                    double.TryParse(profitTxt.Text.Replace(".", ","), out profitValue);
+
+                float rrValue = 0;
+                if (RrTextBox.Tag?.ToString() != "placeholder")
+                    float.TryParse(RrTextBox.Text.Replace(".", ","), out rrValue);
+
+                var trade = new Trade(profitValue)
+                {
+                    Paire = (PaireTextBox.Tag?.ToString() == "placeholder") ? "N/A" : PaireTextBox.Text.ToUpper(),
+                    TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem,
+                    Result = (Resultat)ResultComboBox.SelectedItem,
+                    DateEntree = CombineDateTime(DateEntreePicker.SelectedDate, TimeEntreePicker.Value),
+                    DateSortie = CombineDateTime(DateSortiePicker.SelectedDate, TimeSortiePicker.Value),
+                    RR = rrValue,
+                    ImageLtf = (ImageLtfTextBox.Tag?.ToString() == "placeholder") ? "" : ImageLtfTextBox.Text,
+                    ImageHtf = (ImageHtfTextBox.Tag?.ToString() == "placeholder") ? "" : ImageHtfTextBox.Text,
+                    description = (descriptionTextbox.Tag?.ToString() == "placeholder") ? "" : descriptionTextbox.Text,
+                    strategie = _strategie.Nom,
+                    ChampsPersonnalises = DynamicFieldsPanel.Children
+                        .OfType<TextBox>()
+                        .Select(tb => new ChampPersonnalise(tb.Tag.ToString(), tb.Text))
+                        .ToList()
                 };
 
-                // Ajouter le trade à la stratégie
-                if (modeJournal == false)
-                {
-                    _strategie.AddTrade(trade);
-                }
-                else
-                {
-                    _strategie.AddJournal(trade);
-                }
-                
+                if (modeJournal) _strategie.AddJournal(trade);
+                else _strategie.AddTrade(trade);
 
-                texetat.Visibility = Visibility.Visible;
-                PaireTextBox.Text = ""; TypeOrdreComboBox.SelectedItem = null; ResultComboBox.SelectedItem = null; DateEntreePicker.SelectedDate = null; DateSortiePicker.SelectedDate = null; RrTextBox.Text = "";
-                ImageLtfTextBox.Text = ""; ImageHtfTextBox.Text = null; descriptionTextbox.Text = null; DynamicFieldsPanel.Children.Clear(); ChargerChampsDynamique();
+                // Feedback visuel
+                if (texetat != null) texetat.Visibility = Visibility.Visible;
 
-
+                // On laisse la fenêtre ouverte une fraction de seconde ou on ferme
+                this.DialogResult = true;
+                this.Close();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Une erreur est survenue : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Erreur : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private void Cancel_Click(object sender, RoutedEventArgs e)
-        {
-            // Fermer la fenêtre sans enregistrer
-            this.Close();
         }
 
         private DateTime CombineDateTime(DateTime? date, DateTime? time)
         {
-            if (date == null || time == null)
-            {
-                throw new InvalidOperationException("Les champs Date et Heure doivent être remplis.");
-            }
-
+            if (!date.HasValue || !time.HasValue)
+                throw new Exception("Date et Heure obligatoires.");
             return date.Value.Date + time.Value.TimeOfDay;
         }
+
+        private void Cancel_Click(object sender, RoutedEventArgs e) => this.Close();
     }
 }

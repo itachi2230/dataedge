@@ -1,8 +1,9 @@
-﻿using System.Windows;
-using System.Windows.Controls;
+﻿using System;
 using System.Collections.Generic;
-using System;
-using System.Windows.Media.Animation;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace backtest
 {
@@ -11,180 +12,124 @@ namespace backtest
         public addStrategieWindow()
         {
             InitializeComponent();
-            ResultComboBox.ItemsSource = Enum.GetValues(typeof(Resultat));
-            TypeOrdreComboBox.ItemsSource = Enum.GetValues(typeof(TypeOrdre));
-
-        }
-        private void StartEllipseAnimation(object sender, RoutedEventArgs e)
-        {
-            Storyboard rotateStoryboard = (Storyboard)FindResource("RotateEllipsesAnimation");
-            rotateStoryboard.Begin();
         }
 
-
+        /// <summary>
+        /// Ajoute un nouveau champ dynamique (Critère) à l'interface.
+        /// </summary>
         private void AddCustomField_Click(object sender, RoutedEventArgs e)
         {
-            // Conteneur pour le champ personnalisé
-            StackPanel customFieldPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 5, 0, 5)
-            };
+            // Récupération du style défini dans votre XAML
+            Style modernStyle = (Style)this.FindResource("ModernField");
 
-            // Champ de texte pour le nom du champ personnalisé
+            // Structure pour aligner proprement le texte et le bouton supprimer
+            Grid fieldGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            fieldGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            fieldGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(45) });
+
+            // Champ de saisie du nom du critère
             TextBox nameTextBox = new TextBox
             {
-                Width = 100,
-                Margin = new Thickness(5),
-                Text = "Nom du Champ",
-                Foreground = System.Windows.Media.Brushes.Black,
-                Background = System.Windows.Media.Brushes.Gray
+                Style = modernStyle,
+                FontSize = 13,
+                Height = 35,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Text = "Nom du critère (ex: RSI, Trend...)",
+                Foreground = Brushes.Gray,
+                Tag = "placeholder" // Petit marqueur pour savoir si c'est le texte par défaut
             };
 
-            TextBox valueTextBox = new TextBox
-            {
-                Width = 100,
-                Margin = new Thickness(5),
-                Text = "Valeur du Champ",
-                Foreground = System.Windows.Media.Brushes.Black,
-                Background = System.Windows.Media.Brushes.Gray
+            // Gestion du Placeholder
+            nameTextBox.GotFocus += (s, ev) => {
+                if (nameTextBox.Tag?.ToString() == "placeholder")
+                {
+                    nameTextBox.Text = "";
+                    nameTextBox.Foreground = Brushes.White;
+                    nameTextBox.Tag = "";
+                }
             };
-            // Bouton pour supprimer le champ personnalisé
+
+            // Bouton de suppression stylisé
             Button deleteButton = new Button
             {
-                Content = "X",
+                Content = "✕",
                 Width = 30,
                 Height = 30,
-                Background = System.Windows.Media.Brushes.Red,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(5)
+                Background = new SolidColorBrush(Color.FromRgb(45, 20, 20)),
+                Foreground = Brushes.Red,
+                BorderThickness = new Thickness(0),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Margin = new Thickness(10, 0, 0, 0)
             };
 
-            deleteButton.Click += (s, args) => CustomFieldsPanel.Children.Remove(customFieldPanel);
+            // Arrondir les angles du bouton via un template rapide
+            ControlTemplate template = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(cp);
+            template.VisualTree = border;
+            deleteButton.Template = template;
 
-            customFieldPanel.Children.Add(nameTextBox);
-            customFieldPanel.Children.Add(valueTextBox);
-            customFieldPanel.Children.Add(deleteButton);
+            deleteButton.Click += (s, args) => CustomFieldsPanel.Children.Remove(fieldGrid);
 
-            CustomFieldsPanel.Children.Add(customFieldPanel);
+            Grid.SetColumn(nameTextBox, 0);
+            Grid.SetColumn(deleteButton, 1);
+            fieldGrid.Children.Add(nameTextBox);
+            fieldGrid.Children.Add(deleteButton);
+
+            CustomFieldsPanel.Children.Add(fieldGrid);
         }
 
+        /// <summary>
+        /// Sauvegarde la stratégie et sa structure de champs personnalisés dans le JSON.
+        /// </summary>
         private void SaveStrategie_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Récupère le nom de la stratégie
-                string strategieNom = StrategieNom.Text.ToUpper();
+                string nom = StrategieNom.Text.Trim().ToUpper();
 
-                if (string.IsNullOrEmpty(strategieNom))
+                if (string.IsNullOrEmpty(nom))
                 {
-                    MessageBox.Show("Veuillez entrer un nom pour la stratégie.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Veuillez entrer un nom pour la stratégie.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
-                // Crée une nouvelle stratégie avec le nom spécifié
-                Strategie strategie = new Strategie(strategieNom,descriptionTextbox.Text);
+                // 1. Initialisation de la stratégie (crée le fichier JSON avec Nom et Description)
+                Strategie nouvelleSt = new Strategie(nom, descriptionTextbox.Text);
 
-                // Récupère la date d'entrée et l'heure d'entrée
-                DateTime dateEntree = DateEntreePicker.SelectedDate ?? DateTime.Now;
-                string timeEntreeText = TimeEntreePicker.Text; // Récupère le texte du TimePicker
-                TimeSpan timeEntree = ParseTime(timeEntreeText); // Convertit le texte en TimeSpan
-
-                // Combine la date d'entrée et l'heure d'entrée
-                dateEntree = dateEntree.Date + timeEntree;
-
-                // Récupère la date de sortie et l'heure de sortie
-                DateTime dateSortie = DateSortiePicker.SelectedDate ?? DateTime.Now;
-                string timeSortieText = TimeSortiePicker.Text; // Récupère le texte du TimePicker
-                TimeSpan timeSortie = ParseTime(timeSortieText); // Convertit le texte en TimeSpan
-
-                // Combine la date de sortie et l'heure de sortie
-                dateSortie = dateSortie.Date + timeSortie;
-                //recuperation du resultqt
-                Resultat tempresult;
-                if (ResultComboBox.SelectedItem is Resultat resultatSelectionne)
+                // 2. Récupération des noms des champs personnalisés pour créer la "Structure"
+                List<string> structureDynamique = new List<string>();
+                foreach (Grid grid in CustomFieldsPanel.Children)
                 {
-                    tempresult = resultatSelectionne;
-                }
-                else
-                {
-                    MessageBox.Show("Veuillez sélectionner un résultat valide.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-                //recuperation du type d'ordre
-                TypeOrdre tempordre;
-                if (TypeOrdreComboBox.SelectedItem is TypeOrdre typeordreSelectionne)
-                {
-                    tempordre = typeordreSelectionne;
-                }
-                else
-                {
-                    MessageBox.Show("Veuillez sélectionner un type d'ordre valide.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-                
+                    TextBox txt = grid.Children.OfType<TextBox>().FirstOrDefault();
 
-                // Création de l'objet Trade a  vec date et heure
-                Trade trade = new Trade
-                {
-                    Paire = PaireTextBox.Text.ToUpper(),
-                    Result = tempresult,
-                    DateEntree = dateEntree,
-                    DateSortie = dateSortie,
-                    RR = float.Parse(RrTextBox.Text),
-                    TypeOrdre = tempordre,
-                    ImageLtf = ImageLtfTextBox.Text,
-                    ImageHtf = ImageHtfTextBox.Text,
-                    description=descriptionTextbox.Text
-                };
-
-                // Récupère les champs personnalisés
-                foreach (StackPanel panel in CustomFieldsPanel.Children)
-                {
-                    TextBox nomTextBox = panel.Children[0] as TextBox;
-                    TextBox valeurTextBox = panel.Children[1] as TextBox;
-
-                    ChampPersonnalise champ = new ChampPersonnalise(nomTextBox.Text.ToUpper(), valeurTextBox.Text);
-                   
-
-                    trade.ChampsPersonnalises.Add(champ);
+                    // On vérifie que le texte n'est pas vide et que ce n'est pas le placeholder
+                    if (txt != null && !string.IsNullOrWhiteSpace(txt.Text) && txt.Tag?.ToString() != "placeholder")
+                    {
+                        structureDynamique.Add(txt.Text.Trim().ToUpper());
+                    }
                 }
 
-                // Ajoute le trade à la stratégie
-                strategie.AddTrade(trade);
-                //MessageBox.Show("Trade ajouté avec succès!", "Succès", MessageBoxButton.OK, MessageBoxImage.Information);
+                // 3. Sauvegarde de la structure (la liste des critères) dans le fichier JSON
+                nouvelleSt.SetStructure(structureDynamique);
+
+                this.DialogResult = true;
                 this.Close();
-
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Erreur: {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Erreur lors de la création : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-        // Méthode pour parser le texte en TimeSpan
-        private TimeSpan ParseTime(string timeText)
-        {
-            // Vérifie que le texte n'est pas vide
-            if (string.IsNullOrEmpty(timeText))
-                return TimeSpan.Zero;
-
-            // Essaye de parser le texte en TimeSpan
-            string[] parts = timeText.Split(':');
-            if (parts.Length == 2 && int.TryParse(parts[0], out int hours) && int.TryParse(parts[1], out int minutes))
-            {
-                return new TimeSpan(hours, minutes, 0); // Créé un TimeSpan avec les heures et les minutes
-            }
-            else
-            {
-                throw new FormatException("Le format de l'heure est invalide. Utilisez le format HH:mm.");
-            }
-        }
-
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
         {
+            this.DialogResult = false;
             this.Close();
         }
     }

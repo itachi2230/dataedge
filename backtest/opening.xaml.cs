@@ -5,19 +5,26 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using Newtonsoft.Json;
+using System.IO;
+
 namespace backtest
 {
     public partial class opening : Window
     {
         public opening()
         {
-           
             InitializeComponent();
-            RegisterMachine();
+
+            // On lance l'enregistrement en arrière-plan sans bloquer l'UI
+            _ = RegisterMachine();
+
+            // Initialisation des dossiers de base pour le nouveau système JSON
+            InitFolders();
+
             // Timer pour fermer la fenêtre et lancer l'application principale
             var timer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(1)
+                Interval = TimeSpan.FromSeconds(2) // Augmenté à 2s pour laisser le temps au JSON de s'initialiser si besoin
             };
             timer.Tick += (s, e) =>
             {
@@ -27,32 +34,47 @@ namespace backtest
             timer.Start();
         }
 
+        private void InitFolders()
+        {
+            try
+            {
+                // On s'assure que les dossiers existent dès le démarrage
+                if (!Directory.Exists("data")) Directory.CreateDirectory("data");
+                if (!Directory.Exists("metadata")) Directory.CreateDirectory("metadata");
+            }
+            catch { }
+        }
+
         private void CloseWindow_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
         }
+
         private void done()
         {
             if (FirstLaunchManager.IsFirstLaunch())
             {
                 Demo demoWindow = new Demo();
                 demoWindow.Show();
-                this.Close(); // Ferme la fenêtre de démarrage
+                this.Close();
             }
             else
             {
+                // La MainWindow va maintenant charger les fichiers .json au lieu des .xlsx
                 MainWindow mainWindow = new MainWindow();
                 mainWindow.Show();
                 Application.Current.MainWindow = mainWindow;
                 this.Close();
             }
         }
+
         static async Task RegisterMachine()
         {
+            // URL de ton API
             string apiUrl = "http://fxdataedge.com/public/index.php/api/register-user";
-            //string apiUrl = "http://localhost:8080/api/register-user";
-            string machineName = Environment.MachineName; // Nom de la machine
-            string username = Environment.UserName; // Nom d'utilisateur Windows
+
+            string machineName = Environment.MachineName;
+            string username = Environment.UserName;
 
             var data = new
             {
@@ -62,18 +84,20 @@ namespace backtest
 
             using (HttpClient client = new HttpClient())
             {
-                string json = JsonConvert.SerializeObject(data);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                // On définit un timeout court pour ne pas bloquer l'app si le serveur est down
+                client.Timeout = TimeSpan.FromSeconds(5);
 
                 try
                 {
+                    string json = JsonConvert.SerializeObject(data);
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
                     await client.PostAsync(apiUrl, content);
                 }
-                catch (Exception ex)
+                catch
                 {
+                    // On ignore silencieusement les erreurs réseau au démarrage
                 }
             }
         }
-
     }
 }

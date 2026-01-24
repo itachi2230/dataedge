@@ -11,6 +11,7 @@ using System.Windows.Media;
 using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media.Animation;
+using System.Collections.Generic;
 
 namespace backtest
 {
@@ -33,19 +34,16 @@ namespace backtest
 
             // Initialisation des Habitudes (Checklist)
             habitsManager = new HabitsManager();
-            // Note: Comme ton design n'a pas de bordure 'croissance' par défaut, 
-            // je l'attache au conteneur de notes ou tu peux en créer un.
-            // Pour l'instant, je commente pour éviter le crash si 'croissance' est absent du XAML
-            // DisplayHabitsInBorder(); 
+            // DisplayHabitsInBorder(); // Décommenter si tu as l'élément 'croissance' dans ton XAML
         }
 
         #region CHARGEMENT DES STRATÉGIES ET JOURNAL
         public void loadStrategies()
         {
+            // 1. Récupération de la liste de TOUTES les stratégies existantes
             var strategies = utils.getStrategies();
-
-            // Remplissage du journal global
             Journal = new ObservableCollection<Trade>();
+
             foreach (Strategie st in strategies)
             {
                 var trades = st.GetJournal();
@@ -59,53 +57,62 @@ namespace backtest
                 }
             }
 
-            // Liaison au DataGrid
-            TradesDataGri.ItemsSource = Journal;
-
-            // Tri par date décroissante
-            var column = TradesDataGri.Columns.FirstOrDefault(c => c.Header.ToString().Contains("Paire")); // Adapté à tes colonnes
-            if (column != null)
+            // 2. Mise à jour du DataGrid
+            if (TradesDataGri != null)
             {
-                TradesDataGri.Items.SortDescriptions.Clear();
-                TradesDataGri.Items.SortDescriptions.Add(new System.ComponentModel.SortDescription("DateEntree", System.ComponentModel.ListSortDirection.Descending));
+                TradesDataGri.ItemsSource = Journal;
             }
 
-            // Statistiques Dashboard
-            nbreText.Text = Journal.Count.ToString();
+            // 3. Calcul des statistiques globales pour le Dashboard
             Statistics stats = utils.CalculateStatistics(Journal);
-            tauxBuy.Text = stats.SuccessRateBuy.ToString() + "%";
-            tauxSell.Text = stats.SuccessRateSell.ToString() + "%";
-            meilleurePaire.Text = stats.BestPair ?? "---";
-            PirePaire.Text = stats.WorstPair ?? "---";
 
-            // Génération des vignettes de performance
-            perfStrat.Children.Clear();
-            foreach (var statStr in stats.StrategyPerformance)
+            if (nbreText != null) nbreText.Text = Journal.Count.ToString();
+            if (tauxBuy != null) tauxBuy.Text = stats.SuccessRateBuy.ToString() + "%";
+            if (tauxSell != null) tauxSell.Text = stats.SuccessRateSell.ToString() + "%";
+            if (meilleurePaire != null) meilleurePaire.Text = stats.BestPair ?? "---";
+            if (PirePaire != null) PirePaire.Text = stats.WorstPair ?? "---";
+
+            // 4. Affichage des vignettes (badges) de performance
+            if (perfStrat != null)
             {
-                var ctrl = new ControlStat(statStr.Key, statStr.Value);
-                // Action au clic : Navigation vers StatisticsControl
-                ctrl.MouseLeftButtonUp += (s, e) => {
-                    var selectedStr = strategies.FirstOrDefault(x => x.Nom == statStr.Key);
-                    if (selectedStr != null) ShowStatisticsDirect(selectedStr);
-                };
-                perfStrat.Children.Add(ctrl);
+                perfStrat.Children.Clear();
+
+                // On boucle sur TOUTES les stratégies chargées au début
+                foreach (var st in strategies)
+                {
+                    // On cherche le profit dans les stats. 
+                    // Si la stratégie n'a pas de trades, on met 0 par défaut.
+                    double profit = 0;
+                    if (stats.StrategyPerformance != null && stats.StrategyPerformance.ContainsKey(st.Nom))
+                    {
+                        profit = stats.StrategyPerformance[st.Nom];
+                    }
+
+                    // On crée le contrôle avec le nom de la stratégie et son profit (éventuellement 0)
+                    var ctrl = new ControlStat(st.Nom, profit);
+
+                    // On conserve l'événement de clic pour naviguer vers les détails
+                    ctrl.MouseLeftButtonUp += (s, e) => {
+                        ShowStatisticsDirect(st);
+                    };
+
+                    perfStrat.Children.Add(ctrl);
+                }
             }
         }
         #endregion
 
         #region NAVIGATION (Dashboard <-> StatisticsControl)
 
-        // Cette méthode corrige l'erreur de ton StatisticsControl.xaml.cs
         private void ShowStatisticsDirect(Strategie st)
         {
             // 1. Création du contrôle de statistiques
             var statisticsControl = new StatisticsControl(st);
 
-            // 2. On remplace le contenu du conteneur central par les stats
-            // MainViewContainer est le ContentControl qui englobe les Rows 1 et 2
+            // 2. On remplace le contenu du conteneur central (ContentControl dans ton XAML)
             MainViewContainer.Content = statisticsControl;
 
-            // 3. Animation de fondu pour une transition fluide
+            // 3. Animation de fondu
             DoubleAnimation fadeIn = new DoubleAnimation
             {
                 From = 0,
@@ -118,11 +125,10 @@ namespace backtest
 
         public void ShowDashboard()
         {
-            // 1. On remet la Grid originale (nommée DashboardView dans le XAML) 
-            // comme contenu du conteneur central
+            // 1. On remet la Grid originale (nommée DashboardView dans le XAML)
             MainViewContainer.Content = DashboardView;
 
-            // 2. Animation de fondu pour le retour au Dashboard
+            // 2. Animation de fondu
             DoubleAnimation fadeIn = new DoubleAnimation
             {
                 From = 0,
@@ -131,7 +137,7 @@ namespace backtest
             };
             DashboardView.BeginAnimation(OpacityProperty, fadeIn);
 
-            // 3. Rafraîchissement optionnel des données
+            // 3. Rafraîchissement des données pour refléter les changements
             loadStrategies();
         }
         #endregion
@@ -147,7 +153,7 @@ namespace backtest
                 TextRange textRange = new TextRange(richTextBoxNotesWeeks.Document.ContentStart, richTextBoxNotesWeeks.Document.ContentEnd);
                 using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 {
-                    textRange.Load(fs, DataFormats.Rtf);
+                    try { textRange.Load(fs, DataFormats.Rtf); } catch { }
                 }
             }
             else
@@ -160,6 +166,7 @@ namespace backtest
 
         private void SaveNotes()
         {
+            if (richTextBoxNotesWeeks == null) return;
             string filePath = GetNotesFilePath(currentWeekStart);
             TextRange textRange = new TextRange(richTextBoxNotesWeeks.Document.ContentStart, richTextBoxNotesWeeks.Document.ContentEnd);
             using (FileStream fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
@@ -179,9 +186,17 @@ namespace backtest
         #region ACTIONS BOUTONS & EVENTS
         private void AddTradeButton_Click(object sender, RoutedEventArgs e)
         {
+            // Ouvre le popup pour choisir dans quelle stratégie ajouter le trade du journal
             StrategyListBox.ItemsSource = utils.getStrategies();
             StrategyListBox.DisplayMemberPath = "Nom";
             StrategyPopup.IsOpen = true;
+        }
+
+        private void AddStrategy_Click(object sender, RoutedEventArgs e)
+        {
+             new addStrategieWindow().ShowDialog();
+           
+                loadStrategies();
         }
 
         private void StrategyListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -189,17 +204,17 @@ namespace backtest
             if (StrategyListBox.SelectedItem is Strategie selectedStrategy)
             {
                 StrategyPopup.IsOpen = false;
+                // ModeJournal = true pour ajouter au journal (avec champ profit)
                 new AjoutTrade(selectedStrategy, true).ShowDialog();
                 loadStrategies();
             }
         }
 
-        // Correction de l'erreur XAML : "TradesDataGri_MouseDoubleClick"
         private void TradesDataGri_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (TradesDataGri.SelectedItem is Trade selectedTrade)
             {
-                new VisuelTrade(selectedTrade).Show();
+                new newvisu(selectedTrade).Show();
             }
         }
 
@@ -219,7 +234,10 @@ namespace backtest
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
 
         private void LoadInvestingCalendar()
-        {InvestingCalendarBrowser.Address = "https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=110,17,25,34,32,6,37,26,5,22,39,93,14,48,10,35,105,43,38,4,36,12,72&calType=week&timeZone=55&lang=5";}
+        {
+            try { InvestingCalendarBrowser.Address = "https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=110,17,25,34,32,6,37,26,5,22,39,93,14,48,10,35,105,43,38,4,36,12,72&calType=week&timeZone=55&lang=5"; } catch { }
+        }
+
         private DateTime GetStartOfWeek(DateTime date)
         {
             int daysToSubtract = (int)date.DayOfWeek - (int)DayOfWeek.Monday;
@@ -229,33 +247,30 @@ namespace backtest
         #endregion
     }
 
-
-    // Converter pour les couleurs des types d'ordre (BUY/SELL)
+    #region CONVERTERS
     public class TypeToColorConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                string type = value?.ToString().ToUpper();
-                if (type == "BUY") return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#00BFFF"));
-                if (type == "SELL") return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFCD63A6"));
-                return Brushes.Gray;
-            }
-
-            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+            string type = value?.ToString().ToUpper();
+            if (type == "BUY") return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#00BFFF"));
+            if (type == "SELL") return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFCD63A6"));
+            return Brushes.Gray;
         }
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+    }
 
-        // Converter pour le Profit (Vert si +, Rouge si -)
     public class ProfitToColorConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            if (value != null && double.TryParse(value.ToString().Replace("$", "").Trim(), out double profit))
             {
-                if (value != null && double.TryParse(value.ToString().Replace("$", "").Trim(), out double profit))
-                {
-                    return profit >= 0 ? Brushes.LightGreen : Brushes.OrangeRed;
-                }
-                return Brushes.White;
+                return profit >= 0 ? Brushes.LightGreen : Brushes.OrangeRed;
             }
-
-            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+            return Brushes.White;
         }
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+    }
+    #endregion
 }

@@ -2,100 +2,141 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
-        Title="Ajouter une Stratégie" Height="694.725" Width="524" Background="#1E1E2F" WindowStyle="ToolWindow" WindowStartupLocation="CenterScreen">
+        Title="Ajouter une Stratégie" Height="720" Width="500" 
+        Background="#0A0A12" WindowStyle="None" AllowsTransparency="True" 
+        WindowStartupLocation="CenterScreen">
+
     <Window.Resources>
-        <Storyboard x:Key="RotateEllipsesAnimation" RepeatBehavior="Forever">
-            <DoubleAnimation Storyboard.TargetName="OuterRotateTransform" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:10" />
-            <DoubleAnimation Storyboard.TargetName="InnerRotateTransform" Storyboard.TargetProperty="Angle" From="360" To="0" Duration="0:0:10" />
+        <Storyboard x:Key="NeonPulseAnimation">
+            <DoubleAnimation Storyboard.TargetName="OuterRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:4" RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="InnerRotate" Storyboard.TargetProperty="Angle" From="360" To="0" Duration="0:0:2" RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="GlowEffect" Storyboard.TargetProperty="Opacity" From="0.3" To="1" Duration="0:0:1" AutoReverse="True" RepeatBehavior="Forever"/>
         </Storyboard>
+
+        <Style x:Key="ModernField" TargetType="TextBox">
+            <Setter Property="Background" Value="#121220"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#252540"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="4">
+                            <ScrollViewer x:Name="PART_ContentHost" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Grid Margin="10,0,10,2">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition/>
-            <RowDefinition Height="Auto" MinHeight="110" />
-        </Grid.RowDefinitions>
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource NeonPulseAnimation}"/>
+        </EventTrigger>
+    </Window.Triggers>
 
-        <TextBlock Text="NOUVELLE STRATEGIE" FontSize="18" Foreground="#FFAAA7A7" HorizontalAlignment="Center" Margin="131,10,118,20" Width="247" TextAlignment="Center"/>
+    <Border BorderBrush="{StaticResource AccentBlue}" BorderThickness="1" CornerRadius="15">
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Orientation="Vertical" VerticalAlignment="Top" Margin="0,0,0,10">
-                <TextBox x:Name="StrategieNom" Text="Nom de la Stratégie" Width="400" Height="30" Background="#333344" Foreground="#FFDEDEDE" BorderBrush="Transparent" Margin="0,0"/>
-
-                <TextBlock Text="Premier Trade" FontSize="16" Foreground="#FFAAA7A7" Margin="0,15,0,5"/>
-                <StackPanel Orientation="Vertical" Background="#333344" Height="303">
-                    <TextBox x:Name="PaireTextBox" Text="Paire de devises" Width="380" Height="30" Background="#444455" Foreground="#FFDEDEDE" BorderBrush="Transparent" Margin="0,5"/>
-
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5">
-                        <ComboBox x:Name="TypeOrdreComboBox" Width="185" Height="30" Background="#444455" Foreground="Black" Margin="0,5">
-
-                        </ComboBox>
-
-                        <ComboBox x:Name="ResultComboBox" Width="185" Height="30" Background="#444455" Foreground="Black" Margin="5,5,0,5">
-
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Width="377">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,1,0" Width="209">
-                            <DatePicker x:Name="DateEntreePicker" Width="100" Background="#444455" Foreground="#FF616161" Margin="0,5" ToolTip="Date de la prise position" Text="Date de la prise position"/>
-                            <xctk:TimePicker x:Name="TimeEntreePicker" Width="71" Background="#444455" Foreground="White" Margin="5,5,0,5"/>
-                        </StackPanel>
-
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,1,0" Width="165">
-                            <DatePicker x:Name="DateSortiePicker" Width="82" Background="#444455" Foreground="#FF616161" Margin="0,5" ToolTip="Date de la cloture de la position"/>
-                            <xctk:TimePicker x:Name="TimeSortiePicker" Width="77" Background="#444455" Foreground="White" Margin="5,5,0,5" ToolTip="Heure de la cloture de la postion"/>
-                        </StackPanel>
-
-                    </StackPanel>
-
-                    <!-- Ligne pour Date d'entrée et Heure d'entrée -->
-
-                    <!-- Ligne pour Date de sortie et Heure de sortie -->
-
-                    <TextBox x:Name="RrTextBox" Text="Risk/Reward" Width="380" Height="30" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="0,5" ToolTip="Le ratio Risque/Recompense"/>
-                    <StackPanel Orientation="Horizontal" Width="378">
-                        <TextBox x:Name="ImageLtfTextBox" Text="Lien image LTF" Height="30" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="5,0" Width="192" ToolTip="Lien Tradingview du trade en Lower timeframe"/>
-                        <TextBox x:Name="ImageHtfTextBox" Text="Lien image HTF" Height="30" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="5,0" Width="169" ToolTip="Lien tradingview du trade en Higher timeframe"/>
-                    </StackPanel>
-                    <TextBox x:Name="descriptionTextbox" Text="Description" Width="380" Height="93" Background="#444455" Foreground="#FFEAEAEA" BorderBrush="Transparent" Margin="0,5" ToolTip="Description ou notes du trade(optionnel)"/>
+            <Grid Grid.Row="0" Margin="0,0,0,15">
+                <StackPanel HorizontalAlignment="Left">
+                    <TextBlock Text="CRÉER" FontSize="10" Foreground="{StaticResource AccentBlue}" />
+                    <TextBlock Text="STRATÉGIE" FontSize="22" FontWeight="Black" Foreground="White"/>
                 </StackPanel>
 
-                <TextBlock Text="Champs Personnalisés" FontSize="16" Foreground="#FFAAA7A7" Margin="0,20,0,5"/>
-                <Border CornerRadius="10" Background="#4CAF50" Width="251" HorizontalAlignment="Center" Margin="0,10" Height="25">
-                    <Button Content="Ajouter un Champ Personnalisé" Click="AddCustomField_Click" Background="Transparent" Foreground="White" BorderBrush="Transparent" Width="250" ToolTip="Ajouter vos champs personnalisés" />
-                </Border>
-                <StackPanel x:Name="CustomFieldsPanel" Orientation="Vertical" Margin="0,10,0,0"/>
-            </StackPanel>
-        </ScrollViewer>
+                <Grid HorizontalAlignment="Right" Width="50" Height="50">
+                    <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="2" RenderTransformOrigin="0.5,0.5">
+                        <Ellipse.RenderTransform>
+                            <RotateTransform x:Name="OuterRotate" Angle="0"/>
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <Ellipse Stroke="{StaticResource NeonPink}" StrokeThickness="3" Margin="8" RenderTransformOrigin="0.5,0.5">
+                        <Ellipse.RenderTransform>
+                            <RotateTransform x:Name="InnerRotate" Angle="0"/>
+                        </Ellipse.RenderTransform>
+                        <Ellipse.Effect>
+                            <DropShadowEffect x:Name="GlowEffect"  BlurRadius="15" ShadowDepth="0"/>
+                        </Ellipse.Effect>
+                    </Ellipse>
+                </Grid>
+            </Grid>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="96,2,96,50" Width="280">
-            <Border CornerRadius="10" Background="#4CAF50" Width="120" Height="40" Margin="9">
-                <Button Content="Enregistrer" Background="Transparent" Foreground="#FFFFF2F2" BorderBrush="Transparent" Click="SaveStrategie_Click"/>
-            </Border>
-            <Border CornerRadius="10" Background="#FF5252" Width="120" Height="40" Margin="9">
-                <Button Content="Annuler" Background="Transparent" Foreground="#FFFFF2F2" BorderBrush="Transparent" Click="Cancel_Click"/>
-            </Border>
-        </StackPanel>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden">
+                <StackPanel>
+                    <TextBlock Text="CONFIGURATION GÉNÉRALE" FontSize="10" Foreground="{StaticResource AccentBlue}" FontWeight="Bold" Margin="0,0,0,10"/>
+                    <TextBlock Text="NOM DE LA STRATÉGIE" FontSize="9" Foreground="Gray" Margin="0,0,0,5"/>
+                    <TextBox x:Name="StrategieNom" Style="{StaticResource ModernField}" FontSize="14" Height="35" Margin="0,0,0,15"/>
 
-        <!-- Ellipses avec rotation -->
-        <Grid Margin="428,7,-21,495" Loaded="StartEllipseAnimation" Grid.RowSpan="2">
-            <Ellipse Stroke="#FF0A2685" StrokeThickness="8" RenderTransformOrigin="0.5,0.5" Margin="15,-4,10,-5">
-                <Ellipse.RenderTransform>
-                    <RotateTransform x:Name="OuterRotateTransform" Angle="0" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-            <Ellipse Stroke="#FF1F7AD3" StrokeThickness="8" RenderTransformOrigin="0.5,0.5" Margin="15,10,14,9">
-                <Ellipse.RenderTransform>
-                    <RotateTransform x:Name="InnerRotateTransform" Angle="0" />
-                </Ellipse.RenderTransform>
-                <Ellipse.Effect>
-                    <DropShadowEffect Color="LightBlue" BlurRadius="20" ShadowDepth="0" />
-                </Ellipse.Effect>
-            </Ellipse>
+                    <TextBlock Text="DESCRIPTION / RÈGLES" FontSize="9" Foreground="Gray" Margin="0,0,0,5"/>
+                    <TextBox x:Name="descriptionTextbox" Height="80" Style="{StaticResource ModernField}" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,20"/>
+
+                    <Border Background="#121225" CornerRadius="10" Padding="15" Margin="0,0,0,20" BorderBrush="#252540" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="STRUCTURE DES TRADES" FontWeight="Bold" Foreground="White" Margin="0,0,0,10" FontSize="11"/>
+                            <TextBlock Text="Les champs suivants seront inclus automatiquement :" FontSize="10" Foreground="Gray" Margin="0,0,0,8"/>
+                            <WrapPanel>
+                                <Border Background="#1A1A35" CornerRadius="4" Padding="6,3" Margin="0,0,5,5">
+                                    <TextBlock Text="Date/Heure" FontSize="9" Foreground="#8080FF"/>
+                                </Border>
+                                <Border Background="#1A1A35" CornerRadius="4" Padding="6,3" Margin="0,0,5,5">
+                                    <TextBlock Text="Paire" FontSize="9" Foreground="#8080FF"/>
+                                </Border>
+                                <Border Background="#1A1A35" CornerRadius="4" Padding="6,3" Margin="0,0,5,5">
+                                    <TextBlock Text="Type (Buy/Sell)" FontSize="9" Foreground="#8080FF"/>
+                                </Border>
+                                <Border Background="#1A1A35" CornerRadius="4" Padding="6,3" Margin="0,0,5,5">
+                                    <TextBlock Text="Résultat" FontSize="9" Foreground="#8080FF"/>
+                                </Border>
+                                <Border Background="#1A1A35" CornerRadius="4" Padding="6,3" Margin="0,0,5,5">
+                                    <TextBlock Text="RR" FontSize="9" Foreground="#8080FF"/>
+                                </Border>
+                                <Border Background="#1A1A35" CornerRadius="4" Padding="6,3" Margin="0,0,5,5">
+                                    <TextBlock Text="Screenshots" FontSize="9" Foreground="#8080FF"/>
+                                </Border>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="CHAMPS PERSONNALISÉS (CONFLUENCES)" FontSize="10" Foreground="{StaticResource NeonPink}" FontWeight="Bold" Margin="0,0,0,5"/>
+                    <TextBlock Text="Ajoutez ici les critères spécifiques à cette stratégie (ex: Trend, RSI, Zone...)" FontSize="9" Foreground="Gray" Margin="0,0,0,10" TextWrapping="Wrap"/>
+
+                    <StackPanel x:Name="CustomFieldsPanel"/>
+
+                    <Button Click="AddCustomField_Click" Margin="0,10" Background="Transparent" BorderBrush="{StaticResource AccentBlue}" BorderThickness="1" Foreground="White" Height="35">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="+" Margin="0,0,10,0" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBlock Text="AJOUTER UN CRITÈRE" FontSize="10" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <Button.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="10"/>
+                            </Style>
+                        </Button.Resources>
+                    </Button>
+                </StackPanel>
+            </ScrollViewer>
+            <UniformGrid Grid.Row="2" Columns="2" Margin="0,20,0,0">
+                <Button Content="ANNULER" Click="Cancel_Click" Margin="0,0,10,0" Height="40" Background="#1A1A2E" Foreground="White">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="20"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+                <Button Content="ENREGISTRER" Click="SaveStrategie_Click" Height="40" Background="{StaticResource AccentBlue}" Foreground="White" FontWeight="Bold">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="20"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+            </UniformGrid>
         </Grid>
-        <TextBlock FontSize="16" Margin="0,88,0,0" Grid.Row="2" TextAlignment="Center" FontFamily="Bradley Hand ITC" Foreground="#FF6C5959">
-            <Run Text="UN TRADER SANS STRATEGIE EST UN "/><Run Text="CLOWN"/>
-        </TextBlock>
-    </Grid>
+    </Border>
 </Window>
