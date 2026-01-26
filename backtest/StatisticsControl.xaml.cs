@@ -13,11 +13,12 @@ namespace backtest
     public partial class StatisticsControl : UserControl
     {
         Strategie strategie;
-
+        StatisticsView stv;
         public StatisticsControl()
         {
             InitializeComponent();
             strategie = new Strategie("aucune strategie", "", true);
+            
         }
 
         public StatisticsControl(Strategie strategie)
@@ -26,36 +27,74 @@ namespace backtest
             this.strategie = strategie;
             nomText.Text = strategie.Nom;
 
-            // Description initiale
             richTextBox.Document.Blocks.Clear();
             richTextBox.Document.Blocks.Add(new Paragraph(new Run(strategie.description)));
 
+            // ORDRE CRITIQUE : 
+            // 1. Calculer les stats (remplit les dictionnaires)
+            strategie.CalculateStatistics();
+
+            // 2. Charger le DataGrid (qui utilise les colonnes dynamiques basées sur les stats)
             LoadTradesDataGrid();
+
+            // 3. Créer la vue graphique (qui a maintenant des données fraîches)
+            stv = new StatisticsView(strategie);
+            ComplexStatsHost.Children.Clear();
+            ComplexStatsHost.Children.Add(stv);
         }
 
         public void LoadStatistics(Panel panel1, Panel panel2)
         {
             var stats = strategie.GetStatistics();
+            var advanced = strategie.RetrieveStats();
 
-            // Gestion sécurisée des valeurs (évite le crash si stats vides)
-            string topDay = stats.ContainsKey("Most Favorable Day") ? stats["Most Favorable Day"].ToString() : "N/A";
-            string pireDay = stats.ContainsKey("Least Favorable Day") ? stats["Least Favorable Day"].ToString() : "N/A";
-            string winrate = stats.ContainsKey("Winrate") ? $"{stats["Winrate"]:0.##}%" : "0%";
-            string avgRR = stats.ContainsKey("Average RR") ? $"{stats["Average RR"]:0.##}" : "0";
-            string maxRR = stats.ContainsKey("Max RR") ? $"{stats["Max RR"]:0.##}" : "0";
-            string minRR = stats.ContainsKey("Min RR") ? $"{stats["Min RR"]:0.##}" : "0";
+            // --- Calcul du Meilleur et Pire Jour ---
+            string bestDayStr = "N/A";
+            string worstDayStr = "N/A";
 
-            // Mise à jour du Panel 1 (TOP/PIRE JOUR)
-            UpdateStatCard(panel1, 0, "TOP JOUR", topDay, Colors.White);
-            UpdateStatCard(panel1, 1, "PIRE JOUR", pireDay, Colors.White);
+            if (advanced.DayOfWeekStats != null && advanced.DayOfWeekStats.Count > 0)
+            {
+                // On trie les jours par Expectancy (le profit moyen par trade ce jour-là)
+                var sortedDays = advanced.DayOfWeekStats
+                    .OrderByDescending(d => d.Value.Expectancy)
+                    .ToList();
 
-            // Mise à jour du Panel 2 (WINRATE, RR...)
+                bestDayStr = TranslateDayToFrench(sortedDays.First().Key);
+                worstDayStr = TranslateDayToFrench(sortedDays.Last().Key);
+            }
+
+            // --- Récupération des autres valeurs ---
+            string winrate = stats.ContainsKey("Winrate") ? $"{GetSafeDouble(stats["Winrate"]):F1}%" : "0%";
+            string pf = stats.ContainsKey("Profit Factor") ? $"{GetSafeDouble(stats["Profit Factor"]):F2}" : "1.00";
+
+            // --- Mise à jour du Panel 1 (Setups) ---
+            string topConfig = (advanced.BestConfigs?.Count > 0) ? advanced.BestConfigs[0].NomParametre : "N/A";
+            string pireConfig = (advanced.WorstConfigs?.Count > 0) ? advanced.WorstConfigs[0].NomParametre : "N/A";
+
+            UpdateStatCard(panel1, 0, "MEILLEUR SETUP", topConfig, Colors.Lime);
+            UpdateStatCard(panel1, 1, "PIRE SETUP", pireConfig, Colors.OrangeRed);
+
+            // --- Mise à jour du Panel 2 (Performance & Jours) ---
             UpdateStatCard(panel2, 0, "WINRATE", winrate, Colors.Lime);
-            UpdateStatCard(panel2, 1, "RR MOYEN", avgRR, Colors.White);
-            UpdateStatCard(panel2, 2, "RR MAX", maxRR, Colors.Lime);
-            UpdateStatCard(panel2, 3, "RR MIN", minRR, Colors.Red);
+
+            // REMPLACEMENT DEMANDÉ : Meilleur Jour
+            UpdateStatCard(panel2, 1, "TOP JOUR", bestDayStr, Colors.Cyan);
+
+            UpdateStatCard(panel2, 2, "PROFIT FACTOR", pf, Colors.Gold);
+
+            // REMPLACEMENT DEMANDÉ : Pire Jour
+            UpdateStatCard(panel2, 3, "PIRE JOUR", worstDayStr, Colors.Salmon);
         }
 
+       
+        private double GetSafeDouble(object value)
+        {
+            if (value == null) return 0;
+            // Gère le format JSON et les différences de culture (point vs virgule)
+            string s = value.ToString().Replace(",", ".");
+            double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double res);
+            return res;
+        }
         private void UpdateStatCard(Panel container, int index, string title, string value, Color valueColor)
         {
             if (index < container.Children.Count && container.Children[index] is Border border &&
@@ -189,8 +228,38 @@ namespace backtest
             // CalculateStatistics met déjà à jour les stats avancées dans le JSON
             strategie.CalculateStatistics();
 
-            // Ouvre la fenêtre de stats détaillées
-            new Window1(this.strategie).ShowDialog();
+        }
+        private void DataGrid_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (!e.Handled)
+            {
+                e.Handled = true;
+
+                var eventArg = new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+                {
+                    RoutedEvent = UIElement.MouseWheelEvent,
+                    Source = sender
+                };
+
+                // On utilise FrameworkElement ici pour être plus large (accepte Border, Grid, DataGrid, etc.)
+                var uiElement = sender as FrameworkElement;
+                var parent = uiElement?.Parent as UIElement;
+
+                parent?.RaiseEvent(eventArg);
+            }
+        }
+        // Helper pour avoir des noms propres en français
+        private string TranslateDayToFrench(DayOfWeek day)
+        {
+            switch (day)
+            {
+                case DayOfWeek.Monday: return "Lundi";
+                case DayOfWeek.Tuesday: return "Mardi";
+                case DayOfWeek.Wednesday: return "Mercredi";
+                case DayOfWeek.Thursday: return "Jeudi";
+                case DayOfWeek.Friday: return "Vendredi";
+                default: return day.ToString();
+            }
         }
     }
 }

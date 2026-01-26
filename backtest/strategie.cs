@@ -89,7 +89,7 @@ namespace backtest
             File.WriteAllText(filePath, jsonString);
         }
 
-        private StrategieData LoadData()
+        public StrategieData LoadData()
         {
             if (!File.Exists(filePath)) return new StrategieData { Nom = this.Nom, Description = this.description };
             try
@@ -161,34 +161,152 @@ namespace backtest
         {
             if (data == null) data = LoadData();
             var trades = data.Trades;
-            if (trades.Count == 0) return;
+            if (trades == null || trades.Count == 0) return;
 
+            // --- Stats Basiques ---
             data.StatsBasiques["Total Trades"] = trades.Count;
-            data.StatsBasiques["Winrate"] = (float)trades.Count(t => t.Result == Resultat.TP) / trades.Count * 100;
+            int totalTp = trades.Count(t => t.Result == Resultat.TP);
+            data.StatsBasiques["Winrate"] = (float)totalTp / trades.Count * 100;
             data.StatsBasiques["Average RR"] = (float)trades.Average(t => t.RR);
-            data.StatsBasiques["Max RR"] = (float)trades.Max(t => t.RR);
-            data.StatsBasiques["Min RR"] = (float)trades.Min(t => t.RR);
 
-            var dayGroups = trades.GroupBy(t => t.DateEntree.DayOfWeek);
-            data.StatsBasiques["Most Favorable Day"] = dayGroups.OrderByDescending(g => g.Count(t => t.Result == Resultat.TP)).FirstOrDefault()?.Key.ToString();
-            data.StatsBasiques["Least Favorable Day"] = dayGroups.OrderByDescending(g => g.Count(t => t.Result == Resultat.SL)).FirstOrDefault()?.Key.ToString();
+            // Ajout de métriques de rentabilité globale
+            double totalGrossProfit = trades.Where(t => t.Result == Resultat.TP).Sum(t => t.RR);
+            double totalGrossLoss = trades.Where(t => t.Result == Resultat.SL).Count(); // En admettant que 1 SL = -1R
+            data.StatsBasiques["Expectancy"] = (float)(totalGrossProfit - totalGrossLoss) / trades.Count;
+            data.StatsBasiques["Profit Factor"] = totalGrossLoss > 0 ? (float)(totalGrossProfit / totalGrossLoss) : (float)totalGrossProfit;
 
+            // Réinitialisation
             data.StatsAvancees = new AdvancedStats();
+
             foreach (var trade in trades)
             {
-                UpdatePerf(data.StatsAvancees.TypeOrdreStats[trade.TypeOrdre], trade.Result);
-                if (!data.StatsAvancees.PairStats.ContainsKey(trade.Paire))
-                    data.StatsAvancees.PairStats[trade.Paire] = new PerformanceStat();
-                UpdatePerf(data.StatsAvancees.PairStats[trade.Paire], trade.Result);
+                // On calcule la valeur de performance pour ce trade (ici on utilise le RR)
+                double profit = trade.Result == Resultat.TP ? trade.RR : 0;
+                double loss = trade.Result == Resultat.SL ? 1.0 : 0; // On considère 1R de perte par SL
+
+                // 1. Stats par Jour
+                UpdateAdvancedStat(data.StatsAvancees.DayOfWeekStats, trade.DateEntree.DayOfWeek, trade.Result, profit, loss);
+
+                // 2. Stats par Type d'ordre (BUY/SELL)
+                UpdateAdvancedStat(data.StatsAvancees.TypeOrdreStats, trade.TypeOrdre, trade.Result, profit, loss);
+
+                // 3. Stats par Paire
+                string paire = string.IsNullOrEmpty(trade.Paire) ? "Inconnue" : trade.Paire;
+                UpdateAdvancedStat(data.StatsAvancees.PairStats, paire, trade.Result, profit, loss);
+
+                // 4. Stats par Session
+                string session = GetSession(trade.DateEntree.Hour);
+                UpdateAdvancedStat(data.StatsAvancees.SessionStats, session, trade.Result, profit, loss);
+
+                // 5. Analyse des configurations (Champs Dynamiques)
+                if (trade.ChampsPersonnalises != null)
+                {
+                    foreach (var field in trade.ChampsPersonnalises)
+                    {
+                        if (field.Valeur == null) continue;
+                        string valStr = field.Valeur.ToString();
+                        string key = field.Nom;
+
+                        if (!data.StatsAvancees.PerformanceStats.ContainsKey(key))
+                            data.StatsAvancees.PerformanceStats[key] = new Dictionary<string, PerformanceStat>();
+
+                        UpdatePerf(data.StatsAvancees.PerformanceStats[key], valStr, trade.Result, profit, loss);
+                    }
+                }
             }
+
+            // --- IDENTIFICATION DES MEILLEURES ET PIRES CONFIGS ---
+            // On peut maintenant chercher quelle valeur de quel champ a la meilleure Expectancy
+            IdentifyTopPerformers(data);
+
             SaveData(data);
         }
 
-        private void UpdatePerf(PerformanceStat stat, Resultat res)
+        // Helper pour simplifier les mises à jour
+        private void UpdateAdvancedStat<T>(Dictionary<T, PerformanceStat> dict, T key, Resultat res, double profit, double loss)
         {
-            if (res == Resultat.TP) stat.PercentTP++;
-            else if (res == Resultat.SL) stat.PercentSL++;
+            if (!dict.ContainsKey(key)) dict[key] = new PerformanceStat();
+            UpdatePerf(dict[key], res, profit, loss);
         }
+
+        // Surcharge de UpdatePerf pour inclure les gains/pertes
+        private void UpdatePerf(PerformanceStat stat, Resultat res, double profit, double loss)
+        {
+            if (res == Resultat.TP) stat.CountTP++;
+            else if (res == Resultat.SL) stat.CountSL++;
+
+            stat.TotalProfit += profit;
+            stat.TotalLoss += loss;
+        }
+
+        // Surcharge pour les dictionnaires imbriqués
+        private void UpdatePerf(Dictionary<string, PerformanceStat> dict, string key, Resultat res, double profit, double loss)
+        {
+            if (!dict.ContainsKey(key)) dict[key] = new PerformanceStat();
+            UpdatePerf(dict[key], res, profit, loss);
+        }
+        // Helper pour déterminer la session
+        private string GetSession(int hour)
+        {
+            if (hour >= 0 && hour < 8) return "Tokyo";
+            if (hour >= 8 && hour < 13) return "Londres";
+            if (hour >= 13 && hour < 20) return "New York";
+            return "Hors Session";
+        }
+        private void IdentifyTopPerformers(StrategieData data)
+        {
+            var allConfigs = new List<ConfigRank>();
+
+            // 1. Analyser les Sessions
+            foreach (var item in data.StatsAvancees.SessionStats)
+                allConfigs.Add(MapToRank(item.Key, "Session", item.Value));
+
+            // 2. Analyser les Paires
+            foreach (var item in data.StatsAvancees.PairStats)
+                allConfigs.Add(MapToRank(item.Key, "Paire", item.Value));
+
+            // 3. Analyser les Jours de la semaine
+            foreach (var item in data.StatsAvancees.DayOfWeekStats)
+                allConfigs.Add(MapToRank(item.Key.ToString(), "Jour", item.Value));
+
+            // 4. Analyser les Champs Dynamiques (les plus importants !)
+            foreach (var category in data.StatsAvancees.PerformanceStats)
+            {
+                foreach (var val in category.Value)
+                {
+                    allConfigs.Add(MapToRank($"{category.Key}: {val.Key}", "Setup", val.Value));
+                }
+            }
+
+            // --- FILTRAGE ET TRI ---
+            // On ne garde que les configs ayant un nombre minimum de trades pour éviter les stats faussées
+            var validConfigs = allConfigs.Where(c => c.NombreTrades >= 3).ToList();
+
+            // Top 5 Meilleures (Expectancy la plus haute)
+            data.StatsAvancees.BestConfigs = validConfigs
+                .OrderByDescending(c => c.Expectancy)
+                .Take(5)
+                .ToList();
+
+            // Top 5 Pires (Expectancy la plus basse / négative)
+            data.StatsAvancees.WorstConfigs = validConfigs
+                .OrderBy(c => c.Expectancy)
+                .Take(5)
+                .ToList();
+        }
+
+        // Petit helper pour convertir une PerformanceStat en ConfigRank
+        private ConfigRank MapToRank(string name, string category, PerformanceStat stat)
+        {
+            return new ConfigRank
+            {
+                NomParametre = name,
+                Categorie = category,
+                Expectancy = Math.Round(stat.Expectancy, 2),
+                NombreTrades = stat.TotalTrades
+            };
+        }
+
 
         public Dictionary<string, object> GetStatistics() => LoadData().StatsBasiques;
         public AdvancedStats RetrieveStats() => LoadData().StatsAvancees;
@@ -223,8 +341,14 @@ namespace backtest
 
     public class PerformanceStat
     {
-        public double PercentTP { get; set; }
-        public double PercentSL { get; set; }
+        public int CountTP { get; set; }
+        public int CountSL { get; set; }
+        public double TotalProfit { get; set; } // Nouveau
+        public double TotalLoss { get; set; }   // Nouveau
+        public double NetProfit => TotalProfit - TotalLoss;
+        public int TotalTrades => CountTP + CountSL;
+        public double Winrate => TotalTrades > 0 ? (double)CountTP / TotalTrades * 100 : 0;
+        public double Expectancy => TotalTrades > 0 ? NetProfit / TotalTrades : 0;
     }
 
     public class AdvancedStats
@@ -238,8 +362,16 @@ namespace backtest
         public Dictionary<TypeOrdre, PerformanceStat> TypeOrdreStats { get; set; } = new Dictionary<TypeOrdre, PerformanceStat> {
             { TypeOrdre.BUY, new PerformanceStat() }, { TypeOrdre.SELL, new PerformanceStat() }
         };
+        public List<ConfigRank> BestConfigs { get; set; } = new List<ConfigRank>();
+        public List<ConfigRank> WorstConfigs { get; set; } = new List<ConfigRank>();
     }
-
+    public class ConfigRank
+    {
+        public string NomParametre { get; set; } // ex: "RSI > 70"
+        public string Categorie { get; set; }    // ex: "Indicateur"
+        public double Expectancy { get; set; }
+        public int NombreTrades { get; set; }
+    }
     public static class utils
     {
         public static List<Strategie> getStrategies()

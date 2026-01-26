@@ -88,10 +88,10 @@
                             </StackPanel>
                         </Border>
                     </UniformGrid>
-                    <Border Style="{StaticResource CardStyle}" Width="190" Padding="20,30">
+                    <Border Style="{StaticResource CardStyle}" Width="190" Padding="20,35">
                         <Grid>
                             <Ellipse Stroke="#1A2432" StrokeThickness="8"/>
-                            <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="10" StrokeDashArray="4,2"/>
+                            <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="7" StrokeDashArray="4,2"/>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock x:Name="nbreTrade" Text="0" Foreground="White" FontSize="32" FontWeight="Black" HorizontalAlignment="Center"/>
                                 <TextBlock Text="TRADES" Foreground="Gray" FontSize="10" HorizontalAlignment="Center"/>
@@ -114,7 +114,7 @@
                         <DataGrid x:Name="TradesDataGrid" RowStyle="{StaticResource FuturisticRowStyle}" 
                                   ColumnHeaderStyle="{StaticResource FuturisticColumnHeader}"
                                   Background="Transparent" BorderThickness="0" AutoGenerateColumns="False" IsReadOnly="True"
-                                  MouseRightButtonDown="addTrade" 
+                                  MouseRightButtonDown="addTrade"  PreviewMouseWheel="DataGrid_PreviewMouseWheel"
                                   SelectionChanged="TradesDataGrid_SelectionChanged" KeyUp="TradesDataGrid_KeyUp"/>
                     </DockPanel>
                 </Border>
@@ -125,15 +125,13 @@
                 </StackPanel>
 
                 <Border Grid.Column="2" x:Name="VisualContainer" Style="{StaticResource CardStyle}" 
-        BorderBrush="{StaticResource NeonPink}" BorderThickness="0,1,0,0">
+                    BorderBrush="{StaticResource NeonPink}" BorderThickness="0,1,0,0">
                     <local:TradeVisualizerControl x:Name="TradeVisualizer" />
                 </Border>
             </Grid>
 
-            <Border Grid.Row="3" x:Name="ComplexStatsContainer" Style="{StaticResource CardStyle}" MinHeight="400">
-                <StackPanel x:Name="ComplexStatsHost">
-                    <TextBlock Text="DATA ANALYTICS" Foreground="{StaticResource AccentBlue}" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,20" Opacity="0.5"/>
-                    <Button Style="{StaticResource TileButtonStyle}" Tag="" Content="Générer Rapport" Click="NbreTrade_MouseUp" Width="180"/>
+            <Border PreviewMouseWheel="DataGrid_PreviewMouseWheel" Grid.Row="3" x:Name="ComplexStatsContainer"  Style="{StaticResource CardStyle}" MinHeight="400">
+                <StackPanel x:Name="ComplexStatsHost" >
                 </StackPanel>
             </Border>
         </Grid>

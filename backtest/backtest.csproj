@@ -214,12 +214,12 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
     <Content Include="strategie - Copy.txt" />
+    <Compile Include="StatisticsView.xaml.cs">
+      <DependentUpon>StatisticsView.xaml</DependentUpon>
+    </Compile>
     <Compile Include="strategie.cs" />
     <Compile Include="TradeVisualizerControl.xaml.cs">
       <DependentUpon>TradeVisualizerControl.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Window1.xaml.cs">
-      <DependentUpon>Window1.xaml</DependentUpon>
     </Compile>
     <Compile Include="ZoomImageWindow.xaml.cs">
       <DependentUpon>ZoomImageWindow.xaml</DependentUpon>
@@ -280,11 +280,11 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="TradeVisualizerControl.xaml">
+    <Page Include="StatisticsView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Window1.xaml">
+    <Page Include="TradeVisualizerControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

@@ -23,10 +23,10 @@ namespace backtest
             base.OnStartup(e);
 
             // Gérer les exceptions non gérées dans le thread principal (UI)
-            Application.Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
+            //Application.Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
 
             // Gérer les exceptions non gérées dans les threads en arrière-plan
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            //AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
             // Gérer les exceptions non gérées dans les tâches (Task Parallel Library)//10h15
             TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
@@ -35,7 +35,7 @@ namespace backtest
         private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             // Affichez l'exception
-            MessageBox.Show($"Une erreur s'est produite dans l'interface utilisateur :\n{e.Exception.Message}\n\nDétails :\n{e.Exception.StackTrace}",
+            MessageBox.Show($"Une erreur s'est produite dans l'interface utilisateur :\n{e.Exception.Message}\n\nDétails :\n",
                             "Exception non gérée",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
@@ -47,9 +47,9 @@ namespace backtest
         private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             // Vérifiez si c'est une exception
-            if (e.ExceptionObject is Exception ex)
+            if (e.ExceptionObject is  Exception ex)
             {
-                MessageBox.Show($"Une erreur critique s'est produite :\n{ex.Message}\n\nDétails :\n{ex.StackTrace}",
+                MessageBox.Show($"Une erreur critique s'est produite :\n{ex.Message}\n\nDétails :\n",
                                 "Exception critique non gérée",
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Error);
