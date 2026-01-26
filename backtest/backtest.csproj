@@ -84,15 +84,6 @@
     <Reference Include="CefSharp.Wpf, Version=96.0.141.0, Culture=neutral, PublicKeyToken=40c4b6fc221f4138, processorArchitecture=MSIL">
       <HintPath>..\packages\CefSharp.Wpf.96.0.141\lib\net452\CefSharp.Wpf.dll</HintPath>
     </Reference>
-    <Reference Include="EPPlus, Version=7.4.2.0, Culture=neutral, PublicKeyToken=ea159fdaa78159a1, processorArchitecture=MSIL">
-      <HintPath>..\packages\EPPlus.7.4.2\lib\net35\EPPlus.dll</HintPath>
-    </Reference>
-    <Reference Include="EPPlus.Interfaces, Version=6.1.1.0, Culture=neutral, PublicKeyToken=a694d7f3b0907a61, processorArchitecture=MSIL">
-      <HintPath>..\packages\EPPlus.Interfaces.6.1.1\lib\net35\EPPlus.Interfaces.dll</HintPath>
-    </Reference>
-    <Reference Include="EPPlus.System.Drawing, Version=6.1.1.0, Culture=neutral, PublicKeyToken=2308d35469c9bac0, processorArchitecture=MSIL">
-      <HintPath>..\packages\EPPlus.System.Drawing.6.1.1\lib\net35\EPPlus.System.Drawing.dll</HintPath>
-    </Reference>
     <Reference Include="Google.Protobuf, Version=3.5.1.0, Culture=neutral, PublicKeyToken=a7d26565bac4d604, processorArchitecture=MSIL">
       <HintPath>..\packages\Google.Protobuf.3.5.1\lib\net45\Google.Protobuf.dll</HintPath>
     </Reference>
@@ -121,6 +112,7 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Drawing.Design" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.IO.Pipelines, Version=10.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.IO.Pipelines.10.0.2\lib\net462\System.IO.Pipelines.dll</HintPath>
     </Reference>
@@ -191,6 +183,9 @@
     <Compile Include="ControlStat.xaml.cs">
       <DependentUpon>ControlStat.xaml</DependentUpon>
     </Compile>
+    <Compile Include="CustomMessageBoxView.xaml.cs">
+      <DependentUpon>CustomMessageBoxView.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Demo.xaml.cs">
       <DependentUpon>Demo.xaml</DependentUpon>
     </Compile>
@@ -200,9 +195,6 @@
     <Compile Include="FirstLaunchManager.cs" />
     <Compile Include="FxCloudService.cs" />
     <Compile Include="HabitsManager.cs" />
-    <Compile Include="ImageViewer.xaml.cs">
-      <DependentUpon>ImageViewer.xaml</DependentUpon>
-    </Compile>
     <Compile Include="InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
@@ -212,6 +204,9 @@
     <Compile Include="opening.xaml.cs">
       <DependentUpon>opening.xaml</DependentUpon>
     </Compile>
+    <Compile Include="SettingsView.xaml.cs">
+      <DependentUpon>SettingsView.xaml</DependentUpon>
+    </Compile>
     <Compile Include="StatisticsControl.xaml.cs">
       <DependentUpon>StatisticsControl.xaml</DependentUpon>
     </Compile>
@@ -219,9 +214,6 @@
     <Compile Include="strategie.cs" />
     <Compile Include="TradeVisualizerControl.xaml.cs">
       <DependentUpon>TradeVisualizerControl.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="VisuelTrade.xaml.cs">
-      <DependentUpon>VisuelTrade.xaml</DependentUpon>
     </Compile>
     <Compile Include="Window1.xaml.cs">
       <DependentUpon>Window1.xaml</DependentUpon>
@@ -241,15 +233,15 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="CustomMessageBoxView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="Demo.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="EtudesView.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="ImageViewer.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -277,15 +269,15 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="SettingsView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="StatisticsControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="TradeVisualizerControl.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="VisuelTrade.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -317,7 +309,6 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <None Include="backtest_TemporaryKey.pfx" />
-    <None Include="libwebview.dylib" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

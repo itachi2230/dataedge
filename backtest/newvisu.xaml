@@ -11,6 +11,7 @@
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
         Opacity="0">
+
     <Window.Resources>
         <Storyboard x:Key="FadeInAnimation">
             <DoubleAnimation Storyboard.TargetProperty="Opacity"
@@ -25,16 +26,28 @@
         </EventTrigger>
     </Window.Triggers>
 
-    <Grid Background="#44000000" MouseLeftButtonDown="ExternalGrid_MouseLeftButtonDown">
+    <Grid Background="#BB000000" MouseLeftButtonDown="ExternalGrid_MouseLeftButtonDown">
+
+        <StackPanel VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,30,0,0" IsHitTestVisible="False">
+            <TextBlock Text="DOUBLE-CLIQUEZ SUR UNE IMAGE POUR L'AGRANDIR" 
+                       Foreground="{StaticResource AccentBlue}" 
+                       FontSize="11" FontWeight="Bold" 
+                       HorizontalAlignment="Center" Opacity="0.8"/>
+            <TextBlock Text="CLIQUEZ À L'EXTÉRIEUR POUR FERMER" 
+                       Foreground="Gray" 
+                       FontSize="9" 
+                       HorizontalAlignment="Center" Margin="0,5,0,0"/>
+        </StackPanel>
 
         <Border x:Name="VisualContainer" 
                 Style="{StaticResource CardStyle}" 
                 BorderBrush="{StaticResource NeonPink}"
                 BorderThickness="0,1,0,0" 
                 Margin="300,200"
+                Background="#0A0A12"
                 MouseLeftButtonDown="VisualContainer_MouseLeftButtonDown">
 
-            <local:TradeVisualizerControl x:Name="TradeVisualizer"  />
+            <local:TradeVisualizerControl x:Name="TradeVisualizer" />
         </Border>
     </Grid>
 </Window>

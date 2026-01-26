@@ -88,8 +88,10 @@ namespace backtest
                 {
                     ZoomImageWindow zoomWin = new ZoomImageWindow(img.Source);
                     zoomWin.ShowDialog();
+                    
                 }
             }
+            e.Handled = true;
         }
         private async System.Threading.Tasks.Task DownloadAndCacheImage(string url, string localPath, Image img)
         {
@@ -130,5 +132,7 @@ namespace backtest
             catch { }
             return url;
         }
+
+        
     }
 }

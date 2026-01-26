@@ -109,7 +109,7 @@
                     <TextBlock Text="RISK REWARD (RR)" FontSize="9" Foreground="Gray" Margin="0,0,0,5"/>
                     <TextBox x:Name="RrTextBox" Style="{StaticResource ModernField}" Height="35" Margin="0,0,0,15"/>
 
-                    <TextBlock Text="CAPTURES D'ÉCRAN (LIENS)" FontSize="9" Foreground="Gray" Margin="0,0,0,5"/>
+                    <TextBlock Text="CAPTURES D'ÉCRAN (LIENS HTF,LTF)" FontSize="9" Foreground="Gray" Margin="0,0,0,5"/>
                     <Grid Margin="0,0,0,15">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>

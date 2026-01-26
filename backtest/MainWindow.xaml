@@ -97,51 +97,84 @@
                     </StackPanel.Style>
 
                     <StackPanel Margin="0,5">
-                        <Button Style="{StaticResource CircleNavButton}" Content="📊" Click="Button_Click_3" Margin="0"/>
-                        <TextBlock Text="ÉLUDES" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        <Button Style="{StaticResource CircleNavButton}" Content="📂" Click="ButtonEtude" Margin="0"/>
+                        <TextBlock Text="ÉTUDES" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <StackPanel Margin="0,5">
-                        <Button Style="{StaticResource CircleNavButton}" Content="⚙️" Margin="0"/>
-                        <TextBlock Text="CONFIG" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        <Button Style="{StaticResource CircleNavButton}" Content="📊" Margin="0" Click="Button_Click" />
+                        <TextBlock Text="Investing" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <StackPanel Margin="0,5">
-                        <Button Style="{StaticResource CircleNavButton}" Content="🔔" Margin="0"/>
-                        <TextBlock Text="NOTIFS" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        <Button Style="{StaticResource CircleNavButton}" Content="👥" Margin="0" Click="Button_Click_1"/>
+                        <TextBlock Text="Space" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <Rectangle Height="1" Fill="#333" Margin="10,10" Width="25"/>
 
                     <StackPanel Margin="0,5">
-                        <Button Style="{StaticResource CircleNavButton}" Content="🛠" Margin="0"/>
-                        <TextBlock Text="OUTILS" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        <Button Style="{StaticResource CircleNavButton}" Content="⚙️" Margin="0" Click="btnsettingclick"/>
+                        <TextBlock Text="CONFIG" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
+
 
                 </StackPanel>
             </Border>
-            <Grid Grid.Row="0" Margin="20,0,0,0" MouseDown="TitleBar_MouseDown">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="TERMINAL" Foreground="{StaticResource AccentBlue}" FontWeight="Black" FontSize="18" VerticalAlignment="Center"/>
-                    <TextBlock Text="PRO" Foreground="White" FontWeight="Thin" FontSize="18" Margin="5,0" Opacity="0.5"/>
+            <Grid Grid.Row="0" Background="Transparent" MouseDown="TitleBar_MouseDown">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                    <TextBlock Text="DATA" Foreground="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" FontWeight="Black" FontSize="18" VerticalAlignment="Center"/>
+                    <TextBlock Text="EDGE" Foreground="#FF00FF03" FontSize="18" Margin="5,0" FontWeight="Black"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Border Background="#1A2432" CornerRadius="15" Padding="12,6" Margin="0,0,15,0" BorderBrush="#333" BorderThickness="1">
+                    <Border x:Name="AccountBorder" 
+        CornerRadius="15" 
+        Padding="12,6" 
+        Margin="0,0,15,0" 
+        BorderThickness="1"
+        Cursor="Hand" MouseUp="AccountBorder_MouseUp"
+        MouseDown="AccountBorder_MouseDown">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#1A2432"/>
+                                <Setter Property="BorderBrush" Value="#333333"/>
+
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#253142"/>
+                                        <Setter Property="BorderBrush" Value="#4CAF50"/>
+                                    </Trigger>
+
+                                    <Trigger Property="IsMouseCaptured" Value="True">
+                                        <Setter Property="Background" Value="#0D141D"/>
+                                        <Setter Property="BorderBrush" Value="#2E7D32"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="8" Height="8" Fill="#4CAF50" Margin="0,0,10,0">
                                 <Ellipse.Effect>
                                     <BlurEffect Radius="4"/>
                                 </Ellipse.Effect>
                             </Ellipse>
-                            <TextBlock x:Name="userNameText" Text="TRADER_CONNECTED" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="userNameText" 
+                   Text="NOM_CONNECTER" 
+                   Foreground="White" 
+                   FontSize="11" 
+                   FontWeight="Bold" 
+                   VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-                    <Button Content="—" Click="MinimizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="30" FontSize="16"/>
-                    <Button Content="✕" Click="CloseButton_Click" Background="Transparent" Foreground="#E74C3C" BorderThickness="0" Width="30" FontSize="16"/>
+                    <Button Content="—" Click="MinimizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
+
+                    <Button x:Name="MaximizeBtn" Content="▢" Click="MaximizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
+
+                    <Button Content="✕" Click="CloseButton_Click" Background="Transparent" Foreground="#E74C3C" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
                 </StackPanel>
             </Grid>
-
             <ContentControl x:Name="MainViewContainer" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0">
                 <Grid x:Name="DashboardView">
                     <Grid.RowDefinitions>
@@ -319,7 +352,7 @@
             </ContentControl>
 
             <Grid Grid.Row="3" Margin="25,0.4,0,0">
-                
+
 
                 <Button Content="CALENDRIER ECO" Click="Button_Click" Background="#1A2432" Foreground="White" Width="120" Height="36" HorizontalAlignment="Right" Margin="0,0,70,0">
                     <Button.Template>
@@ -337,9 +370,22 @@
                     <ListBox x:Name="StrategyListBox" SelectionChanged="StrategyListBox_SelectionChanged" Width="200" Background="Transparent" Foreground="White" BorderThickness="0"/>
                 </Border>
             </Popup>
-            <Border x:Name="annoncesInvesting" Grid.Row="1" Grid.RowSpan="2" Style="{StaticResource CardStyle}" Margin="100,100,100,0" Visibility="Collapsed" Panel.ZIndex="200">
-                <cef:ChromiumWebBrowser x:Name="InvestingCalendarBrowser"/>
-            </Border>
+            <Grid x:Name="OverlayClose" 
+              Grid.RowSpan="3" 
+              Background="Transparent" 
+              Visibility="Collapsed" 
+              Panel.ZIndex="199"
+              MouseDown="OverlayClose_MouseDown">
+              <Border x:Name="annoncesInvesting" 
+                Grid.Row="1" 
+                Grid.RowSpan="2" 
+                Style="{StaticResource CardStyle}" 
+                Margin="100,100,100,0" 
+                Panel.ZIndex="200">
+                    <cef:ChromiumWebBrowser x:Name="InvestingCalendarBrowser"/>
+                </Border>
+            </Grid>
         </Grid>
+
     </Border>
 </Window>

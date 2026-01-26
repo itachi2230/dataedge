@@ -20,8 +20,7 @@ namespace backtest
         private DateTime currentWeekStart;
         private readonly string notesFolderPath = Path.Combine(Environment.CurrentDirectory, "Notes");
         private ObservableCollection<Trade> Journal;
-        private HabitsManager habitsManager;
-
+        SettingsView settingsView;
         public MainWindow()
         {
             InitializeComponent();
@@ -31,10 +30,7 @@ namespace backtest
             LoadNotesForCurrentWeek();
             LoadInvestingCalendar();
             loadStrategies();
-
-            // Initialisation des Habitudes (Checklist)
-            habitsManager = new HabitsManager();
-            // DisplayHabitsInBorder(); // Décommenter si tu as l'élément 'croissance' dans ton XAML
+            settingsView = new SettingsView();
         }
 
         #region CHARGEMENT DES STRATÉGIES ET JOURNAL
@@ -123,6 +119,24 @@ namespace backtest
             statisticsControl.BeginAnimation(OpacityProperty, fadeIn);
         }
 
+        private void ShowEtude()
+        {
+            // 1. Création du contrôle de statistiques
+            var etudew = new EtudesControl();
+
+            // 2. On remplace le contenu du conteneur central (ContentControl dans ton XAML)
+            MainViewContainer.Content = etudew;
+
+            // 3. Animation de fondu
+            DoubleAnimation fadeIn = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromSeconds(0.4),
+                EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
+            };
+            etudew.BeginAnimation(OpacityProperty, fadeIn);
+        }
         public void ShowDashboard()
         {
             // 1. On remet la Grid originale (nommée DashboardView dans le XAML)
@@ -220,24 +234,52 @@ namespace backtest
 
         private void Button_Click(object sender, RoutedEventArgs e) // News Toggle
         {
-            annoncesInvesting.Visibility = (annoncesInvesting.Visibility == Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
+            OverlayClose.Visibility = (OverlayClose.Visibility == Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
         }
-
+        private void OverlayClose_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            OverlayClose.Visibility = Visibility.Collapsed;
+        }
         private void Button_Click_2(object sender, RoutedEventArgs e) { new addStrategieWindow().ShowDialog(); loadStrategies(); } // + Strat
-
-        private void Button_Click_3(object sender, RoutedEventArgs e) { new EtudesView().ShowDialog(); } // Studies
+        private void ButtonEtude(object sender, RoutedEventArgs e) { ShowEtude(); } 
 
         private void CloseButton_Click(object sender, RoutedEventArgs e) { SaveNotes(); this.Close(); }
 
         private void MinimizeButton_Click(object sender, RoutedEventArgs e) => this.WindowState = WindowState.Minimized;
-
+        private void MaximizeButton_Click(object sender, RoutedEventArgs e){if (this.WindowState == WindowState.Maximized){this.WindowState = WindowState.Normal; MaximizeBtn.Content = "▢";}else{this.WindowState = WindowState.Maximized; MaximizeBtn.Content = "❐"; }}
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
+        private void AccountBorder_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Capture la souris pour activer le trigger visuel "IsMouseCaptured"
+            ((IInputElement)sender).CaptureMouse();
+            settingsView.ShowAccountPanel();
+            MainViewContainer.Content = settingsView;
 
+            // 3. Animation de fondu
+            DoubleAnimation fadeIn = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromSeconds(0.4),
+                EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
+            };
+            settingsView.BeginAnimation(OpacityProperty, fadeIn);
+
+            e.Handled = true;
+        }
+
+        // Optionnel : Relâcher la capture au MouseUp pour finir l'effet visuel
+        private void AccountBorder_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (((IInputElement)sender).IsMouseCaptured)
+            {
+                ((IInputElement)sender).ReleaseMouseCapture();
+            }
+        }
         private void LoadInvestingCalendar()
         {
             try { InvestingCalendarBrowser.Address = "https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=110,17,25,34,32,6,37,26,5,22,39,93,14,48,10,35,105,43,38,4,36,12,72&calType=week&timeZone=55&lang=5"; } catch { }
         }
-
         private DateTime GetStartOfWeek(DateTime date)
         {
             int daysToSubtract = (int)date.DayOfWeek - (int)DayOfWeek.Monday;
@@ -245,6 +287,27 @@ namespace backtest
             return date.AddDays(-daysToSubtract).Date;
         }
         #endregion
+
+        private void btnsettingclick(object sender, RoutedEventArgs e)
+        {
+            MainViewContainer.Content = settingsView;
+            // 3. Animation de fondu
+            DoubleAnimation fadeIn = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromSeconds(0.4),
+                EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
+            };
+            settingsView.BeginAnimation(OpacityProperty, fadeIn);
+
+            e.Handled = true;
+        }
+
+        private void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show("Comming soon");
+        }
     }
 
     #region CONVERTERS
@@ -272,5 +335,6 @@ namespace backtest
         }
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
     }
+    // Cette classe "masque" la MessageBox par défaut de System.Windows
     #endregion
 }
