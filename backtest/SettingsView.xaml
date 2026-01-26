@@ -49,7 +49,7 @@
             Height="30" Margin="0,8" Foreground="Gray" BorderBrush="#222" HorizontalAlignment="Stretch" FontSize="14"/>
             </StackPanel>
 
-            <Border Grid.Column="1" CornerRadius="20" Padding="60,40" Background="{StaticResource CardBg}" BorderThickness="1">
+            <Border Grid.Column="1" CornerRadius="20" Padding="40,20" Background="{StaticResource CardBg}" BorderThickness="1">
                 <Grid>
                     <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="Both">
                         <Grid x:Name="AccountGrid" MaxWidth="800" HorizontalAlignment="Stretch" VerticalAlignment="Center">

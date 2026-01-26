@@ -122,14 +122,15 @@ namespace backtest
         public async void chargerprofile()
         {
             var profile = await _cloudService.GetProfileAsync();
-
+            if (Application.Current.MainWindow is MainWindow mw) mw.ApplyUserInterface(LoadSessionFromDisk());
             if (profile != null)
             {
                 _isLoggedIn = true;
-                LoadSessionFromDisk();
+                
                 // --- FIN DU CHARGEMENT (SUCCÈS) ---
                 await ShowNotification("Connecté avec succès !");
                 ShowAccountPanel();
+
             }
         }
         private async void Login_Click(object sender, RoutedEventArgs e)
@@ -149,6 +150,7 @@ namespace backtest
             if (success == "yes")
             {
                 chargerprofile();
+
             }
             else
             {
@@ -187,14 +189,15 @@ namespace backtest
                 ShowNotification(success, true);
             }
         }
-        private void LoadSessionFromDisk()
+        private UserSessionData LoadSessionFromDisk()
         {
-            if (!File.Exists(_sessionFilePath)) return;
+            var session= new UserSessionData();
+            if (!File.Exists(_sessionFilePath)) return session;
 
             try
             {
                 string json = File.ReadAllText(_sessionFilePath);
-                var session = JsonSerializer.Deserialize<UserSessionData>(json);
+                session = JsonSerializer.Deserialize<UserSessionData>(json);
 
                 if (session != null && session.IsLoggedIn)
                 {
@@ -220,6 +223,7 @@ namespace backtest
                 }
             }
             catch { /* Erreur lecture */ }
+            return session;
         }
         private void Logout_Click(object sender, RoutedEventArgs e)
         {
@@ -231,6 +235,7 @@ namespace backtest
 
             ShowNotification("Session locale effacée");
             ShowAccountPanel();
+            if (Application.Current.MainWindow is MainWindow mw) mw.Logout();
         }
         // 1. Basculer entre Mode Vue et Mode Édition
         private void BtnEditToggle_Click(object sender, RoutedEventArgs e)

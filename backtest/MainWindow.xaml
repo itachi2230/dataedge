@@ -3,12 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:cef="clr-namespace:CefSharp.Wpf;assembly=CefSharp.Wpf"
         xmlns:local="clr-namespace:backtest"
-        Title="Performance Dashboard" Height="850" Width="1350"
+        Title="Performance Dashboard" Height="750" Width="1350"
         Background="Transparent" WindowStartupLocation="CenterScreen"
         
         AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip">
 
     <Window.Resources>
+        <Storyboard x:Key="RotationSyncAnim">
+            <DoubleAnimation Storyboard.TargetName="SyncIconRotation" 
+                     Storyboard.TargetProperty="Angle"
+                     From="0" To="360" 
+                     Duration="0:0:1" 
+                     RepeatBehavior="Forever"/>
+        </Storyboard>
     </Window.Resources>
 
     <Border Background="{StaticResource BgDark}" CornerRadius="20" BorderBrush="#222" BorderThickness="1">
@@ -22,7 +29,7 @@
                 <RowDefinition Height="60"/>
                 <RowDefinition Height="145"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="70"/>
+                <RowDefinition Height="40"/>
             </Grid.RowDefinitions>
 
             <Border x:Name="SidePanel"
@@ -96,24 +103,24 @@
                         </Style>
                     </StackPanel.Style>
 
-                    <StackPanel Margin="0,5">
+                    <StackPanel Margin="0,2">
                         <Button Style="{StaticResource CircleNavButton}" Content="📂" Click="ButtonEtude" Margin="0"/>
                         <TextBlock Text="ÉTUDES" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
-                    <StackPanel Margin="0,5">
+                    <StackPanel Margin="0,2">
                         <Button Style="{StaticResource CircleNavButton}" Content="📊" Margin="0" Click="Button_Click" />
                         <TextBlock Text="Investing" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
-                    <StackPanel Margin="0,5">
+                    <StackPanel Margin="0,2">
                         <Button Style="{StaticResource CircleNavButton}" Content="👥" Margin="0" Click="Button_Click_1"/>
                         <TextBlock Text="Space" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <Rectangle Height="1" Fill="#333" Margin="10,10" Width="25"/>
 
-                    <StackPanel Margin="0,5">
+                    <StackPanel Margin="0,2">
                         <Button Style="{StaticResource CircleNavButton}" Content="⚙️" Margin="0" Click="btnsettingclick"/>
                         <TextBlock Text="CONFIG" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -127,54 +134,90 @@
                     <TextBlock Text="EDGE" Foreground="#FF00FF03" FontSize="18" Margin="5,0" FontWeight="Black"/>
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
+                        <TextBlock x:Name="txtLastSync" 
+                   Text="SYNC: jamais" 
+                   Foreground="Gray" 
+                   FontSize="9" 
+                   FontWeight="SemiBold"
+                   VerticalAlignment="Center" 
+                   Margin="0,0,8,0"
+                   Opacity="0.7"/>
+
+                        <Button Style="{StaticResource CircleNavButton}" 
+                Width="28" Height="28" 
+                ToolTip="Synchroniser maintenant"
+                Click="BtnSync_Click">
+                            <Path x:Name="SyncIconPath" 
+          Data="M12,18A6,6 0 0,1 6,12C6,11 6.25,10.03 6.7,9.2L5.24,7.74C4.46,8.97 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15V18M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.97 17.3,14.8L18.76,16.26C19.54,15.03 20,13.57 20,12A8,8 0 0,0 12,4Z" 
+          Fill="Cyan" 
+          Width="12" Height="12" 
+          Stretch="Uniform"
+          RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform>
+                                    <RotateTransform x:Name="SyncIconRotation" Angle="0"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Button>
+                    </StackPanel>
+
                     <Border x:Name="AccountBorder" 
-        CornerRadius="15" 
-        Padding="12,6" 
-        Margin="0,0,15,0" 
-        BorderThickness="1"
-        Cursor="Hand" MouseUp="AccountBorder_MouseUp"
-        MouseDown="AccountBorder_MouseDown">
+            CornerRadius="20" 
+            Padding="4,4,15,4" 
+            Margin="0,0,15,0" 
+            BorderThickness="1"
+            Cursor="Hand" 
+            MouseUp="AccountBorder_MouseUp"
+            MouseDown="AccountBorder_MouseDown">
                         <Border.Style>
                             <Style TargetType="Border">
-                                <Setter Property="Background" Value="#1A2432"/>
+                                <Setter Property="Background" Value="#10FFFFFF"/>
                                 <Setter Property="BorderBrush" Value="#333333"/>
-
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#253142"/>
-                                        <Setter Property="BorderBrush" Value="#4CAF50"/>
-                                    </Trigger>
-
-                                    <Trigger Property="IsMouseCaptured" Value="True">
-                                        <Setter Property="Background" Value="#0D141D"/>
-                                        <Setter Property="BorderBrush" Value="#2E7D32"/>
+                                        <Setter Property="Background" Value="#1500FFFF"/>
+                                        <Setter Property="BorderBrush" Value="Cyan"/>
                                     </Trigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
 
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="8" Height="8" Fill="#4CAF50" Margin="0,0,10,0">
-                                <Ellipse.Effect>
-                                    <BlurEffect Radius="4"/>
-                                </Ellipse.Effect>
-                            </Ellipse>
+                            <Grid Margin="0,0,10,0">
+                                <Ellipse Width="30" Height="30" Stroke="Cyan" StrokeThickness="1">
+                                    <Ellipse.Fill>
+                                        <ImageBrush x:Name="SmallUserImg" ImageSource="pack://application:,,,/Resources/default_user.png" Stretch="UniformToFill"/>
+                                    </Ellipse.Fill>
+                                    <Ellipse.Effect>
+                                        <DropShadowEffect Color="Cyan" BlurRadius="8" ShadowDepth="0" Opacity="0.3"/>
+                                    </Ellipse.Effect>
+                                </Ellipse>
+
+                                <Ellipse Width="8" Height="8" 
+                         Fill="#4CAF50" 
+                         VerticalAlignment="Bottom" 
+                         HorizontalAlignment="Right"
+                         Stroke="#050505" StrokeThickness="1.5"/>
+                            </Grid>
+
                             <TextBlock x:Name="userNameText" 
-                   Text="NOM_CONNECTER" 
-                   Foreground="White" 
-                   FontSize="11" 
-                   FontWeight="Bold" 
-                   VerticalAlignment="Center"/>
+                       Text="NOM_UTILISATEUR" 
+                       Foreground="White" 
+                       FontSize="11" 
+                       FontWeight="Bold" 
+                       VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button Content="—" Click="MinimizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
-
                     <Button x:Name="MaximizeBtn" Content="▢" Click="MaximizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
-
                     <Button Content="✕" Click="CloseButton_Click" Background="Transparent" Foreground="#E74C3C" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
                 </StackPanel>
             </Grid>
+            
             <ContentControl x:Name="MainViewContainer" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0">
                 <Grid x:Name="DashboardView">
                     <Grid.RowDefinitions>
@@ -267,7 +310,19 @@
                             </StackPanel>
                         </Grid>
                     </Grid>
-
+                    <Border x:Name="CyberToast" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" 
+                            Background="#050505" BorderBrush="Cyan" BorderThickness="1" CornerRadius="4" Padding="20,10" Margin="0,0,0,30">
+                        <Border.Effect>
+                            <DropShadowEffect x:Name="ToastGlow" Color="Cyan" BlurRadius="15" Opacity="0.5" ShadowDepth="0"/>
+                        </Border.Effect>
+                        <StackPanel Orientation="Horizontal">
+                            <Grid Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <Ellipse x:Name="ToastIconCircle" Stroke="Cyan" StrokeThickness="2"/>
+                                <Path x:Name="ToastIconPath" Data="M 4,9 L 8,13 L 14,5" Stroke="Cyan" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            </Grid>
+                            <TextBlock x:Name="ToastText" Text="NOTIFICATION" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
                     <Grid Grid.Row="1" Margin="10,10,0,4.6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="1.2*"/>
@@ -354,7 +409,7 @@
             <Grid Grid.Row="3" Margin="25,0.4,0,0">
 
 
-                <Button Content="CALENDRIER ECO" Click="Button_Click" Background="#1A2432" Foreground="White" Width="120" Height="36" HorizontalAlignment="Right" Margin="0,0,70,0">
+                <Button Content="CALENDRIER ECO" Click="Button_Click" Background="#1A2432" Foreground="White" Width="120" Height="26" HorizontalAlignment="Right" Margin="0,0,70,0">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border Background="{TemplateBinding Background}" CornerRadius="18" BorderBrush="#333" BorderThickness="1">

@@ -18,6 +18,7 @@ namespace backtest.Services
         private readonly string _localProfileCache = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
         private readonly string _configFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.txt");
         public readonly string _sessionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "session_v1.json");
+        private static readonly object _logLock = new object();
 
         public string CurrentToken { get; private set; }
         public string RefreshToken { get; private set; }
@@ -377,6 +378,23 @@ namespace backtest.Services
         #endregion
 
         #region UTILITAIRES ET RÉSEAU
+        public static void Log(string message)
+        {
+            try
+            {
+                string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "log.txt");
+                string logLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}";
+
+                lock (_logLock)
+                {
+                    File.AppendAllText(logPath, logLine);
+                }
+            }
+            catch
+            {
+                // On ne lève pas d'exception pour un log pour ne pas bloquer le logiciel
+            }
+        }
 
         private async Task<HttpResponseMessage> SecureRequestAsync(Func<Task<HttpResponseMessage>> requestFunc)
         {
@@ -429,7 +447,14 @@ namespace backtest.Services
             => new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
 
         public List<SyncItem> GetAppSyncManifest()
-            => new List<SyncItem> { new SyncItem { LocalPath = "data/", RemoteRelativePath = "data/", IsDirectory = true } };
+            => new List<SyncItem> {
+                new SyncItem { LocalPath = "data/", RemoteRelativePath = "data/", IsDirectory = true },
+                new SyncItem { LocalPath = "etudes/", RemoteRelativePath = "etudes/", IsDirectory = true },
+                new SyncItem { LocalPath = "Notes/", RemoteRelativePath = "Notes/", IsDirectory = true },
+                new SyncItem { LocalPath = "cacheimage/", RemoteRelativePath = "cacheimage/", IsDirectory = true },
+                new SyncItem { LocalPath = "metadata/", RemoteRelativePath = "metadata/", IsDirectory = true },
+
+            };
 
         #endregion
 

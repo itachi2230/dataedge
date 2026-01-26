@@ -12,6 +12,10 @@ using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media.Animation;
 using System.Collections.Generic;
+using backtest.Services;
+using System.Text.Json;
+using System.Windows.Media.Imaging;
+using System.Threading.Tasks;
 
 namespace backtest
 {
@@ -21,6 +25,9 @@ namespace backtest
         private readonly string notesFolderPath = Path.Combine(Environment.CurrentDirectory, "Notes");
         private ObservableCollection<Trade> Journal;
         SettingsView settingsView;
+        private FxCloudService _cloudService = new FxCloudService();
+        private readonly string _sessionFilePath;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -31,6 +38,9 @@ namespace backtest
             LoadInvestingCalendar();
             loadStrategies();
             settingsView = new SettingsView();
+            _sessionFilePath = _cloudService._sessionFilePath;
+            LoadUserProfile();
+
         }
 
         #region CHARGEMENT DES STRATÉGIES ET JOURNAL
@@ -96,6 +106,62 @@ namespace backtest
                 }
             }
         }
+        public void LoadUserProfile()
+        {
+            // 1. VERIFICATION DU FICHIER LOCAL (INSTANTANÉ)
+            if (File.Exists(_sessionFilePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(_sessionFilePath);
+                    var session = JsonSerializer.Deserialize<UserSessionData>(json);
+
+                    if (session != null && session.IsLoggedIn)
+                    {
+                        ApplyUserInterface(session);
+                        return; // On a affiché le profil local, on s'arrête là pour l'instant
+                    }
+                }
+                catch { /* Fichier corrompu ou illisible */ }
+            }
+
+            // 2. SI PAS DE FICHIER OU PAS CONNECTÉ
+            userNameText.Text = "NON_CONNECTER";txtLastSync.Text = "SYNC: Jamais";
+        }
+        // Cette méthode met à jour l'UI avec les données qu'on lui donne (locales ou serveurs)
+        public void ApplyUserInterface(UserSessionData data)
+        {
+            userNameText.Text = data.FullName.ToUpper();
+            if (data.LastSyncDate.HasValue)
+            {
+                // Calcul du temps écoulé
+                TimeSpan diff = DateTime.Now - data.LastSyncDate.Value;
+                string timeAgo = FormatTimeAgo(diff);
+                txtLastSync.Text = $"SYNC: {timeAgo}";
+            }
+            else
+            {
+                txtLastSync.Text = "SYNC: Jamais";
+            }
+            // Chargement de l'image (Gestion du chemin local vs URL)
+            if (!string.IsNullOrEmpty(data.ImagePath) && File.Exists(data.ImagePath))
+            {
+                SmallUserImg.ImageSource = new BitmapImage(new Uri(data.ImagePath));
+            }
+            else
+            {
+                // Image par défaut si le chemin n'existe plus
+                SmallUserImg.ImageSource = new BitmapImage(new Uri("pack://application:,,,/Resources/default_user.png"));
+            }
+        }
+        private string FormatTimeAgo(TimeSpan diff)
+        {
+            if (diff.TotalMinutes < 1) return "À l'instant";
+            if (diff.TotalMinutes < 60) return $"Il y a {(int)diff.TotalMinutes} min";
+            if (diff.TotalHours < 24) return $"Il y a {(int)diff.TotalHours} h";
+            return $"Le {diff.ToString(@"dd/MM/yyyy")}";
+        }
+
         #endregion
 
         #region NAVIGATION (Dashboard <-> StatisticsControl)
@@ -205,7 +271,95 @@ namespace backtest
             StrategyListBox.DisplayMemberPath = "Nom";
             StrategyPopup.IsOpen = true;
         }
+        private async void BtnSync_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as Button;
+            btn.IsEnabled = false;
+            // 1. Démarrer l'animation
+            Storyboard sb = (Storyboard)this.FindResource("RotationSyncAnim");
+            sb.Begin();
 
+            try
+            {
+                // 2. Lancer la synchronisation
+                List<string> results = await _cloudService.FullSyncAsync();
+                FxCloudService.Log(String.Join("\n", results));
+                // 3. Analyse intelligente des résultats
+                // On vérifie si une ligne contient "success" ou "mis à jour"
+                int changeCount = results.Count(line => line.Contains("success") || line.Contains("mis à jour") && !line.Contains("0"));
+                bool hasCriticalError = results.Any(line => line.Contains("Erreur") || line.Contains("inaccessible"));
+                // Construction du message de notification
+                string messageFinal;
+                bool isError = hasCriticalError;
+                if (hasCriticalError)
+                {
+                    messageFinal = "La synchronisation a échoué. Vérifiez votre connexion.";
+                }
+                else if (changeCount > 0)
+                {
+                    messageFinal = $"Synchro réussie : {changeCount} éléments synchronisés.";
+                    // Mise à jour de l'UI pour la date
+                    DateTime now = DateTime.Now;
+                    _cloudService.UpdateLocalLastSync(now);
+                    txtLastSync.Text = "SYNC: " + now.ToString("g");
+                }
+                else
+                {
+                    messageFinal = "Tout est déjà à jour.";
+                }
+                await ShowNotification(messageFinal, isError, false, 0.5);
+            }
+            catch (Exception ex)
+            {
+                await ShowNotification("Erreur imprévue : " + ex.Message, true, true, 0.5);
+            }
+            finally
+            {
+                // 3. Arrêter l'animation à la fin (même si erreur)
+                sb.Stop();
+                btn.IsEnabled = true;
+            }
+
+        }
+        public void Logout()
+        {
+            // On efface le fichier comme dans Settings
+            if (File.Exists(_sessionFilePath)) File.Delete(_sessionFilePath);
+
+            LoadUserProfile();
+            SmallUserImg.ImageSource = new BitmapImage(new Uri("pack://application:,,,/Resources/default_user.png"));
+        }
+
+        public async Task ShowNotification(string message, bool isError = false, bool keepOpen = false, double secondes = 0.2)
+        {
+            Color themeColor = isError ? Color.FromRgb(255, 69, 69) : Color.FromRgb(0, 255, 255);
+            SolidColorBrush themeBrush = new SolidColorBrush(themeColor);
+
+            ToastText.Text = message.ToUpper();
+            CyberToast.BorderBrush = themeBrush;
+            ToastGlow.Color = themeColor;
+            ToastIconCircle.Stroke = themeBrush;
+            ToastIconPath.Stroke = themeBrush;
+
+            // Icone : Sablier pour le chargement, Croix pour erreur, Check pour succès
+            if (keepOpen && !isError)
+                ToastIconPath.Data = Geometry.Parse("M 5,5 L 15,5 L 10,10 L 5,15 L 15,15"); // Simple Sablier
+            else
+                ToastIconPath.Data = isError ? Geometry.Parse("M 5,5 L 13,13 M 13,5 L 5,13") : Geometry.Parse("M 4,9 L 8,13 L 14,5");
+
+            CyberToast.Opacity = 0;
+            CyberToast.Visibility = Visibility.Visible;
+            DoubleAnimation fadeIn = new DoubleAnimation(1, TimeSpan.FromSeconds(secondes));
+            CyberToast.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+
+            if (!keepOpen)
+            {
+                await Task.Delay(3000);
+                DoubleAnimation fadeOut = new DoubleAnimation(0, TimeSpan.FromSeconds(0.5));
+                fadeOut.Completed += (s, e) => CyberToast.Visibility = Visibility.Collapsed;
+                CyberToast.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+            }
+        }
         private void AddStrategy_Click(object sender, RoutedEventArgs e)
         {
              new addStrategieWindow().ShowDialog();
@@ -286,8 +440,6 @@ namespace backtest
             if (date.DayOfWeek == DayOfWeek.Sunday) daysToSubtract = 6;
             return date.AddDays(-daysToSubtract).Date;
         }
-        #endregion
-
         private void btnsettingclick(object sender, RoutedEventArgs e)
         {
             MainViewContainer.Content = settingsView;
@@ -304,10 +456,14 @@ namespace backtest
             e.Handled = true;
         }
 
-        private void Button_Click_1(object sender, RoutedEventArgs e)
+        private async void Button_Click_1(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Comming soon");
+            await ShowNotification("Comming soon !!", false, false, 0.5);
+
         }
+        #endregion
+
+
     }
 
     #region CONVERTERS

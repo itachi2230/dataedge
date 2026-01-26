@@ -210,6 +210,9 @@
     <Compile Include="StatisticsControl.xaml.cs">
       <DependentUpon>StatisticsControl.xaml</DependentUpon>
     </Compile>
+    <Resource Include="resources\default_user.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
     <Content Include="strategie - Copy.txt" />
     <Compile Include="strategie.cs" />
     <Compile Include="TradeVisualizerControl.xaml.cs">
