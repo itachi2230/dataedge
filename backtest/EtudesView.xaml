@@ -83,15 +83,15 @@
     <Border  BorderBrush="#1A1A2E" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="60"/>
-                <RowDefinition Height="60"/>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="50"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <DockPanel Grid.Row="0" >
                 <Button Style="{StaticResource CircleNavButton}" Content="" 
                         FontFamily="Segoe MDL2 Assets" Click="BtnRetour_Click" 
-                        ToolTip="Retour au Dashboard"/>
+                        ToolTip="Retour au Dashboard" Height="Auto" Margin="2,0,0,1" />
 
                 <TextBlock Text="GESTION DES ÉTUDES" 
                            FontSize="14" FontWeight="Bold" Foreground="White"
@@ -164,7 +164,7 @@
 
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280"/>
+                    <ColumnDefinition Width="210"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 

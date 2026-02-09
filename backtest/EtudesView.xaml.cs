@@ -51,7 +51,7 @@ namespace backtest
             catch (Exception ex) { MessageBox.Show("Erreur sauvegarde : " + ex.Message); }
         }
 
-        private void LoadStudyFile(string packagePath)
+        public void LoadStudyFile(string packagePath)
         {
             try
             {
@@ -70,7 +70,7 @@ namespace backtest
             catch (Exception ex) { MessageBox.Show("Erreur chargement : " + ex.Message); }
         }
 
-        private void ApplyImageSizingAndEvents()
+        public void ApplyImageSizingAndEvents()
         {
             foreach (Block block in StudyContentRichTextBox.Document.Blocks)
             {
@@ -93,7 +93,7 @@ namespace backtest
         // 2. OPTIMISATION ET INSERTION DES IMAGES (NETTOYAGE)
         // =================================================================
 
-        private void StudyContentRichTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
+        public void StudyContentRichTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
         {
             if (e.DataObject.GetDataPresent(typeof(BitmapSource)))
             {
@@ -108,7 +108,7 @@ namespace backtest
         }
         //ZD9!R4m@82Lp
 
-        private BitmapSource CompressImage(BitmapSource source)
+        public static BitmapSource CompressImage(BitmapSource source)
         {
             // 1. Redimensionnement
             double maxWidth = 1000; // On peut descendre à 1000px pour gagner encore plus de place
@@ -137,7 +137,7 @@ namespace backtest
                 return result;
             }
         }
-        private void InsertImage(BitmapSource source)
+        public void InsertImage(BitmapSource source)
         {
             var img = new Image
             {

@@ -120,19 +120,46 @@ namespace backtest
                 if (modeJournal) _strategie.AddJournal(trade);
                 else _strategie.AddTrade(trade);
 
-                // Feedback visuel
-                if (texetat != null) texetat.Visibility = Visibility.Visible;
+                if (texetat != null)
+                {
+                    texetat.Visibility = Visibility.Visible;
+                    texetat.Text = $"Trade {trade.Paire} enregistré !";
+                }
 
-                // On laisse la fenêtre ouverte une fraction de seconde ou on ferme
-                this.DialogResult = true;
-                this.Close();
+                // On vide les champs pour le trade suivant
+                ViderChamps();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Erreur : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+        private void ViderChamps()
+        {
+            // 1. Vider les TextBoxes standards
+            PaireTextBox.Text = "";
+            RrTextBox.Text = "";
+            ImageLtfTextBox.Text = "";
+            ImageHtfTextBox.Text = "";
+            descriptionTextbox.Text = "";
+            if (profitTxt != null) profitTxt.Text = "";
 
+            // 2. Vider les champs dynamiques (Indicateurs, etc.)
+            foreach (var child in DynamicFieldsPanel.Children)
+            {
+                if (child is TextBox tb) tb.Text = "";
+            }
+
+            // 3. Réinitialiser les sélections
+            TypeOrdreComboBox.SelectedIndex = -1;
+            ResultComboBox.SelectedIndex = -1;
+
+            // 4. Facultatif : Remettre les placeholders si nécessaire
+            SetupPlaceholders(MainStack);
+
+            // 5. Focus sur le premier champ pour recommencer direct
+            PaireTextBox.Focus();
+        }
         private DateTime CombineDateTime(DateTime? date, DateTime? time)
         {
             if (!date.HasValue || !time.HasValue)
@@ -140,6 +167,6 @@ namespace backtest
             return date.Value.Date + time.Value.TimeOfDay;
         }
 
-        private void Cancel_Click(object sender, RoutedEventArgs e) => this.Close();
+        private void Cancel_Click(object sender, RoutedEventArgs e) { this.DialogResult = true; this.Close(); }
     }
 }

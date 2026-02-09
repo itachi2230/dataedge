@@ -34,7 +34,7 @@ namespace backtest
             UpdateMoneyEquity();
         }
 
-        private void RefreshUI()
+        public void RefreshUI()
         {
             LoadHeaderStats();
             LoadEquityCurve();
@@ -133,114 +133,152 @@ namespace backtest
 
         private void UpdateMoneyEquity()
         {
-            // On récupère les valeurs saisies par l'utilisateur
             double initialCap = GetSafeDouble(InputCapital.Text);
             double riskPercent = GetSafeDouble(InputRisk.Text) / 100.0;
 
-            if (initialCap <= 0) initialCap = 1000; // Sécurité
+            // On crée un nouveau modèle avec un Tracker personnalisé
+            var model = new PlotModel
+            {
+                Title = "PROJECTION MONÉTAIRE",
+                TitleColor = OxyColors.White,
+                TitleFontSize = 12,
+                SelectionColor = OxyColors.Cyan,
+                DefaultFont = "Segoe UI"
+            };
 
-            var model = CreateBaseModel("ÉVOLUTION DU CAPITAL RÉEL");
-
-            // Style de la ligne : Vert trading pour l'argent
+            // CONFIGURATION DE LA SÉRIE AVEC TRACKER PERSONNALISÉ
             var series = new AreaSeries
             {
                 Color = OxyColor.FromRgb(34, 197, 94),
                 Fill = OxyColor.FromAColor(40, OxyColor.FromRgb(34, 197, 94)),
                 StrokeThickness = 2,
-                MarkerType = MarkerType.None
+                MarkerType = MarkerType.Circle,
+                MarkerSize = 3,
+                MarkerStroke = OxyColors.White,
+                MarkerFill = OxyColor.FromRgb(34, 197, 94),
+                // C'EST ICI : Format du texte au survol
+                // {0} = Titre de la série, {1} = Axe X, {2} = Axe Y, {4} = Valeur X, {5} = Valeur Y
+                TrackerFormatString = "Trade: {2:0}\nSolde: {4:N2} €"
             };
 
             double currentCap = initialCap;
             series.Points.Add(new DataPoint(0, currentCap));
 
-            // On récupère les trades triés par date
             var trades = _strategie.GetTrades().OrderBy(t => t.DateEntree).ToList();
-
-            foreach (var t in trades)
+            for (int i = 0; i < trades.Count; i++)
             {
-                // Calcul du risque monétaire sur le capital ACTUEL (Compound Interest)
                 double riskAmount = currentCap * riskPercent;
-
-                // Un TP gagne son RR x Risque, un SL perd 1x Risque
-                double resultMultiplier = (t.Result == Resultat.TP) ? t.RR : -1;
-
-                currentCap += (riskAmount * resultMultiplier);
-                series.Points.Add(new DataPoint(series.Points.Count, currentCap));
+                double resultR = (trades[i].Result == Resultat.TP) ? trades[i].RR : -1;
+                currentCap += (riskAmount * resultR);
+                series.Points.Add(new DataPoint(i + 1, currentCap));
             }
 
             model.Series.Add(series);
 
-            // Axe Y avec format monétaire (€)
+            // Axe Y (Argent)
             model.Axes.Add(new LinearAxis
             {
                 Position = AxisPosition.Left,
-                TextColor = OxyColors.White,
+                TextColor = OxyColors.Gray,
                 MajorGridlineStyle = LineStyle.Solid,
-                MajorGridlineColor = OxyColor.FromAColor(20, OxyColors.White),
-                LabelFormatter = d => d.ToString("N0") + " €"
+                MajorGridlineColor = OxyColor.FromAColor(15, OxyColors.White),
+                StringFormat = "N0", // Affiche les milliers proprement
+                Unit = "€"
             });
 
-            // CRUCIAL : Réassigner le modèle pour forcer WPF à redessiner
+            // Axe X (Nombre de trades)
+            model.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Bottom,
+                TextColor = OxyColors.Gray,
+                Title = "Nombre de Trades"
+            });
+
             PlotMoneyEquity.Model = model;
             PlotMoneyEquity.InvalidatePlot(true);
         }
-
         private void GenerateDeepAudit()
         {
             var basicStats = _strategie.GetStatistics();
+            var trades = _strategie.GetTrades().OrderBy(t => t.DateEntree).ToList();
+
             double pf = GetSafeDouble(basicStats["Profit Factor"]);
             double wr = GetSafeDouble(basicStats["Winrate"]);
             double exp = GetSafeDouble(basicStats["Expectancy"]);
-            int total = _strategie.GetTrades().Count;
+            int total = trades.Count;
 
-            // --- 1. PROFIL DE RISQUE ---
+            // --- 1. CALCUL DU MAX DRAWDOWN (Unités R) ---
+            double cumulativeR = 0;
+            double peakR = 0;
+            double maxDD = 0;
+
+            foreach (var t in trades)
+            {
+                cumulativeR += (t.Result == Resultat.TP) ? t.RR : -1;
+                if (cumulativeR > peakR) peakR = cumulativeR;
+                double currentDD = peakR - cumulativeR;
+                if (currentDD > maxDD) maxDD = currentDD;
+            }
+
+            // --- 2. AUDIT EXÉCUTIF (Haut de page) ---
+            string audit = $"Analyse basée sur {total} trades. Votre avantage statistique est de {exp:F2}R par trade. ";
+            if (maxDD > 10) audit += "Attention : votre Drawdown est élevé, ce qui suggère une volatilité importante de votre équité.";
+            else audit += "Votre courbe de croissance est remarquablement stable.";
+
+            TxtExecutiveSummary.Text = audit;
+
+            // --- 3. PROFIL DE RISQUE (Section Conclusion) ---
             if (total < 20)
             {
-                TxtRiskProfile.Text = "Échantillon trop faible. Les résultats actuels sont peut-être dus à la chance (Variance).";
+                TxtRiskProfile.Text = "Échantillon trop faible (moins de 20 trades). Les résultats actuels sont peut-être dus à la variance positive.";
             }
             else if (wr > 65)
             {
-                TxtRiskProfile.Text = "Profil 'Sniper' : Haute précision. Vos séries de pertes (drawdowns) seront courtes, mais attention à ne pas couper vos gains trop tôt.";
+                TxtRiskProfile.Text = $"Profil 'Sniper' : Très haute précision ({wr:F0}%). Vos séries de pertes sont courtes ({maxDD:F1}R max), ce qui facilite la discipline.";
             }
             else if (wr < 35 && pf > 1.5)
             {
-                TxtRiskProfile.Text = "Profil 'Trend Follower' : Faible précision mais gros gains. Vous devez avoir un mental d'acier pour supporter les longues séries de pertes.";
+                TxtRiskProfile.Text = "Profil 'Trend Follower' : Précision faible mais gains explosifs. Capital psychologique requis pour tenir les phases de perte.";
             }
             else
             {
-                TxtRiskProfile.Text = "Profil 'Équilibré' : Statistiques saines. Risque modéré et distribution normale des gains.";
+                TxtRiskProfile.Text = $"Profil 'Équilibré' : Statistiques saines. Distribution de risque standard avec un DD maîtrisé de {maxDD:F1}R.";
             }
 
-            // --- 2. SCALABILITÉ ---
-            if (pf > 2.0 && total > 30)
+            // --- 4. SCALABILITÉ ---
+            if (pf > 2.0 && total > 30 && maxDD < 8)
             {
-                TxtScalability.Text = "Excellente. Le système est mathématiquement prêt à supporter une augmentation de capital significative.";
+                TxtScalability.Text = "EXCELLENTE. Le système est mathématiquement robuste. Vous pouvez envisager d'augmenter le risque par trade progressivement.";
             }
-            else if (pf > 1.2)
+            else if (pf > 1.2 && maxDD < 12)
             {
-                TxtScalability.Text = "Modérée. Le système est rentable, mais une augmentation de capital trop brutale pourrait être dangereuse sans plus de données.";
+                TxtScalability.Text = "MODÉRÉE. Le système est rentable. Pour scaler, concentrez-vous sur la réduction des erreurs d'exécution.";
             }
             else
             {
-                TxtScalability.Text = "Faible. Le système est trop proche du point mort (Break-even). Ne pas augmenter les enjeux pour l'instant.";
+                TxtScalability.Text = "FAIBLE. Le système est trop proche du point mort ou trop instable. Priorisez la survie du capital avant la croissance.";
             }
 
-            // --- 3. VERDICT FINAL ---
+            // --- 5. VERDICT FINAL & CONSEIL ---
             if (exp <= 0)
             {
-                TxtFinalVerdict.Text = "❌ SYSTÈME À ÉCARTER : L'espérance de gain est négative. Chaque trade vous rapproche de la ruine.";
+                TxtFinalVerdict.Text = "❌ SYSTÈME À ÉCARTER : Espérance négative. Ce système perd de l'argent statistiquement.";
+                TxtKeyAdvice.Text = "💡 CONSEIL : Analysez vos pertes. S'agit-il d'un mauvais setup ou d'une mauvaise gestion du risque ?";
             }
-            else if (exp < 0.2)
+            else if (exp < 0.25)
             {
-                TxtFinalVerdict.Text = "⚠️ À OPTIMISER : Vous gagnez de l'argent mais les frais de courtage pourraient annuler vos profits. Filtrez vos entrées.";
+                TxtFinalVerdict.Text = "⚠️ À OPTIMISER : Rentabilité marginale. Les frais de courtage et le slippage pourraient annuler vos gains réels.";
+                TxtKeyAdvice.Text = "💡 CONSEIL : Filtrez les trades avec un RR inférieur à 1.5 pour booster votre espérance.";
             }
             else if (exp >= 0.5)
             {
-                TxtFinalVerdict.Text = "🚀 PÉPITE DÉTECTÉE : Avantage statistique massif. Ce système est une véritable machine à cash s'il est suivi avec discipline.";
+                TxtFinalVerdict.Text = "🚀 PÉPITE DÉTECTÉE : Avantage statistique massif. Exécution prioritaire requise.";
+                TxtKeyAdvice.Text = "💡 CONSEIL : Ne changez rien. Votre discipline est votre seul ennemi maintenant.";
             }
             else
             {
                 TxtFinalVerdict.Text = "✅ SYSTÈME SOLIDE : Stratégie viable pour un trading professionnel régulier.";
+                TxtKeyAdvice.Text = (maxDD > 8) ? "💡 CONSEIL : Réduisez légèrement votre risque pour lisser le Drawdown." : "💡 CONSEIL : Continuez ainsi, les métriques sont équilibrées.";
             }
         }
         private void LoadDynamicCharts()

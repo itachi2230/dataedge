@@ -226,36 +226,49 @@ namespace backtest
         private void LoadNotesForCurrentWeek()
         {
             if (!Directory.Exists(notesFolderPath)) Directory.CreateDirectory(notesFolderPath);
-            string filePath = GetNotesFilePath(currentWeekStart);
 
-            if (File.Exists(filePath))
-            {
-                TextRange textRange = new TextRange(richTextBoxNotesWeeks.Document.ContentStart, richTextBoxNotesWeeks.Document.ContentEnd);
-                using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
-                {
-                    try { textRange.Load(fs, DataFormats.Rtf); } catch { }
-                }
-            }
-            else
-            {
-                richTextBoxNotesWeeks.Document.Blocks.Clear();
-                SaveNotes();
-            }
+            // On utilise l'extension .etude maintenant
+            string filePath = Path.Combine(notesFolderPath, $"Notes_{currentWeekStart:yyyyMMdd}.etude");
+
+            RichTextService.LoadPackage(richTextBoxNotesWeeks, filePath);
+            RichTextService.FormatImagesInDocument(richTextBoxNotesWeeks,200);
+
             UpdateWeekStartDateDisplay();
         }
-
         private void SaveNotes()
         {
             if (richTextBoxNotesWeeks == null) return;
-            string filePath = GetNotesFilePath(currentWeekStart);
-            TextRange textRange = new TextRange(richTextBoxNotesWeeks.Document.ContentStart, richTextBoxNotesWeeks.Document.ContentEnd);
-            using (FileStream fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+            string filePath = Path.Combine(notesFolderPath, $"Notes_{currentWeekStart:yyyyMMdd}.etude");
+
+            RichTextService.SavePackage(richTextBoxNotesWeeks, filePath);
+        }
+        // Pour gérer le "Coller" d'images dans les notes du dashboard
+        private void richTextBoxNotesWeeks_Pasting(object sender, DataObjectPastingEventArgs e)
+        {
+            if (e.DataObject.GetDataPresent(typeof(BitmapSource)))
             {
-                textRange.Save(fs, DataFormats.Rtf);
+                if (e.DataObject.GetData(typeof(BitmapSource)) is BitmapSource bitmap)
+                {
+                    BitmapSource compressed = RichTextService.CompressImage(bitmap);
+                    Image img = new Image { Source = compressed, MaxWidth  =200 };
+                    
+                    new InlineUIContainer(img, richTextBoxNotesWeeks.CaretPosition);
+                    e.CancelCommand();
+                }
             }
         }
-
-        private string GetNotesFilePath(DateTime weekStart) => Path.Combine(notesFolderPath, $"Notes_{weekStart:yyyyMMdd}.rtf");
+        private void richTextBoxNotesWeeks_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var pos = richTextBoxNotesWeeks.GetPositionFromPoint(e.GetPosition(richTextBoxNotesWeeks), true);
+            if (pos?.Parent is InlineUIContainer container && container.Child is Image img)
+            {
+                if (img.Source is BitmapSource src)
+                {
+                    new ZoomImageWindow(src).ShowDialog();
+                    e.Handled = true;
+                }
+            }
+        }
 
         private void PreviousWeek_Click(object sender, RoutedEventArgs e) { SaveNotes(); currentWeekStart = currentWeekStart.AddDays(-7); LoadNotesForCurrentWeek(); }
         private void NextWeek_Click(object sender, RoutedEventArgs e) { SaveNotes(); currentWeekStart = currentWeekStart.AddDays(7); LoadNotesForCurrentWeek(); }

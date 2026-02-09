@@ -198,7 +198,7 @@
                             </Button>
                         </StackPanel>
 
-                        <oxy:PlotView x:Name="PlotMoneyEquity" Grid.Column="1" Height="250" Background="Transparent"/>
+                        <oxy:PlotView x:Name="PlotMoneyEquity" Grid.Column="1" Height="250" Background="Transparent" Controller="{Binding CustomController}"/>
                     </Grid>
                 </Border>
 

@@ -191,6 +191,9 @@ namespace backtest
             if (fenetreAjout.ShowDialog() == true || fenetreAjout.DialogResult == null)
             {
                 LoadTradesDataGrid();
+                stv = new StatisticsView(strategie);
+                ComplexStatsHost.Children.Clear();
+                ComplexStatsHost.Children.Add(stv);
             }
         }
 

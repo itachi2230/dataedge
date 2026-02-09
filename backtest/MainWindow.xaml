@@ -399,7 +399,7 @@
                                     <TextBlock x:Name="weekStartDateText" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontSize="12"/>
                                     <Button Content="❯" Click="NextWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
                                 </StackPanel>
-                                <RichTextBox x:Name="richTextBoxNotesWeeks" Grid.Row="2" Background="#0D141D" Foreground="#EEE" BorderThickness="0" Padding="10" FontSize="14"/>
+                                <RichTextBox x:Name="richTextBoxNotesWeeks" Grid.Row="2" MouseDoubleClick="richTextBoxNotesWeeks_MouseLeftButtonDown" Background="#0D141D" Foreground="#EEE" BorderThickness="0" Padding="10" FontSize="14" DataObject.Pasting="richTextBoxNotesWeeks_Pasting"/>
                             </Grid>
                         </Border>
                     </Grid>

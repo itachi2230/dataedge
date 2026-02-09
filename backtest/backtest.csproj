@@ -204,6 +204,7 @@
     <Compile Include="opening.xaml.cs">
       <DependentUpon>opening.xaml</DependentUpon>
     </Compile>
+    <Compile Include="RichTextService.cs" />
     <Compile Include="SettingsView.xaml.cs">
       <DependentUpon>SettingsView.xaml</DependentUpon>
     </Compile>
