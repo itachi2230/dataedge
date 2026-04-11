@@ -22,5 +22,29 @@ namespace backtest.Properties {
                 return defaultInstance;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("EURUSD")]
+        public string LastSymbol {
+            get {
+                return ((string)(this["LastSymbol"]));
+            }
+            set {
+                this["LastSymbol"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("15m")]
+        public string LastTimeframe {
+            get {
+                return ((string)(this["LastTimeframe"]));
+            }
+            set {
+                this["LastTimeframe"] = value;
+            }
+        }
     }
 }

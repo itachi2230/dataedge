@@ -19,7 +19,77 @@ button.active { background: var(--accent); color: black; }
 #drawing-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 50; }
 #drawing-canvas.active { pointer-events: auto; cursor: crosshair; }
 #debug-console {
-    position: absolute; bottom: 10px; right: 10px; width: 250px; max-height: 80px;
-    background: rgba(0, 0, 0, 0.8); color: var(--accent); font-family: monospace; font-size: 9px;
-    padding: 8px; border-radius: 4px; border: 1px solid var(--border-dark);
+    /* On le décale à gauche pour qu'il ne recouvre pas les boutons A, L, P */
+    position: absolute; 
+    bottom: 10px; 
+    left: 10px; /* Changé de right à left */
+    width: 250px;
+    z-index: 200; /* Sous les contrôles au cas où */
+    pointer-events: none; /* Pour pouvoir cliquer à travers si besoin */
+}
+/* La zone de détection invisible dans l'angle */
+.tv-scale-angle-zone {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 120px; 
+    height: 100px;
+    z-index: 1000; /* Doit être très élevé */
+    background: transparent;
+    pointer-events: auto;
+}
+
+/* Le conteneur des boutons (caché par défaut) */
+.price-scale-controls {
+    position: absolute;
+    /* Ajuste le bottom pour qu'il soit pile au dessus de la barre de temps */
+    bottom: 35px; 
+    right: 10px;
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+/* Quand on survol la ZONE, on montre les boutons */
+.tv-scale-angle-zone:hover .price-scale-controls {
+    opacity: 1;
+    pointer-events: auto; /* Active les clics sur les boutons */
+}
+
+/* Style des petits boutons flottants TV */
+.price-scale-controls button {
+    background: #1e222d; /* Couleur de TV sombre */
+    color: #b2b5be; /* Couleur de texte TV */
+    border: 1px solid #363a45;
+    border-radius: 2px;
+    width: 26px; /* Légèrement plus petit */
+    height: 26px;
+    font-size: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3); /* Petit relief */
+}
+
+/* Style hover/active de TV */
+.price-scale-controls button:hover {
+    background: #2a2e39;
+    border-color: #4c525e;
+    color: #f0f3fa;
+}
+
+.price-scale-controls button.active {
+    color: #2962ff; /* Bleu de TV */
+    border-color: #2962ff;
+    background: rgba(41, 98, 255, 0.08); /* Fond bleu très léger */
+}
+#drawing-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    z-index: 10;
+    pointer-events: auto; /* CRITIQUE */
 }

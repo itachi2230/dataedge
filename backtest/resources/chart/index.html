@@ -18,9 +18,10 @@
 
         <div class="tool-group" id="drawing-tools">
             <span class="label">Outils</span>
-            <button onclick="clearDrawings()">🗑️</button>
+            <button onclick="resetChart()">🗑️</button>
+			
         </div>
-
+		
         <div class="tool-group">
             <span class="label">Couleurs</span>
             <input type="color" id="upColor" value="#00FFFF" onchange="updateColors()">
@@ -30,6 +31,13 @@
 
     <div id="chart-container">
         <canvas id="drawing-canvas"></canvas>
+		<div class="tv-scale-angle-zone">
+            <div class="price-scale-controls">
+                <button id="btn-percent-scale" onclick="togglePercentScale()" title="Pourcentage">P</button>
+                <button id="btn-log-scale" onclick="toggleLogScale()" title="Logarithmique">L</button>
+                <button id="btn-auto-scale" onclick="toggleAutoScale()" title="Auto Scale">A</button>
+            </div>
+        </div>
     </div>
     
     <div id="debug-console"></div>

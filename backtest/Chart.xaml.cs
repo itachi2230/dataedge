@@ -17,7 +17,7 @@ namespace backtest
     {
         private readonly ChartBridge _chartBridge;
         private readonly Dataservice _dataService;
-        
+
         private string _currentSymbol = "EURUSD";
         private string _currentTF = "15m";
         private int _currentYear = DateTime.Now.Year;
@@ -27,12 +27,34 @@ namespace backtest
         public Chart()
         {
             InitializeComponent();
+
+            // 1. Charger les derniers réglages sauvegardés avant d'initialiser le reste
+            LoadUserSettings();
+
             _dataService = new Dataservice("https://fxdataedge.com/");
-            _chartBridge = new ChartBridge(this); // On passe l'instance au bridge
+            _chartBridge = new ChartBridge(this);
 
             InitTimeframeButtons();
             InitBrowser();
             LoadWatchlist();
+        }
+
+        private void LoadUserSettings()
+        {
+            // Récupération des réglages (avec valeurs par défaut si vide)
+            _currentSymbol = !string.IsNullOrEmpty(Properties.Settings.Default.LastSymbol)
+                             ? Properties.Settings.Default.LastSymbol : "EURUSD";
+            TxtCurrentSymbol.Text = _currentSymbol;
+            _currentTF = !string.IsNullOrEmpty(Properties.Settings.Default.LastTimeframe)
+                         ? Properties.Settings.Default.LastTimeframe : "15m";
+        }
+
+        private void SaveUserSettings()
+        {
+            // Sauvegarde dans les paramètres de l'application
+            Properties.Settings.Default.LastSymbol = _currentSymbol;
+            Properties.Settings.Default.LastTimeframe = _currentTF;
+            Properties.Settings.Default.Save();
         }
 
         private async void LoadWatchlist()
@@ -41,13 +63,16 @@ namespace backtest
             {
                 var list = await _dataService.GetWatchlistAsync();
                 WatchlistItems.ItemsSource = list;
+
+                // Optionnel : Sélectionner visuellement la paire actuelle dans la liste
+                var current = list.FirstOrDefault(x => x.Symbol == _currentSymbol);
+                if (current != null) WatchlistItems.SelectedItem = current;
             }
             catch (Exception ex) { SetStatus("Erreur Watchlist: " + ex.Message, "#FF4B4B"); }
         }
 
         private void InitTimeframeButtons()
         {
-            // Liste des timeframes pour le sélecteur
             var tfs = new List<TimeframeItem>
             {
                 new TimeframeItem { Name = "1m", Value = "1m" },
@@ -58,9 +83,7 @@ namespace backtest
                 new TimeframeItem { Name = "D", Value = "d" }
             };
 
-            // Marquer la TF actuelle comme active
-            foreach (var item in tfs) item.IsActive = (item.Value == _currentTF);
-
+            foreach (var item in tfs) item.IsActive = (item.Value.ToLower() == _currentTF.ToLower());
             TimeframeSelector.ItemsSource = tfs;
         }
 
@@ -69,8 +92,7 @@ namespace backtest
             var settings = new BrowserSettings { WebGl = CefState.Enabled, DefaultEncoding = "UTF-8" };
             ChartBrowser.BrowserSettings = settings;
             ChartBrowser.JavascriptObjectRepository.Settings.LegacyBindingEnabled = true;
-            
-            // Liaison du bridge
+
             ChartBrowser.JavascriptObjectRepository.Register("chartService", _chartBridge, isAsync: true);
 
             ChartBrowser.FrameLoadEnd += async (s, e) => {
@@ -81,20 +103,16 @@ namespace backtest
             if (File.Exists(indexPath)) ChartBrowser.Address = indexPath;
         }
 
-        private async void OnBrowserFrameLoadEnd(object sender, FrameLoadEndEventArgs e)
-        {
-            if (e.Frame.IsMain)
-            {
-                await Dispatcher.InvokeAsync(async () => await LoadBacktestData());
-            }
-        }
-
         public async Task LoadBacktestData()
         {
             _endOfDataReached = false;
             try
             {
                 SetStatus("Chargement...", "#FFB900");
+
+                // On s'assure que l'année est remise au maximum pour un changement de paire/TF
+                if (!_isLoadingMore) _currentYear = DateTime.Now.Year;
+
                 var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, _currentYear.ToString());
 
                 if (result.success)
@@ -103,11 +121,10 @@ namespace backtest
                     if (candles.Count > 0)
                     {
                         string json = JsonConvert.SerializeObject(candles);
-
-                        // CORRECTION ICI : Bien séparer json et symbol par une virgule en dehors des quotes
                         await ChartBrowser.EvaluateScriptAsync($"updateChartData({json}, '{_currentSymbol}');");
 
-                        SetStatus("Connecté", "#00FF7F");
+                        SetStatus(_currentSymbol + " " + _currentTF, "#00FF7F");
+                        SaveUserSettings(); // On sauvegarde à chaque succès de chargement
                         return;
                     }
                 }
@@ -115,13 +132,13 @@ namespace backtest
             }
             catch (Exception ex) { SetStatus("Erreur: " + ex.Message, "#FF4B4B"); }
         }
+
         private void SetStatus(string msg, string colorHex)
         {
             TxtStatus.Text = msg.ToUpper();
             TxtStatus.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(colorHex);
         }
 
-        // Pagination : Appelée lors du scroll vers l'arrière
         public async Task LoadMoreData()
         {
             if (_isLoadingMore || _endOfDataReached) return;
@@ -140,12 +157,8 @@ namespace backtest
                     if (candles.Count > 0)
                     {
                         string json = JsonConvert.SerializeObject(candles);
-
-                        // On ajoute les données au début (le JS gère le "isProcessingData" pour éviter les bugs)
                         await ChartBrowser.EvaluateScriptAsync($"prependChartData({json});");
-
-                        SetStatus("Historique ajouté", "#00FF7F");
-                        _isLoadingMore = false;
+                        SetStatus(_currentSymbol + " " + _currentTF, "#00FF7F");
                         return;
                     }
                 }
@@ -153,7 +166,7 @@ namespace backtest
                 _endOfDataReached = true;
                 SetStatus("FIN DES DONNÉES", "#FF4B4B");
             }
-            catch { _isLoadingMore = false; }
+            catch { }
             finally { _isLoadingMore = false; }
         }
 
@@ -165,12 +178,13 @@ namespace backtest
             {
                 using (var reader = new StreamReader(filePath))
                 {
-                    reader.ReadLine();
+                    reader.ReadLine(); // Skip header
                     while (!reader.EndOfStream)
                     {
                         var line = reader.ReadLine();
                         var parts = line.Split(',');
-                        if (parts.Length < 6) continue;
+                        if (parts.Length < 5) continue;
+
                         DateTime dt = DateTime.ParseExact(parts[0], "yyyy.MM.dd HH:mm:ss", culture);
                         candles.Add(new CandleModel
                         {
@@ -195,9 +209,7 @@ namespace backtest
             {
                 _currentTF = btn.Tag.ToString().ToLower();
                 _currentYear = DateTime.Now.Year;
-                // Mise à jour visuelle des boutons
                 InitTimeframeButtons();
-
                 await LoadBacktestData();
             }
         }
@@ -206,22 +218,24 @@ namespace backtest
         {
             if (WatchlistItems.SelectedItem is WatchlistSymbol selected)
             {
+                // Mise à jour de la paire
                 _currentSymbol = selected.Symbol;
                 _currentYear = DateTime.Now.Year;
+                TxtCurrentSymbol.Text = _currentSymbol;
+                // On relance le chargement complet
                 await LoadBacktestData();
             }
         }
 
-       // private void ResetChart_Click(object sender, RoutedEventArgs e)
-       // {
-         //   if (ChartBrowser.IsBrowserInitialized)
-       //         ChartBrowser.ExecuteScriptAsync("chart.timeScale().fitContent();");
-       // }
+        private void ResetChart_Click(object sender, RoutedEventArgs e)
+        {
+            if (ChartBrowser.IsBrowserInitialized)
+                ChartBrowser.ExecuteScriptAsync("resetChart();");
+        }
 
         #endregion
     }
 
-    // Classe pour gérer l'état des boutons Timeframe
     public class TimeframeItem
     {
         public string Name { get; set; }
