@@ -46,8 +46,8 @@
 
             <Grid Grid.Row="0" Margin="0,0,0,15">
                 <StackPanel HorizontalAlignment="Left">
-                    <TextBlock Text="AJOUTER" FontSize="10" Foreground="{StaticResource AccentBlue}" />
-                    <TextBlock Text="NOUVEAU TRADE" FontSize="22" FontWeight="Black" Foreground="White"/>
+                    <TextBlock x:Name="ActionTitle" Text="AJOUTER" FontSize="10" Foreground="{StaticResource AccentBlue}" />
+                    <TextBlock x:Name="MainTitle" Text="NOUVEAU TRADE" FontSize="22" FontWeight="Black" Foreground="White"/>
                 </StackPanel>
 
                 <Grid HorizontalAlignment="Right" Width="50" Height="50">

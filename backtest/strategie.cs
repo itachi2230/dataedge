@@ -1,4 +1,5 @@
-﻿using System;
+﻿using OfficeOpenXml;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -131,10 +132,75 @@ namespace backtest
         public List<Trade> GetTrades() => LoadData().Trades;
         public List<Trade> GetJournal() => LoadData().Journal;
 
+        public void UpdateTrade(Trade updatedTrade)
+        {
+            var data = LoadData();
+            // On cherche l'index du trade existant via son ID
+            int index = data.Trades.FindIndex(t => t.Id == updatedTrade.Id);
+
+            if (index != -1)
+            {
+                data.Trades[index] = updatedTrade; // Remplacement
+                CalculateStatistics(data); // Important : Recalculer après modification
+                SaveData(data);
+            }
+        }
+        public void UpdateJournal(Trade updatedTrade)
+        {
+            var data = LoadData();
+            int index = data.Journal.FindIndex(t => t.Id == updatedTrade.Id);
+
+            if (index != -1)
+            {
+                data.Journal[index] = updatedTrade;
+                // On peut aussi recalculer les stats ici si ton journal impacte le Dashboard global
+                CalculateStatistics(data);
+                SaveData(data);
+            }
+        }
+        public void ModifierInfosGenerales(string nouveauNom, string nouvelleDescription)
+        {
+            if (string.IsNullOrWhiteSpace(nouveauNom)) return;
+
+            var data = LoadData();
+            string ancienNom = data.Nom;
+            string ancienPath = filePath;
+
+            // Mise à jour des propriétés de l'objet de données
+            data.Nom = nouveauNom;
+            data.Description = nouvelleDescription;
+
+            // 1. Si le nom a changé, on gère les fichiers
+            if (ancienNom != nouveauNom)
+            {
+                this.Nom = nouveauNom; // Met à jour la propriété de l'instance pour que 'filePath' change
+
+                // Supprimer l'ancien nom dans strategies.txt et ajouter le nouveau
+                if (File.Exists(strategiesFile))
+                {
+                    string contenu = File.ReadAllText(strategiesFile);
+                    contenu = contenu.Replace($"{ancienNom}%", ""); // Retire l'ancien
+                    File.WriteAllText(strategiesFile, contenu + nouveauNom + "%"); // Ajoute le nouveau
+                }
+
+                // Supprimer l'ancien fichier JSON après avoir sauvegardé le nouveau
+                if (File.Exists(ancienPath)) File.Delete(ancienPath);
+            }
+
+            this.description = nouvelleDescription;
+            SaveData(data); // Sauvegarde le fichier (avec le nouveau nom si changé)
+        }
         public void RemoveTradeById(long tradeId)
         {
             var data = LoadData();
             data.Trades.RemoveAll(t => t.Id == tradeId);
+            CalculateStatistics(data);
+            SaveData(data);
+        }
+        public void RemoveJournalById(long tradeId)
+        {
+            var data = LoadData();
+            data.Journal.RemoveAll(t => t.Id == tradeId);
             CalculateStatistics(data);
             SaveData(data);
         }
@@ -310,6 +376,10 @@ namespace backtest
 
         public Dictionary<string, object> GetStatistics() => LoadData().StatsBasiques;
         public AdvancedStats RetrieveStats() => LoadData().StatsAvancees;
+
+
+        //added
+
     }
 
     public class Trade
@@ -423,6 +493,170 @@ namespace backtest
 
             return stats;
         }
+
+        /// <summary>
+        /// Vérifie s'il existe des fichiers Excel (.xlsx) qui n'ont pas encore été migrés en JSON.
+        /// </summary>
+        public static bool HasOldDataToMigrate()
+        {
+            string dataPath = Strategie.dataFolder;
+            if (!Directory.Exists(dataPath)) return false;
+
+            var excelFiles = Directory.GetFiles(dataPath, "*.xlsx")
+                                      .Where(f => !Path.GetFileName(f).StartsWith("J"))
+                                      .ToList();
+
+            foreach (var file in excelFiles)
+            {
+                string jsonEquivalent = Path.Combine(dataPath, Path.GetFileNameWithoutExtension(file) + ".json");
+                if (!File.Exists(jsonEquivalent)) return true; // On a trouvé au moins un fichier à migrer
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Exécute la migration et déplace les anciens fichiers dans un dossier "old_version".
+        /// </summary>
+        public static void ExecuteFullMigration()
+        {
+            ExcelPackage.License.SetNonCommercialPersonal("djiguiba"); 
+            string dataPath = Strategie.dataFolder;
+            string backupPath = Path.Combine(dataPath, "old_version");
+
+            if (!Directory.Exists(backupPath)) Directory.CreateDirectory(backupPath);
+
+            var excelFiles = Directory.GetFiles(dataPath, "*.xlsx")
+                                      .Where(f => !Path.GetFileName(f).StartsWith("J"))
+                                      .ToList();
+
+            foreach (var excelPath in excelFiles)
+            {
+                string strategyName = Path.GetFileNameWithoutExtension(excelPath);
+                try
+                {
+                    // 1. On effectue la migration (réutilise la méthode MigrateSingleFile précédente)
+                    MigrateSingleFile(strategyName, excelPath);
+
+                    // 2. Déplacement du fichier Excel vers le dossier de sauvegarde
+                    string destExcel = Path.Combine(backupPath, Path.GetFileName(excelPath));
+                    if (File.Exists(destExcel)) File.Delete(destExcel); // Évite l'erreur si déjà présent
+                    File.Move(excelPath, destExcel);
+
+                    // 3. Optionnel : On déplace aussi les métadonnées Excel si elles existent
+                    string metadataFile = Path.Combine(Strategie.metadataFolder, $"{strategyName}_metadata.xlsx");
+                    if (File.Exists(metadataFile))
+                    {
+                        string destMeta = Path.Combine(backupPath, Path.GetFileName(metadataFile));
+                        if (File.Exists(destMeta)) File.Delete(destMeta);
+                        File.Move(metadataFile, destMeta);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Erreur lors de la migration de {strategyName} : {ex.Message}");
+                }
+            }
+        }
+
+        private static void MigrateSingleFile(string name, string excelPath)
+        {
+            // On crée l'objet Stratégie (le constructeur gère la création du JSON de base et l'ajout au fichier index)
+            var newStrategy = new Strategie(name, "Migré depuis l'ancienne version", false);
+            var data = new StrategieData { Nom = name, Description = "Migré depuis l'ancienne version" };
+            var tradesList = new List<Trade>();
+
+            using (var package = new ExcelPackage(new FileInfo(excelPath)))
+            {
+                var ws = package.Workbook.Worksheets[0];
+                if (ws.Dimension == null) return;
+
+                int rows = ws.Dimension.Rows;
+                int cols = ws.Dimension.Columns;
+
+                var headers = new Dictionary<int, string>();
+                for (int c = 1; c <= cols; c++) headers[c] = ws.Cells[1, c].Text.Trim();
+
+                var std = new List<string> { "ID", "PAIRE", "RESULTAT", "DATE ENTREE", "DATE SORTIE", "RR", "TYPE ORDRE", "IMAGE LTF", "IMAGE HTF", "DESCRIPTION", "PROFIT" };
+
+                data.ChampsCustomConfig = headers.Values
+                    .Where(h => !std.Contains(h.ToUpper()) && !string.IsNullOrEmpty(h))
+                    .Select(h => h.ToUpper()).ToList();
+
+                for (int r = 2; r <= rows; r++)
+                {
+                    var t = new Trade { strategie = name };
+                    var customs = new List<ChampPersonnalise>();
+
+                    for (int c = 1; c <= cols; c++)
+                    {
+                        string h = headers[c].ToUpper();
+                        string val = ws.Cells[r, c].Text;
+
+                        switch (h)
+                        {
+                            case "ID": t.Id = Convert.ToInt64(val) ; break;
+                            case "PAIRE": t.Paire = val; break;
+                            case "RESULTAT": t.Result = ParseEnum<Resultat>(val); break;
+                            case "DATE ENTREE": t.DateEntree = ParseDate(val); break;
+                            case "DATE SORTIE": t.DateSortie = ParseDate(val); break;
+                            case "RR": t.RR = (float)ParseDouble(val); break;
+                            case "TYPE ORDRE": t.TypeOrdre = val.ToUpper().Contains("BUY") ? TypeOrdre.BUY : TypeOrdre.SELL; break;
+                            case "IMAGE LTF": t.ImageLtf = val; break;
+                            case "IMAGE HTF": t.ImageHtf = val; break;
+                            case "DESCRIPTION": t.description = val; break;
+                            case "PROFIT": t.Profit = ParseDouble(val); break;
+                            default:
+                                if (data.ChampsCustomConfig.Contains(h))
+                                    customs.Add(new ChampPersonnalise(h, val));
+                                break;
+                        }
+                    }
+                    t.ChampsPersonnalises = customs;
+                    tradesList.Add(t);
+                }
+            }
+            data.Trades = tradesList;
+            newStrategy.CalculateStatistics(data); // Cette méthode sauvegarde le JSON
+        }
+
+        // Helpers statiques pour la conversion propre
+        private static T ParseEnum<T>(string val) where T : struct
+            {
+                if (Enum.TryParse(val, true, out T res)) return res;
+                return default;
+            }
+
+        private static DateTime ParseDate(string val)
+        {
+            if (string.IsNullOrWhiteSpace(val)) return DateTime.Now;
+
+            // 1. Essayer le format spécifique de ton Excel (Jour/Mois/Année Heure:Minute)
+            string[] formats = { "dd/MM/yyyy HH:mm", "dd/MM/yyyy HH:mm:ss", "d/M/yyyy H:mm", "dd-MM-yyyy HH:mm" };
+
+            if (DateTime.TryParseExact(val.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dt))
+            {
+                return dt;
+            }
+
+            // 2. Si l'extraction exacte échoue, tenter un parse générique
+            if (DateTime.TryParse(val, CultureInfo.CurrentCulture, DateTimeStyles.None, out dt))
+            {
+                return dt;
+            }
+
+            // 3. Valeur par défaut pour éviter de faire planter la migration
+            return DateTime.Now;
+        }   
+
+        private static double ParseDouble(string val)
+            {
+                if (string.IsNullOrEmpty(val)) return 0;
+                val = val.Replace(",", ".");
+                double.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out double res);
+                return res;
+            }
+        
+
     }
 
     public class ChampPersonnaliseConverter : IValueConverter

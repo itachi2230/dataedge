@@ -9,37 +9,70 @@ namespace backtest
 {
     public partial class addStrategieWindow : Window
     {
+        private Strategie _existingStrategie = null;
+        private bool IsEditMode => _existingStrategie != null;
+
+        // Constructeur pour la CRÉATION
         public addStrategieWindow()
         {
             InitializeComponent();
         }
 
-        /// <summary>
-        /// Ajoute un nouveau champ dynamique (Critère) à l'interface.
-        /// </summary>
+        // Constructeur pour la MODIFICATION
+        public addStrategieWindow(Strategie strategie)
+        {
+            InitializeComponent();
+            _existingStrategie = strategie;
+            PrepareEditMode();
+        }
+
+        private void PrepareEditMode()
+        {
+            // Changer les titres de l'UI
+            ActionTitle.Text = "MODIFIER";
+            ActionTitle.Foreground = Brushes.Cyan;
+
+            // Remplir les champs
+            StrategieNom.Text = _existingStrategie.Nom;
+            descriptionTextbox.Text = _existingStrategie.description;
+
+            // Charger les champs personnalisés existants
+            var structure = _existingStrategie.GetStructure();
+            if (structure != null)
+            {
+                foreach (var fieldName in structure)
+                {
+                    AddFieldToUI(fieldName);
+                }
+            }
+        }
+
         private void AddCustomField_Click(object sender, RoutedEventArgs e)
         {
-            // Récupération du style défini dans votre XAML
-            Style modernStyle = (Style)this.FindResource("ModernField");
+            AddFieldToUI(""); // Ajoute un champ vide
+        }
 
-            // Structure pour aligner proprement le texte et le bouton supprimer
+        // Centralisation de la création de ligne de critère pour réutilisation
+        private void AddFieldToUI(string fieldName)
+        {
+            Style modernStyle = (Style)this.FindResource("ModernField");
             Grid fieldGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
             fieldGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             fieldGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(45) });
 
-            // Champ de saisie du nom du critère
+            bool isPlaceholder = string.IsNullOrEmpty(fieldName);
+
             TextBox nameTextBox = new TextBox
             {
                 Style = modernStyle,
                 FontSize = 13,
                 Height = 35,
                 VerticalContentAlignment = VerticalAlignment.Center,
-                Text = "Nom du critère (ex: RSI, Trend...)",
-                Foreground = Brushes.Gray,
-                Tag = "placeholder" // Petit marqueur pour savoir si c'est le texte par défaut
+                Text = isPlaceholder ? "Nom du critère (ex: RSI, Trend...)" : fieldName,
+                Foreground = isPlaceholder ? Brushes.Gray : Brushes.White,
+                Tag = isPlaceholder ? "placeholder" : ""
             };
 
-            // Gestion du Placeholder
             nameTextBox.GotFocus += (s, ev) => {
                 if (nameTextBox.Tag?.ToString() == "placeholder")
                 {
@@ -49,7 +82,6 @@ namespace backtest
                 }
             };
 
-            // Bouton de suppression stylisé
             Button deleteButton = new Button
             {
                 Content = "✕",
@@ -62,7 +94,7 @@ namespace backtest
                 Margin = new Thickness(10, 0, 0, 0)
             };
 
-            // Arrondir les angles du bouton via un template rapide
+            // Template arrondi pour le bouton supprimer
             ControlTemplate template = new ControlTemplate(typeof(Button));
             FrameworkElementFactory border = new FrameworkElementFactory(typeof(Border));
             border.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
@@ -80,57 +112,49 @@ namespace backtest
             Grid.SetColumn(deleteButton, 1);
             fieldGrid.Children.Add(nameTextBox);
             fieldGrid.Children.Add(deleteButton);
-
             CustomFieldsPanel.Children.Add(fieldGrid);
         }
 
-        /// <summary>
-        /// Sauvegarde la stratégie et sa structure de champs personnalisés dans le JSON.
-        /// </summary>
         private void SaveStrategie_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 string nom = StrategieNom.Text.Trim().ToUpper();
+                if (string.IsNullOrEmpty(nom)) return;
 
-                if (string.IsNullOrEmpty(nom))
-                {
-                    MessageBox.Show("Veuillez entrer un nom pour la stratégie.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                // 1. Initialisation de la stratégie (crée le fichier JSON avec Nom et Description)
-                Strategie nouvelleSt = new Strategie(nom, descriptionTextbox.Text);
-
-                // 2. Récupération des noms des champs personnalisés pour créer la "Structure"
+                // Récupération de la nouvelle structure
                 List<string> structureDynamique = new List<string>();
                 foreach (Grid grid in CustomFieldsPanel.Children)
                 {
-                    TextBox txt = grid.Children.OfType<TextBox>().FirstOrDefault();
-
-                    // On vérifie que le texte n'est pas vide et que ce n'est pas le placeholder
+                    var txt = grid.Children.OfType<TextBox>().FirstOrDefault();
                     if (txt != null && !string.IsNullOrWhiteSpace(txt.Text) && txt.Tag?.ToString() != "placeholder")
                     {
                         structureDynamique.Add(txt.Text.Trim().ToUpper());
                     }
                 }
 
-                // 3. Sauvegarde de la structure (la liste des critères) dans le fichier JSON
-                nouvelleSt.SetStructure(structureDynamique);
+                if (IsEditMode)
+                {
+                    // MODE MODIFICATION
+                    _existingStrategie.ModifierInfosGenerales(nom, descriptionTextbox.Text);
+                    _existingStrategie.SetStructure(structureDynamique);
+                }
+                else
+                {
+                    // MODE CRÉATION
+                    Strategie nouvelleSt = new Strategie(nom, descriptionTextbox.Text);
+                    nouvelleSt.SetStructure(structureDynamique);
+                }
 
                 this.DialogResult = true;
                 this.Close();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Erreur lors de la création : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Erreur : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void Cancel_Click(object sender, RoutedEventArgs e)
-        {
-            this.DialogResult = false;
-            this.Close();
-        }
+        private void Cancel_Click(object sender, RoutedEventArgs e) => this.Close();
     }
 }

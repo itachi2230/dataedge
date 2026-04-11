@@ -8,6 +8,7 @@ using System.IO;
 using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace backtest.Services
 {
@@ -47,8 +48,8 @@ namespace backtest.Services
 
         private string LoadConfiguration()
         {
-            string defaultUrl = "http://localhost:8080/";
-            AppId = "FX_HABIT_DEFAULT";
+            string defaultUrl = "https://fxdataedge.com/";
+            AppId = "FX_DATAEDGE";
 
             if (File.Exists(_configFilePath))
             {
@@ -70,7 +71,7 @@ namespace backtest.Services
             }
             else
             {
-                string configContent = "# CONFIGURATION FX-HABIT\nserver=http://localhost:8080/\napp_id=FX_HABIT_DEFAULT";
+                string configContent = "# CONFIGURATION FX-GLOBAL\nserver=https://fxdataedge.com/\napp_id=FX_DATAEDGE";
                 File.WriteAllText(_configFilePath, configContent);
             }
             return defaultUrl;
@@ -124,7 +125,7 @@ namespace backtest.Services
             try
             {
                 var data = new { identifier = identifier, password = password };
-                var response = await _httpClient.PostAsync("api/login", GetJsonContent(data));
+                var response = await _httpClient.PostAsync("/api/login", GetJsonContent(data));
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -498,6 +499,71 @@ namespace backtest.Services
         }
 
         #endregion
+
+        #region software handshake and control
+
+        // Structure pour mapper le JSON de Symfony
+      
+        public async Task<HandshakeResponse> CheckSoftwareStatusAsync(string currentVersion, string username = "Guest")
+        {
+            try
+            {
+                var data = new
+                {
+                    app_id = AppId,
+                    version = currentVersion,
+                    username = username,
+                    machine_id = Environment.MachineName
+                };
+
+                var response = await _httpClient.PostAsync("software/handshake", GetJsonContent(data));
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<HandshakeResponse>(json, options);
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("Erreur Handshake critique: " + ex.Message);
+            }
+            return null;
+        }
+        public async Task SendCrashReportAsync(string errorStack)
+        {
+            try
+            {
+                var data = new
+                {
+                    app_id = AppId,
+                    machine_id = Environment.MachineName,
+                    error_stack = errorStack
+                };
+                await _httpClient.PostAsync("software/report-crash", GetJsonContent(data));
+            }
+            catch { /* On ne bloque pas si l'envoi du log échoue */ }
+        }
+        public async Task<bool> SendSupportMessageAsync(string type, string message, string user = "Guest")
+        {
+            try
+            {
+                var data = new
+                {
+                    user = user,
+                    type = type, // ex: "Suggestion", "Bug", "Contact"
+                    content = message,
+                    machine_id = Environment.MachineName
+                };
+
+                var response = await _httpClient.PostAsync("support/send", GetJsonContent(data));
+                return response.IsSuccessStatusCode;
+            }
+            catch { return false; }
+        }
+        #endregion
     }
 
     #region CLASSES DE DONNÉES
@@ -506,5 +572,44 @@ namespace backtest.Services
     public class CloudFileInfo { public string path { get; set; } public string hash { get; set; } public long size { get; set; } public long last_modified { get; set; } }
     public class UserSession{ public string FullName { get; set; }public string Email { get; set; }public string Phone { get; set; }public string Bio { get; set; } public string LocalImagePath { get; set; } public DateTime? LastSyncDate { get; set; } }
     public class UserSessionData{public bool IsLoggedIn { get; set; }public string FullName { get; set; }public string Email { get; set; }public string Phone { get; set; }public string Bio { get; set; } public DateTime? LastSyncDate { get; set; }public string ImagePath { get; set; }}
+    public class HandshakeResponse
+    {
+        [JsonPropertyName("is_locked")]
+        public bool IsLocked { get; set; }
+
+        [JsonPropertyName("latest_version")]
+        public string LatestVersion { get; set; }
+
+        [JsonPropertyName("system_message")]
+        public SystemMessage SystemMessage { get; set; }
+
+        // On passe en List ici
+        [JsonPropertyName("push_notifications")]
+        public List<PushNotification> PushNotifications { get; set; } = new List<PushNotification>();
+
+        [JsonPropertyName("server_info")]
+        public ServerInfo ServerInfo { get; set; }
+    }
+    public class SystemMessage
+    {
+        public string Title { get; set; }
+        public string Body { get; set; }
+        public string Type { get; set; } // upgrade, info, danger
+    }
+   
+    public class PushNotification
+    {
+        public int Id { get; set; }
+        public string Title { get; set; }
+        public string Content { get; set; }
+        public string Type { get; set; } // offer, alert, info
+        public string Date { get; set; }
+    }
+
+    public class ServerInfo
+    {
+        public string Time { get; set; }
+        public string Status { get; set; }
+    }
     #endregion
 }

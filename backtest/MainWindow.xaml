@@ -6,7 +6,7 @@
         Title="Performance Dashboard" Height="750" Width="1350"
         Background="Transparent" WindowStartupLocation="CenterScreen"
         
-        AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip">
+        AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip" WindowState="Maximized">
 
     <Window.Resources>
         <Storyboard x:Key="RotationSyncAnim">
@@ -211,6 +211,91 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+
+                <Grid HorizontalAlignment="Right" Margin="0,0,280,0">
+                    <Button x:Name="BtnSupport" 
+            Style="{StaticResource CircleNavButton}" 
+            Width="32" Height="32" 
+            ToolTip="Contacter le Support"
+            Click="BtnSupport_Click">
+                        <Path Data="M12,1C7,1 3,5 3,10V17A3,3 0 0,0 6,20H9V12H5V10A7,7 0 0,1 12,3A7,7 0 0,1 19,10V12H15V20H18A3,3 0 0,0 21,17V10C21,5 17,1 12,1M7,14V18H6A1,1 0 0,1 5,17V14H7M17,14H19V17A1,1 0 0,1 18,18H17V14Z" 
+              Fill="White" Width="16" Height="16" Stretch="Uniform" Opacity="0.8"/>
+                    </Button>
+
+                    <Popup x:Name="PopupSupport" StaysOpen="False" PlacementTarget="{Binding ElementName=BtnSupport}" Placement="Bottom" VerticalOffset="10" HorizontalOffset="-230" AllowsTransparency="True">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="12" Width="390" Padding="15">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.5"/>
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Text="SUPPORT TECHNIQUE" Foreground="Cyan" FontWeight="Black" FontSize="10" Margin="0,0,0,15" />
+
+                                <TextBlock Text="Votre Contact (Email/WhatsApp)" Foreground="Gray" FontSize="9" Margin="0,0,0,5"/>
+                                <TextBox x:Name="txtSupportContact" Height="30" Background="#252525" Foreground="White" BorderBrush="#444" Padding="5,3" VerticalContentAlignment="Center"/>
+
+                                <TextBlock Text="Votre Message" Foreground="Gray" FontSize="9" Margin="0,10,0,5"/>
+                                <TextBox x:Name="txtSupportMessage" Height="80" Background="#252525" Foreground="White" BorderBrush="#444" TextWrapping="Wrap" AcceptsReturn="True" Padding="5"/>
+
+                                <Button x:Name="BtnSendSupport" Content="ENVOYER AU DEVELOPPEUR" Margin="0,15,0,0" Click="BtnSendSupport_Click" Style="{StaticResource CyberButton}" Height="30" FontSize="10"/>
+                                <TextBlock   FontSize="14" Text = "Tous vos messages et sugestions seront traités merci !" Foreground="Gray" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+
+                                <TextBlock x:Name="txtSupportStatus" Text="" FontSize="8" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                </Grid>
+                
+                <Grid HorizontalAlignment="Right" Margin="0,0,220,0">
+                    <Button x:Name="BtnNotifications" 
+            Style="{StaticResource CircleNavButton}" 
+            Width="32" Height="32" 
+            Click="BtnNotifications_Click">
+                        <Grid>
+                            <Path Data="M12,22A2,2 0 0,0 14,20H10A2,2 0 0,0 12,22M18,16V11C18,7.93 16.36,5.36 13.5,4.68V4A1.5,1.5 0 0,0 12,2.5A1.5,1.5 0 0,0 10.5,4V4.68C7.63,5.36 6,7.92 6,11V16L4,18V19H20V18L18,16Z" 
+                  Fill="White" Width="14" Height="14" Stretch="Uniform" Opacity="0.8"/>
+
+                            <Border x:Name="BadgeNotif" 
+                    Background="#E74C3C" 
+                    MinWidth="14" Height="14" 
+                    CornerRadius="7" 
+                    HorizontalAlignment="Right" VerticalAlignment="Top" 
+                    Margin="0,-2,-2,0" 
+                    Visibility="Collapsed">
+                                <TextBlock x:Name="txtNotifCount" Text="0" 
+                           Foreground="White" FontSize="8" FontWeight="Bold" 
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="2,0"/>
+                            </Border>
+                        </Grid>
+                    </Button>
+
+                    <Popup x:Name="PopupNotif" StaysOpen="False" PlacementTarget="{Binding ElementName=BtnNotifications}" Placement="Bottom" VerticalOffset="10" HorizontalOffset="-200" AllowsTransparency="True">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="12" Width="280" Padding="12">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.5"/>
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Text="NOTIFICATIONS" Foreground="Cyan" FontWeight="Black" FontSize="10" Margin="0,0,0,10" />
+
+                                <ItemsControl x:Name="ItemsNotif">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,8" Margin="0,0,0,4">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="11" Foreground="{Binding Color}"/>
+                                                    <TextBlock Text="{Binding Body}" FontSize="10" Foreground="White" TextWrapping="Wrap" Opacity="0.8" Margin="0,3,0,0"/>
+                                                    <TextBlock Text="{Binding Date}" FontSize="8" Foreground="Gray" HorizontalAlignment="Right" Margin="0,5,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Button Content="Tout marquer comme lu" Margin="0,10,0,0" Click="CloseNotif_Click" Style="{StaticResource CyberButton}" Height="25" FontSize="9"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                </Grid>
+                
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button Content="—" Click="MinimizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
                     <Button x:Name="MaximizeBtn" Content="▢" Click="MaximizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>

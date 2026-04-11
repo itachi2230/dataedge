@@ -1,80 +1,80 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using CefSharp;
-using CefSharp.Wpf;
+using backtest.Services; // Assure-toi que le namespace est correct
 
 namespace backtest
 {
-    /// <summary>
-    /// Interaction logic for App.xaml
-    /// </summary>
     public partial class App : Application
     {
+        // On crée une instance rapide pour les rapports de crash 
+        // au cas où l'injection de dépendance n'est pas encore prête
+        private readonly FxCloudService _crashReporter = new FxCloudService();
+
         protected override void OnStartup(StartupEventArgs e)
         {
-            // Désactiver le rendu GPU pour WPF
+            // Rendu Software pour éviter les crashs liés aux drivers GPU (courant en trading)
             System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
 
             base.OnStartup(e);
 
-            // Gérer les exceptions non gérées dans le thread principal (UI)
-            //Application.Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
+            // 1. Thread UI
+            // this.DispatcherUnhandledException += Current_DispatcherUnhandledException;
 
-            // Gérer les exceptions non gérées dans les threads en arrière-plan
+            // 2. Threads en arrière-plan
             //AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
-            // Gérer les exceptions non gérées dans les tâches (Task Parallel Library)//10h15
-            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+            // 3. Tasks (TPL)
+            //TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
         }
 
-        private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+        private async void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            // Affichez l'exception
-            MessageBox.Show($"Une erreur s'est produite dans l'interface utilisateur :\n{e.Exception.Message}\n\nDétails :\n",
-                            "Exception non gérée",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
-
-            // Évitez la fermeture automatique de l'application
-            e.Handled = true;
+            e.Handled = true; // Empêche le crash brutal
+            await HandleFatalError(e.Exception, "Interface Utilisateur (UI)");
         }
 
-        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        private async void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            // Vérifiez si c'est une exception
-            if (e.ExceptionObject is  Exception ex)
+            if (e.ExceptionObject is Exception ex)
             {
-                MessageBox.Show($"Une erreur critique s'est produite :\n{ex.Message}\n\nDétails :\n",
-                                "Exception critique non gérée",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Error);
-            }
-            else
-            {
-                MessageBox.Show($"Une erreur critique non gérée s'est produite.",
-                                "Erreur critique",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Error);
+                await HandleFatalError(ex, "Domaine Applicatif (Critique)");
             }
         }
 
-        private void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+        private async void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
         {
-            // Affichez l'exception des tâches non observées
-            MessageBox.Show($"Une erreur s'est produite dans une tâche :\n{e.Exception.Message}\n\nDétails :\n{e.Exception.StackTrace}",
-                            "Exception non gérée dans une tâche",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
+            e.SetObserved(); // Empêche la fermeture
+            await HandleFatalError(e.Exception, "Tâche Asynchrone (Task)");
+        }
 
-            // Marquez l'exception comme observée pour éviter que l'application ne se termine
-            e.SetObserved();
+        /// <summary>
+        /// Centralise l'envoi du rapport au serveur Symfony et informe l'utilisateur
+        /// </summary>
+        private async Task HandleFatalError(Exception ex, string context)
+        {
+            // On extrait la source réelle (le nom de l'erreur + le message)
+            string errorHeader = $"[{ex.GetType().Name}] {ex.Message}";
+
+            // On nettoie le StackTrace pour ne garder que ce qui concerne TON code (pas le système Windows)
+            var lines = ex.StackTrace?.Split('\n')
+                          .Where(line => line.Contains("backtest")) // Remplace par ton namespace si différent
+                          .Select(line => line.Trim())
+                          .ToList() ?? new System.Collections.Generic.List<string>();
+
+            string cleanStack = lines.Count > 0 ? string.Join("\n   -> ", lines) : "Pas de détails locaux.";
+
+            string finalReport = $"{errorHeader}\nCONTEXTE: {context}\nTRACE:\n   -> {cleanStack}";
+
+            // Envoi asynchrone sans bloquer
+            _ = _crashReporter.SendCrashReportAsync(finalReport);
+
+            // Affichage utilisateur simplifié
+            MessageBox.Show(
+                $"Une anomalie a été détectée ({ex.GetType().Name}).\n\n" +
+                "Le rapport technique a été envoyé au support pour analyse.",
+                "DataEdge Support", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
-
-
 }

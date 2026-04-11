@@ -11,45 +11,97 @@ namespace backtest
     {
         private Strategie _strategie;
         private bool modeJournal;
+        private Trade _tradeEnEdition = null; // Stocke le trade si on est en mode modif
+        private bool IsEditMode => _tradeEnEdition != null;
 
+        // Constructeur Standard (Ajout)
         public AjoutTrade(Strategie strategie, bool modeJournal = false)
         {
             InitializeComponent();
             _strategie = strategie;
             this.modeJournal = modeJournal;
+            InitInterface();
+        }
 
-            // Configuration de l'interface
+        // Constructeur pour la MODIFICATION
+        public AjoutTrade(Strategie strategie, Trade tradeAModifier, bool modeJournal = false)
+        {
+            InitializeComponent();
+            _strategie = strategie;
+            this.modeJournal = modeJournal;
+            _tradeEnEdition = tradeAModifier;
+
+            InitInterface();
+            PreparerModeModification();
+        }
+
+        private void InitInterface()
+        {
             if (profitTxt != null)
                 stackprofit.Visibility = modeJournal ? Visibility.Visible : Visibility.Collapsed;
 
-            // Initialisation des Enums
             TypeOrdreComboBox.ItemsSource = Enum.GetValues(typeof(TypeOrdre));
             ResultComboBox.ItemsSource = Enum.GetValues(typeof(Resultat));
 
-            // Setup des placeholders (comme dans addStrategieWindow)
             SetupPlaceholders(MainStack);
-
-            // Chargement de la structure dynamique
             ChargerChampsDynamique();
         }
 
-        private void SetupPlaceholders(Panel container)
+        private void PreparerModeModification()
         {
-            foreach (var child in container.Children)
+            // Update UI Titles
+            ActionTitle.Text = "MODIFIER";
+            MainTitle.Text = $"TRADE {_tradeEnEdition.Paire}";
+
+            // Remplissage des champs standards
+            PaireTextBox.Text = _tradeEnEdition.Paire;
+            PaireTextBox.Foreground = Brushes.White;
+            PaireTextBox.Tag = ""; // Enlever placeholder
+
+            TypeOrdreComboBox.SelectedItem = _tradeEnEdition.TypeOrdre;
+            ResultComboBox.SelectedItem = _tradeEnEdition.Result;
+
+            DateEntreePicker.SelectedDate = _tradeEnEdition.DateEntree;
+            TimeEntreePicker.Value = _tradeEnEdition.DateEntree;
+
+            DateSortiePicker.SelectedDate = _tradeEnEdition.DateSortie;
+            TimeSortiePicker.Value = _tradeEnEdition.DateSortie;
+
+            RrTextBox.Text = _tradeEnEdition.RR.ToString();
+            RrTextBox.Foreground = Brushes.White;
+            RrTextBox.Tag = "";
+
+            ImageLtfTextBox.Text = _tradeEnEdition.ImageLtf;
+            ImageLtfTextBox.Foreground = Brushes.White;
+            ImageLtfTextBox.Tag = "";
+
+            ImageHtfTextBox.Text = _tradeEnEdition.ImageHtf;
+            ImageHtfTextBox.Foreground = Brushes.White;
+            ImageHtfTextBox.Tag = "";
+
+            descriptionTextbox.Text = _tradeEnEdition.description;
+            descriptionTextbox.Foreground = Brushes.White;
+            descriptionTextbox.Tag = "";
+
+            if (modeJournal && profitTxt != null)
             {
-                if (child is TextBox tb)
+                profitTxt.Text = _tradeEnEdition.Profit.ToString();
+                profitTxt.Foreground = Brushes.White;
+                profitTxt.Tag = "";
+            }
+
+            // Remplissage des champs dynamiques (Confluences)
+            foreach (var cp in _tradeEnEdition.ChampsPersonnalises)
+            {
+                // On cherche le TextBox qui a le Tag correspondant au nom du critère
+                var tb = DynamicFieldsPanel.Children.OfType<TextBox>()
+                         .FirstOrDefault(t => t.Tag?.ToString() == cp.Nom);
+
+                if (tb != null)
                 {
-                    tb.GotFocus += (s, e) =>
-                    {
-                        if (tb.Tag?.ToString() == "placeholder")
-                        {
-                            tb.Text = "";
-                            tb.Foreground = Brushes.White;
-                            tb.Tag = "";
-                        }
-                    };
+                    tb.Text = cp.Valeur.ToString();
+                    tb.Foreground = Brushes.White;
                 }
-                else if (child is Panel p) SetupPlaceholders(p); // Récursivité pour les Grids/StackPanels
             }
         }
 
@@ -72,7 +124,7 @@ namespace backtest
                 {
                     Style = (Style)this.FindResource("ModernField"),
                     Height = 35,
-                    Tag = header, // Utilisé pour mapper la sauvegarde
+                    Tag = header,
                     Margin = new Thickness(0, 0, 0, 10)
                 };
 
@@ -91,43 +143,64 @@ namespace backtest
                     return;
                 }
 
-                double profitValue = 0;
-                if (modeJournal && profitTxt.Tag?.ToString() != "placeholder")
-                    double.TryParse(profitTxt.Text.Replace(".", ","), out profitValue);
+                // Parsing des valeurs numériques
+                double.TryParse(profitTxt.Text.Replace(".", ","), out double profitValue);
+                float.TryParse(RrTextBox.Text.Replace(".", ","), out float rrValue);
 
-                float rrValue = 0;
-                if (RrTextBox.Tag?.ToString() != "placeholder")
-                    float.TryParse(RrTextBox.Text.Replace(".", ","), out rrValue);
+                // On récupère les confluences
+                var confluences = DynamicFieldsPanel.Children
+                                    .OfType<TextBox>()
+                                    .Select(tb => new ChampPersonnalise(tb.Tag.ToString(), tb.Text))
+                                    .ToList();
 
-                var trade = new Trade(profitValue)
+                if (IsEditMode)
                 {
-                    Paire = (PaireTextBox.Tag?.ToString() == "placeholder") ? "N/A" : PaireTextBox.Text.ToUpper(),
-                    TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem,
-                    Result = (Resultat)ResultComboBox.SelectedItem,
-                    DateEntree = CombineDateTime(DateEntreePicker.SelectedDate, TimeEntreePicker.Value),
-                    DateSortie = CombineDateTime(DateSortiePicker.SelectedDate, TimeSortiePicker.Value),
-                    RR = rrValue,
-                    ImageLtf = (ImageLtfTextBox.Tag?.ToString() == "placeholder") ? "" : ImageLtfTextBox.Text,
-                    ImageHtf = (ImageHtfTextBox.Tag?.ToString() == "placeholder") ? "" : ImageHtfTextBox.Text,
-                    description = (descriptionTextbox.Tag?.ToString() == "placeholder") ? "" : descriptionTextbox.Text,
-                    strategie = _strategie.Nom,
-                    ChampsPersonnalises = DynamicFieldsPanel.Children
-                        .OfType<TextBox>()
-                        .Select(tb => new ChampPersonnalise(tb.Tag.ToString(), tb.Text))
-                        .ToList()
-                };
+                    // --- LOGIQUE DE MISE À JOUR ---
+                    _tradeEnEdition.Paire = PaireTextBox.Text.ToUpper();
+                    _tradeEnEdition.TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem;
+                    _tradeEnEdition.Result = (Resultat)ResultComboBox.SelectedItem;
+                    _tradeEnEdition.DateEntree = CombineDateTime(DateEntreePicker.SelectedDate, TimeEntreePicker.Value);
+                    _tradeEnEdition.DateSortie = CombineDateTime(DateSortiePicker.SelectedDate, TimeSortiePicker.Value);
+                    _tradeEnEdition.RR = rrValue;
+                    _tradeEnEdition.ImageLtf = ImageLtfTextBox.Text;
+                    _tradeEnEdition.ImageHtf = ImageHtfTextBox.Text;
+                    _tradeEnEdition.description = descriptionTextbox.Text;
+                    _tradeEnEdition.Profit = profitValue;
+                    _tradeEnEdition.ChampsPersonnalises = confluences;
 
-                if (modeJournal) _strategie.AddJournal(trade);
-                else _strategie.AddTrade(trade);
-
-                if (texetat != null)
-                {
-                    texetat.Visibility = Visibility.Visible;
-                    texetat.Text = $"Trade {trade.Paire} enregistré !";
+                    if (modeJournal) _strategie.UpdateJournal(_tradeEnEdition);
+                    else _strategie.UpdateTrade(_tradeEnEdition);
+                    MessageBox.Show("Trade mis à jour !", "Succès", MessageBoxButton.OK, MessageBoxImage.Information);
+                    this.Close();
                 }
+                else
+                {
+                    // --- LOGIQUE D'AJOUT CLASSIQUE ---
+                    var nouveauTrade = new Trade(profitValue)
+                    {
+                        Paire = PaireTextBox.Text.ToUpper(),
+                        TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem,
+                        Result = (Resultat)ResultComboBox.SelectedItem,
+                        DateEntree = CombineDateTime(DateEntreePicker.SelectedDate, TimeEntreePicker.Value),
+                        DateSortie = CombineDateTime(DateSortiePicker.SelectedDate, TimeSortiePicker.Value),
+                        RR = rrValue,
+                        ImageLtf = ImageLtfTextBox.Text,
+                        ImageHtf = ImageHtfTextBox.Text,
+                        description = descriptionTextbox.Text,
+                        strategie = _strategie.Nom,
+                        ChampsPersonnalises = confluences
+                    };
 
-                // On vide les champs pour le trade suivant
-                ViderChamps();
+                    if (modeJournal) _strategie.AddJournal(nouveauTrade);
+                    else _strategie.AddTrade(nouveauTrade);
+
+                    if (texetat != null)
+                    {
+                        texetat.Visibility = Visibility.Visible;
+                        texetat.Text = $"Trade {nouveauTrade.Paire} enregistré !";
+                    }
+                    ViderChamps();
+                }
             }
             catch (Exception ex)
             {
@@ -165,6 +238,25 @@ namespace backtest
             if (!date.HasValue || !time.HasValue)
                 throw new Exception("Date et Heure obligatoires.");
             return date.Value.Date + time.Value.TimeOfDay;
+        }
+        private void SetupPlaceholders(Panel container)
+        {
+            foreach (var child in container.Children)
+            {
+                if (child is TextBox tb)
+                {
+                    tb.GotFocus += (s, e) =>
+                    {
+                        if (tb.Tag?.ToString() == "placeholder")
+                        {
+                            tb.Text = "";
+                            tb.Foreground = Brushes.White;
+                            tb.Tag = "";
+                        }
+                    };
+                }
+                else if (child is Panel p) SetupPlaceholders(p); // Récursivité pour les Grids/StackPanels
+            }
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e) { this.DialogResult = true; this.Close(); }

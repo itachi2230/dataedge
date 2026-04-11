@@ -145,8 +145,8 @@ namespace backtest
 
             // Configuration des colonnes de base
             TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "PAIRE", Binding = new Binding("Paire"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-            TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "RESULT", Binding = new Binding("Result"), Width = 80 });
-            TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "RR", Binding = new Binding("RR"), Width = 60 });
+            TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "RES", Binding = new Binding("Result"), Width = 40 });
+            TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "RR", Binding = new Binding("RR"), Width = 50 });
             TradesDataGrid.Columns.Add(new DataGridTextColumn { Header = "ENTRÉE", Binding = new Binding("DateEntree") { StringFormat = "dd/MM/yy" }, Width = 100 });
 
             // Remplacement de GetDynamicHeaders par l'analyse des stats JSON
@@ -216,13 +216,26 @@ namespace backtest
 
         private void TradesDataGrid_KeyUp(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Delete && TradesDataGrid.SelectedItem is Trade tr)
+            // Vérifier si un trade est sélectionné
+            if (!(TradesDataGrid.SelectedItem is Trade tr)) return;
+
+            // 1. GESTION DE LA SUPPRESSION (Touche Delete)
+            if (e.Key == Key.Delete)
             {
                 if (MessageBox.Show($"Supprimer le trade {tr.Paire} du {tr.DateEntree:dd/MM} ?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     this.strategie.RemoveTradeById(tr.Id);
                     LoadTradesDataGrid();
                 }
+            }
+            // 2. GESTION DE L'ÉDITION (Touche Espace)
+            else if (e.Key == Key.Space)
+            {
+                // On ouvre la fenêtre AjoutTrade en passant le trade sélectionné
+                // On précise modeJournal: false (ou selon la vue actuelle)
+                AjoutTrade editWindow = new AjoutTrade(this.strategie, tr, modeJournal: false);
+                editWindow.ShowDialog();
+                LoadTradesDataGrid();
             }
         }
 

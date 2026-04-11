@@ -16,6 +16,7 @@ using backtest.Services;
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using System.Threading.Tasks;
+using CefSharp;
 
 namespace backtest
 {
@@ -30,20 +31,258 @@ namespace backtest
 
         public MainWindow()
         {
+            // À faire UNE SEULE FOIS au lancement de l'app
+            if (!Cef.IsInitialized)
+            {
+                var cefSettings = new CefSharp.Wpf.CefSettings();
+
+                // Définir un dossier pour stocker les dessins et le cache
+                string cachePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DataEdge\\CefCache");
+                if (!Directory.Exists(cachePath)) Directory.CreateDirectory(cachePath);
+
+                cefSettings.CachePath = cachePath;
+                cefSettings.PersistSessionCookies = true;
+
+                Cef.Initialize(cefSettings);
+            }
             InitializeComponent();
             currentWeekStart = GetStartOfWeek(DateTime.Now);
+            CefSharpSettings.ConcurrentTaskExecution = true;
 
             // Initialisation des données
             LoadNotesForCurrentWeek();
             LoadInvestingCalendar();
-            loadStrategies();
+            
             settingsView = new SettingsView();
             _sessionFilePath = _cloudService._sessionFilePath;
             LoadUserProfile();
 
+            if (utils.HasOldDataToMigrate())
+            {
+                var result = MessageBox.Show(
+                    "Des données de l'ancienne version (.xlsx) ont été détectées. Voulez-vous les migrer vers le nouveau format JSON ?\n\nLes fichiers originaux seront déplacés dans le dossier 'data/old_version'.",
+                    "Migration de données",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    utils.ExecuteFullMigration();
+                    MessageBox.Show("Migration terminée avec succès !", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    // Optionnel : Rafraîchir ta liste de stratégies après migration
+                    // LoadStrategiesList(); 
+                }
+            }
+            loadStrategies();
+            // À mettre dans le constructeur après InitializeComponent()
+            ContextMenu journalMenu = new ContextMenu();
+
+            // Option MODIFIER
+            MenuItem editTrade = new MenuItem { Header = "Modifier ce trade", Foreground = Brushes.Cyan };
+            editTrade.Click += (s, e) => {
+                if (TradesDataGri.SelectedItem is Trade selectedTrade)
+                {
+                    // On ouvre la fenêtre d'édition avec les données du trade
+                    var strat = new Strategie(selectedTrade.strategie);
+                    var editWin = new AjoutTrade(strat, selectedTrade,true);
+                    editWin.ShowDialog();
+                    loadStrategies();
+                }
+            };
+
+            // Option SUPPRIMER
+            MenuItem deleteTrade = new MenuItem { Header = "Supprimer ce trade", Foreground = Brushes.OrangeRed };
+            deleteTrade.Click += (s, e) => {
+                if (TradesDataGri.SelectedItem is Trade selectedTrade)
+                {
+                    if (MessageBox.Show("Supprimer ?", "Confirmation", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                    {
+                        new Strategie(selectedTrade.strategie).RemoveJournalById(selectedTrade.Id);
+                        loadStrategies();
+                    }
+                }
+            };
+
+            journalMenu.Items.Add(editTrade);
+            journalMenu.Items.Add(deleteTrade);
+            TradesDataGri.ContextMenu = journalMenu;
+            PerformSystemHandshake();
         }
 
-        #region CHARGEMENT DES STRATÉGIES ET JOURNAL
+        #region CHARGEMENT DES STRATÉGIES ET JOURNAL ET NOTIFS
+
+        private async void PerformSystemHandshake()
+        {
+            string currentVersion = "1.0.0";
+            string user = userNameText.Text ?? "Guest";
+            // Chemin du fichier de sauvegarde
+            string notifFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "last_notif.txt");
+            var notificationsList = new List<NotificationItem>();
+
+            try
+            {
+                string cloudStatus = await _cloudService.GetCloudStatusAsync();
+                if (cloudStatus.StartsWith("OFFLINE")) { /* ... gestion erreur ... */ return; }
+
+                var handshake = await _cloudService.CheckSoftwareStatusAsync(currentVersion, user);
+
+                if (handshake != null)
+                {
+                    if (handshake.IsLocked) { Application.Current.Shutdown(); return; }
+
+                    // --- 1. RÉCUPÉRATION DE L'ID SAUVEGARDÉ ---
+                    int savedId = 0;
+                    if (File.Exists(notifFilePath))
+                    {
+                        int.TryParse(File.ReadAllText(notifFilePath), out savedId);
+                    }
+
+                    // --- 2. CONSTRUCTION DE LA LISTE (FLUX COMPLET) ---
+                    bool hasSystemMsg = handshake.SystemMessage != null && !string.IsNullOrEmpty(handshake.SystemMessage.Body);
+                    if (hasSystemMsg)
+                    {
+                        notificationsList.Add(new NotificationItem
+                        {
+                            Title = handshake.SystemMessage.Title?.ToUpper() ?? "SYSTEM",
+                            Body = handshake.SystemMessage.Body,
+                            Date = "IMPORTANT",
+                            Color = handshake.SystemMessage.Type == "danger" ? Brushes.OrangeRed : Brushes.Cyan
+                        });
+                    }
+
+                    if (handshake.PushNotifications != null)
+                    {
+                        foreach (var notif in handshake.PushNotifications)
+                        {
+                            notificationsList.Add(new NotificationItem
+                            {
+                                Id = notif.Id,
+                                Title = notif.Title?.ToUpper() ?? "ANNONCE",
+                                Body = notif.Content,
+                                Date = notif.Date,
+                                Color = Brushes.White
+                            });
+                        }
+                    }
+
+                    // --- 3. CALCUL DU COMPTEUR (UNIQUEMENT LES NOUVEAUX) ---
+                    int newNotifsCount = 0;
+
+                    // On compte 1 si message système présent
+                    if (hasSystemMsg) newNotifsCount++;
+
+                    // On compte uniquement les push dont l'ID > savedId
+                    if (handshake.PushNotifications != null)
+                    {
+                        newNotifsCount += handshake.PushNotifications.Count(n => n.Id > savedId);
+                    }
+
+                    // --- 4. MISE À JOUR UI ---
+                    ItemsNotif.ItemsSource = notificationsList;
+
+                    if (newNotifsCount > 0)
+                    {
+                        BadgeNotif.Visibility = Visibility.Visible;
+                        txtNotifCount.Text = newNotifsCount.ToString();
+                    }
+                    else
+                    {
+                        BadgeNotif.Visibility = Visibility.Collapsed;
+                    }
+
+                    // Gestion version...
+                    txtLastSync.Text = (handshake.LatestVersion != currentVersion) ? $"MAJ: {handshake.LatestVersion}" : $"SYNC: {DateTime.Now:HH:mm}";
+                }
+            }
+            catch (Exception ex) { FxCloudService.Log($"Erreur: {ex.Message}"); }
+        }
+        // Events pour la cloche
+        private void BtnNotifications_Click(object sender, RoutedEventArgs e)
+        {
+            PopupNotif.IsOpen = !PopupNotif.IsOpen;
+            // Une fois ouvert, on peut cacher le badge
+            BadgeNotif.Visibility = Visibility.Collapsed;
+        }
+
+        private void CloseNotif_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // 1. On récupère la liste liée à l'UI
+                var currentItems = ItemsNotif.ItemsSource as List<NotificationItem>;
+
+                // 2. On cherche l'ID le plus récent (on ignore le message système s'il n'a pas d'ID)
+                // On prend le premier élément qui a un ID positif (ce sera la notif push la plus récente)
+                var latestPush = currentItems?.FirstOrDefault(x => x.Id > 0);
+
+                if (latestPush != null)
+                {
+                    string notifFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "last_notif.txt");
+
+                    // 3. On écrase le fichier avec le nouvel ID
+                    File.WriteAllText(notifFilePath, latestPush.Id.ToString());
+                }
+
+                // 4. UI
+                BadgeNotif.Visibility = Visibility.Collapsed;
+                PopupNotif.IsOpen = false;
+            }
+            catch (Exception ex)
+            {
+                FxCloudService.Log($"Erreur sauvegarde lecture notif: {ex.Message}");
+                PopupNotif.IsOpen = false;
+            }
+        }
+        // Ouvre le popup de support
+        private void BtnSupport_Click(object sender, RoutedEventArgs e)
+        {
+            txtSupportStatus.Text = "";
+            PopupSupport.IsOpen = true;
+        }
+
+        // Gère l'envoi du message
+        private async void BtnSendSupport_Click(object sender, RoutedEventArgs e)
+        {
+            string contact = txtSupportContact.Text.Trim();
+            string message = txtSupportMessage.Text.Trim();
+            string user = userNameText.Text;
+
+            if (string.IsNullOrEmpty(message))
+            {
+                txtSupportStatus.Text = "Veuillez écrire un message.";
+                txtSupportStatus.Foreground = Brushes.OrangeRed;
+                return;
+            }
+
+            // Préparation de l'UI pendant l'envoi
+            BtnSendSupport.IsEnabled = false;
+            txtSupportStatus.Text = "Transmission en cours...";
+            txtSupportStatus.Foreground = Brushes.Cyan;
+
+            // On concatène le contact au message pour le serveur ou on utilise le champ 'type'
+            // Ici on envoie le contact dans le paramètre 'type' pour que Symfony le logge bien
+            bool success = await _cloudService.SendSupportMessageAsync(contact, message, user);
+
+            if (success)
+            {
+                txtSupportStatus.Text = "Message transmis avec succès !";
+                txtSupportStatus.Foreground = Brushes.LimeGreen;
+
+                // On vide les champs après un court délai et on ferme
+                await Task.Delay(1500);
+                txtSupportContact.Clear();
+                txtSupportMessage.Clear();
+                PopupSupport.IsOpen = false;
+            }
+            else
+            {
+                txtSupportStatus.Text = "Erreur de connexion au serveur.";
+                txtSupportStatus.Foreground = Brushes.OrangeRed;
+            }
+
+            BtnSendSupport.IsEnabled = true;
+        }
         public void loadStrategies()
         {
             // 1. Récupération de la liste de TOUTES les stratégies existantes
@@ -79,29 +318,48 @@ namespace backtest
             if (PirePaire != null) PirePaire.Text = stats.WorstPair ?? "---";
 
             // 4. Affichage des vignettes (badges) de performance
+            // 4. Affichage des vignettes (badges) de performance
             if (perfStrat != null)
             {
                 perfStrat.Children.Clear();
-
-                // On boucle sur TOUTES les stratégies chargées au début
                 foreach (var st in strategies)
                 {
-                    // On cherche le profit dans les stats. 
-                    // Si la stratégie n'a pas de trades, on met 0 par défaut.
                     double profit = 0;
                     if (stats.StrategyPerformance != null && stats.StrategyPerformance.ContainsKey(st.Nom))
-                    {
                         profit = stats.StrategyPerformance[st.Nom];
-                    }
 
-                    // On crée le contrôle avec le nom de la stratégie et son profit (éventuellement 0)
                     var ctrl = new ControlStat(st.Nom, profit);
 
-                    // On conserve l'événement de clic pour naviguer vers les détails
-                    ctrl.MouseLeftButtonUp += (s, e) => {
-                        ShowStatisticsDirect(st);
+                    // --- MENU CONTEXTUEL ---
+                    ContextMenu cm = new ContextMenu();
+
+                    // Option MODIFIER
+                    MenuItem editMenu = new MenuItem { Header = "Modifier les infos", Foreground = Brushes.Cyan };
+                    editMenu.Click += (s, e) => {
+                        // Ici, on ouvre une fenêtre de saisie (ex: EditStratWindow)
+                        var editWin = new addStrategieWindow(st);
+                        if (editWin.ShowDialog() == true)
+                        {
+                            loadStrategies(); // Rafraîchir tout
+                        }
                     };
 
+                    // Option SUPPRIMER
+                    MenuItem deleteMenu = new MenuItem { Header = "Supprimer la stratégie", Foreground = Brushes.Red };
+                    deleteMenu.Click += (s, e) => {
+                        if (MessageBox.Show($"Supprimer {st.Nom} ?", "Confirmation", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                        {
+                            st.SupprimerStrategie();
+                            loadStrategies();
+                        }
+                    };
+
+                    cm.Items.Add(editMenu);
+                    cm.Items.Add(new Separator()); // Petite ligne de séparation
+                    cm.Items.Add(deleteMenu);
+
+                    ctrl.ContextMenu = cm;
+                    ctrl.MouseDoubleClick += (s, e) => { ShowStatisticsDirect(st); };
                     perfStrat.Children.Add(ctrl);
                 }
             }
@@ -219,6 +477,25 @@ namespace backtest
 
             // 3. Rafraîchissement des données pour refléter les changements
             loadStrategies();
+        }
+
+        private void ShowChart()
+        {
+            // 1. Création du contrôle de statistiques
+            var chart = new Chart();
+
+            // 2. On remplace le contenu du conteneur central (ContentControl dans ton XAML)
+            MainViewContainer.Content = chart;
+
+            // 3. Animation de fondu
+            DoubleAnimation fadeIn = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromSeconds(0.4),
+                EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
+            };
+            chart.BeginAnimation(OpacityProperty, fadeIn);
         }
         #endregion
 
@@ -471,8 +748,8 @@ namespace backtest
 
         private async void Button_Click_1(object sender, RoutedEventArgs e)
         {
-            await ShowNotification("Comming soon !!", false, false, 0.5);
-
+            //await ShowNotification("Comming soon !!", false, false, 0.5);
+            ShowChart();
         }
         #endregion
 
@@ -503,6 +780,16 @@ namespace backtest
             return Brushes.White;
         }
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+    }
+
+    // Classe pour l'affichage uniforme dans la liste
+    public class NotificationItem
+    {
+        public int Id { get; set; }
+        public string Title { get; set; }
+        public string Body { get; set; }
+        public string Date { get; set; }
+        public SolidColorBrush Color { get; set; }
     }
     // Cette classe "masque" la MessageBox par défaut de System.Windows
     #endregion

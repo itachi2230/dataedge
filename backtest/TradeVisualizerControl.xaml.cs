@@ -43,26 +43,45 @@ namespace backtest
                 ProcessImage(ImgLtf, trade.ImageLtf, "LTF_" + trade.Id);
         }
 
-        private async void ProcessImage(Image imageControl, string rawUrl, string fileNamePrefix)
+        private async void ProcessImage(Image imageControl, string rawValue, string fileNamePrefix)
         {
-            string directUrl = ConvertToDirectUrl(rawUrl);
-            if (string.IsNullOrEmpty(directUrl)) return;
+            if (string.IsNullOrWhiteSpace(rawValue)) return;
 
-            // On crée un nom de fichier unique basé sur l'URL ou l'ID pour éviter les doublons
-            // On utilise le code de l'image comme nom de fichier local
-            string imageCode = Path.GetFileNameWithoutExtension(directUrl);
-            string localPath = Path.Combine(_cacheFolder, $"{imageCode}.png");
+            string localPath = "";
+            string directUrl = "";
 
-            // LOGIQUE DE CACHE
-            if (File.Exists(localPath))
+            // 1. DISTINCTION ENTRE URL ET FICHIER LOCAL
+            if (rawValue.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             {
-                // Si l'image existe localement, on la charge depuis le disque
-                LoadImageFromFile(imageControl, localPath);
+                // C'est une URL (nouvelle version)
+                directUrl = ConvertToDirectUrl(rawValue);
+                string imageCode = Path.GetFileNameWithoutExtension(directUrl);
+                localPath = Path.Combine(_cacheFolder, $"{imageCode}.png");
             }
             else
             {
-                // Sinon, on la télécharge
+                // C'est un nom de fichier (ancienne version de ton ami, ex: "122.png")
+                // On s'assure que l'extension est présente
+                string fileName = rawValue.EndsWith(".png") ? rawValue : rawValue + ".png";
+                localPath = Path.Combine(_cacheFolder, fileName);
+            }
+
+            // 2. LOGIQUE DE CHARGEMENT / TÉLÉCHARGEMENT
+            if (File.Exists(localPath))
+            {
+                // Si le fichier existe (soit migré, soit déjà caché), on charge
+                LoadImageFromFile(imageControl, localPath);
+            }
+            else if (!string.IsNullOrEmpty(directUrl))
+            {
+                // Si le fichier n'existe pas MAIS qu'on a une URL, on télécharge
                 await DownloadAndCacheImage(directUrl, localPath, imageControl);
+            }
+            else
+            {
+                // Le fichier local est introuvable et ce n'est pas une URL
+                System.Diagnostics.Debug.WriteLine($"Fichier introuvable dans le cache : {localPath}");
+                imageControl.Source = null;
             }
         }
 

@@ -118,6 +118,7 @@
                             <TextBlock DockPanel.Dock="Top" Text="HISTORIQUE DES TRADES" Foreground="Gray" FontWeight="Bold" Margin="5,0,0,10" FontSize="10" />
                             <DataGrid x:Name="TradesDataGrid" RowStyle="{StaticResource FuturisticRowStyle}" 
                                   ColumnHeaderStyle="{StaticResource FuturisticColumnHeader}"
+                                  ToolTip="Touche clavier 'delete' pour supprimer et 'espace' pour modifier un trade"
                                   Background="Transparent" BorderThickness="0" AutoGenerateColumns="False" IsReadOnly="True"
                                   MouseRightButtonDown="addTrade"  PreviewMouseWheel="DataGrid_PreviewMouseWheel"
                                   SelectionChanged="TradesDataGrid_SelectionChanged" KeyUp="TradesDataGrid_KeyUp"/>

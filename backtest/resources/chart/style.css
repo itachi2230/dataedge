@@ -1,0 +1,25 @@
+﻿:root {
+    --bg-dark: #131722;
+    --panel-dark: rgba(30, 34, 45, 0.9);
+    --border-dark: #363c4e;
+    --text-dark: #d1d4dc;
+    --accent: #00FFFF;
+}
+body { margin: 0; padding: 0; background	-color: var(--bg-dark); overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+#chart-container { width: 100vw; height: 100vh; position: relative; }
+#toolbar {
+    position: absolute; top: 10px; left: 10px; z-index: 100;
+    background: var(--panel-dark); padding: 5px 15px; border-radius: 6px;
+    border: 1px solid var(--border-dark); display: flex; gap: 15px; align-items: center;
+}
+.tool-group { display: flex; align-items: center; gap: 8px; border-right: 1px solid #444; padding-right: 10px; }
+select, button { background: #2a2e39; color: white; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+button.active { background: var(--accent); color: black; }
+.label { color: var(--text-dark); font-size: 11px; font-weight: bold; text-transform: uppercase; }
+#drawing-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 50; }
+#drawing-canvas.active { pointer-events: auto; cursor: crosshair; }
+#debug-console {
+    position: absolute; bottom: 10px; right: 10px; width: 250px; max-height: 80px;
+    background: rgba(0, 0, 0, 0.8); color: var(--accent); font-family: monospace; font-size: 9px;
+    padding: 8px; border-radius: 4px; border: 1px solid var(--border-dark);
+}
