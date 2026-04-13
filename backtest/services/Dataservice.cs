@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Linq;
+using System.IO.Pipelines;
+using System.Threading;
 
 namespace backtest.services
 {
@@ -24,7 +26,7 @@ namespace backtest.services
             _httpClient = new HttpClient
             {
                 BaseAddress = new Uri(finalBaseUrl),
-                Timeout = TimeSpan.FromSeconds(30)
+                Timeout = TimeSpan.FromSeconds(10)
             };
 
             _localDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "chart", "historical");
@@ -81,47 +83,60 @@ namespace backtest.services
 
         #region Récupération de Données (Historical)
 
-        public async Task<(bool success, string message, string filePath)> GetMarketDataAsync(string pair, string timeframe, string year)
+        public async Task<(bool success, string message, string filePath)> GetMarketDataAsync(string pair, string timeframe, string year, CancellationToken cts)
         {
             string cleanPair = pair.ToUpper().Trim();
             string serverTf = MapTimeframeToServer(timeframe);
-
             string fileNameCsv = $"{cleanPair}_{serverTf}_{year}.csv";
             string localPath = Path.Combine(_localDataFolder, fileNameCsv);
 
-            // 1. Check Cache Local
+            // Fichier temporaire pour éviter de corrompre le cache en cas de coupure
+            string tempPath = localPath + ".tmp";
+
+            // 1. Check Cache Local (Vérification de la taille pour éviter les fichiers vides)
             if (File.Exists(localPath))
             {
-                return (true, "DATA_LOCAL_READY", localPath);
+                var info = new FileInfo(localPath);
+                if (info.Length > 0)
+                    return (true, "DATA_LOCAL_READY", localPath);
+
+                File.Delete(localPath); // Nettoyage si fichier invalide
             }
 
             try
             {
-                // 2. Appel API
+                // 2. Appel API avec stream pour ne pas charger tout en RAM
                 string url = $"{ROUTE_FETCH_DATA}?pair={cleanPair}&tf={serverTf}&year={year}";
-                var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+                // Timeout légèrement plus long pour les gros historiques
+                var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts);
 
                 if (!response.IsSuccessStatusCode)
-                {
                     return (false, $"SERVER_ERROR: {response.StatusCode}", null);
-                }
 
-                // 3. Décompression GZip vers CSV
+                // 3. Décompression vers fichier TEMPORAIRE
                 using (var compressedStream = await response.Content.ReadAsStreamAsync())
                 using (var decompressionStream = new GZipStream(compressedStream, CompressionMode.Decompress))
-                using (var fileStream = File.Create(localPath))
+                using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
                 {
-                    await decompressionStream.CopyToAsync(fileStream);
+                    // CopyToAsync est parfait ici car il ne bloque pas le thread UI
+                    await decompressionStream.CopyToAsync(fileStream, 81920, cts);
+                    await fileStream.FlushAsync();
                 }
+
+                // 4. Validation finale : On renomme le fichier temp en fichier final
+                // C'est une opération atomique : soit le fichier est complet, soit il n'existe pas.
+                if (File.Exists(localPath)) File.Delete(localPath);
+                File.Move(tempPath, localPath);
 
                 return (true, "DOWNLOAD_SUCCESS", localPath);
             }
             catch (Exception ex)
             {
+                if (File.Exists(tempPath)) try { File.Delete(tempPath); } catch { }
                 return (false, $"EXCEPTION: {ex.Message}", null);
             }
         }
-
         public bool IsDataAvailableLocally(string pair, string tf, string year)
         {
             string serverTf = MapTimeframeToServer(tf);

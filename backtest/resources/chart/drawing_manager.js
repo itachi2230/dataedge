@@ -1,249 +1,201 @@
-﻿window.currentSymbol = "Default";
-
-window.DrawingManager = {
+﻿window.DrawingManager = {
     mode: null,
-    drawings: [],
+    drawings: [], 
     tempStart: null,
     selectedIdx: null,
-    isDragging: false,
-    dragPart: null, // 'start', 'end', ou 'move'
-    dragOffset: null, // Pour le déplacement global
-    tools: {},
-
-    registerTool(id, config) {
-        this.tools[id] = config;
-        const btn = document.createElement('button');
-        btn.id = `btn-${id}`;
-        btn.innerHTML = `${config.icon} ${config.name}`;
-        btn.onclick = () => this.setMode(id);
-        document.getElementById('drawing-tools')?.prepend(btn);
-    },
+    dragTarget: null, // Sera { type: 'p1'|'p2'|'line', index: x, offset: {x, y} }
 
     setMode(id) {
         this.mode = (this.mode === id) ? null : id;
-        const canvas = document.getElementById('drawing-canvas');
-        if (canvas) canvas.className = this.mode ? 'active' : '';
-        
+        const container = document.getElementById('chart-container');
+        if (container) container.style.cursor = this.mode ? 'crosshair' : 'default';
+
         document.querySelectorAll('#drawing-tools button').forEach(b => b.classList.remove('active'));
         if (this.mode) document.getElementById(`btn-${id}`)?.classList.add('active');
-        
+
         this.selectedIdx = null;
         this.tempStart = null;
+        this.updateSVG(null); 
         this.redraw();
     },
 
+    getActiveSeries: () => window.candleSeries,
+
+    createLineSeries() {
+        if (!window.chart) return null;
+        return window.chart.addLineSeries({
+            color: window.isDarkMode ? '#00FFFF' : '#2196F3',
+            lineWidth: 2,
+            priceLineVisible: false,
+            lastPriceAnimation: 0,
+            crosshairMarkerVisible: false,
+            autoscaleInfoProvider: () => null,
+        });
+    },
+
+    updateSVG(p1, p2) {
+        let svgLine = document.getElementById('temp-line');
+        if (!svgLine) {
+            const container = document.getElementById('chart-container');
+            container.insertAdjacentHTML('beforeend', `
+                <svg id="drawing-svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1000;">
+                    <line id="temp-line" stroke="${window.isDarkMode ? '#00FFFF' : '#2196F3'}" stroke-width="2" stroke-dasharray="5,5" style="display:none"/>
+                </svg>`);
+            svgLine = document.getElementById('temp-line');
+        }
+        if (!p1 || !p2) { svgLine.style.display = 'none'; return; }
+        svgLine.setAttribute('x1', p1.x); svgLine.setAttribute('y1', p1.y);
+        svgLine.setAttribute('x2', p2.x); svgLine.setAttribute('y2', p2.y);
+        svgLine.style.display = 'block';
+    },
+
     saveDrawings() {
-        if (window.currentSymbol) {
-            localStorage.setItem('Draw_' + window.currentSymbol, JSON.stringify(this.drawings));
+        if (window.currentSymbol && window.currentSymbol !== "Default") {
+            const data = this.drawings.map(d => ({ type: d.type, start: d.start, end: d.end }));
+            localStorage.setItem('Draw_' + window.currentSymbol, JSON.stringify(data));
         }
     },
 
     loadDrawings() {
+        if (!window.chart || !window.currentSymbol) return;
+        this.drawings.forEach(d => { if(d.series) window.chart.removeSeries(d.series); });
+        this.drawings = [];
         const saved = localStorage.getItem('Draw_' + window.currentSymbol);
-        this.drawings = saved ? JSON.parse(saved) : [];
+        if (!saved) return;
+        try {
+            const rawData = JSON.parse(saved);
+            rawData.forEach(d => {
+                const series = this.createLineSeries();
+                series.setData([{ time: d.start.time, value: d.start.price }, { time: d.end.time, value: d.end.price }]);
+                this.drawings.push({ ...d, series });
+            });
+        } catch (e) { console.error(e); }
+    },
+
+    deleteSelected() {
+        if (this.selectedIdx === null) return;
+        window.chart.removeSeries(this.drawings[this.selectedIdx].series);
+        this.drawings.splice(this.selectedIdx, 1);
+        this.selectedIdx = null;
+        this.saveDrawings();
         this.redraw();
     },
 
-    getActiveSeries() {
-        return (window.currentChartType === 'candles') ? window.candleSeries : window.lineSeries;
-    },
-
-    // Convertit les coordonnées logiques (Time/Price) en Pixels (X/Y)
-    getPix(pt) {
-        const series = this.getActiveSeries();
-        if (!pt || !window.chart || !series) return null;
-        const x = window.chart.timeScale().timeToCoordinate(pt.time);
-        const y = series.priceToCoordinate(pt.price);
-        return (x === null || y === null) ? null : { x, y };
-    },
-
     redraw() {
-        const canvas = document.getElementById('drawing-canvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
         this.drawings.forEach((d, i) => {
-            const p1 = this.getPix(d.start);
-            const p2 = this.getPix(d.end);
-            if (p1 && p2 && this.tools[d.type]) {
-                const isSelected = (this.selectedIdx === i);
-                this.tools[d.type].render(ctx, p1, p2, window.isDarkMode, false, isSelected);
-            }
+            const isSel = (i === this.selectedIdx);
+            d.series.applyOptions({
+                lineWidth: isSel ? 4 : 2,
+                color: isSel ? '#FFD700' : (window.isDarkMode ? '#00FFFF' : '#2196F3')
+            });
         });
-
-        // Dessiner le trait temporaire pendant la création
-        if (this.mode && this.tempStart) {
-            const p1 = this.getPix(this.tempStart);
-            const p2 = this.lastMousePos; // Position live de la souris
-            if (p1 && p2 && this.tools[this.mode]) {
-                this.tools[this.mode].render(ctx, p1, p2, window.isDarkMode, true, false);
-            }
-        }
     }
 };
 
-// --- LOGIQUE DE SYNCHRONISATION ET REDIMENSIONNEMENT ---
-
-function syncDrawingWithChart() {
-    if (!window.chart) return;
-    window.chart.timeScale().subscribeVisibleTimeRangeChange(() => window.DrawingManager.redraw());
-    window.chart.subscribeCrosshairMove(() => window.DrawingManager.redraw());
-    try {
-        window.chart.priceScale('right').subscribeVisiblePriceRangeChange(() => window.DrawingManager.redraw());
-    } catch(e) {}
-}
-
-function resizeCanvas() {
+window.syncDrawingWithChart = function() {
     const container = document.getElementById('chart-container');
-    const canvas = document.getElementById('drawing-canvas');
-    if (!container || !canvas) return;
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-    window.DrawingManager.redraw();
-}
+    const mainSeries = window.DrawingManager.getActiveSeries();
 
-window.addEventListener('resize', resizeCanvas);
-window.addEventListener('load', () => setTimeout(resizeCanvas, 100));
+    // --- GESTION DU MOUSE DOWN (DÉBUT DU DÉPLACEMENT) ---
+    container.addEventListener('mousedown', (e) => {
+        if (window.DrawingManager.mode || window.DrawingManager.selectedIdx === null) return;
 
-// --- GESTION DES ÉVÉNEMENTS SOURIS ---
-
-const canvas = document.getElementById('drawing-canvas');
-
-canvas.addEventListener('mousedown', e => {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    const time = window.chart.timeScale().coordinateToTime(x);
-    const series = window.DrawingManager.getActiveSeries();
-    const price = series ? series.coordinateToPrice(y) : null;
-    if (!time || price === null) return;
-
-    // MODE CRÉATION
-    if (window.DrawingManager.mode) {
-        if (!window.DrawingManager.tempStart) {
-            window.DrawingManager.tempStart = { time, price };
-        } else {
-            window.DrawingManager.drawings.push({ 
-                type: window.DrawingManager.mode, 
-                start: window.DrawingManager.tempStart, 
-                end: { time, price } 
-            });
-            window.DrawingManager.tempStart = null;
-            window.DrawingManager.setMode(null);
-            window.DrawingManager.saveDrawings();
-        }
-    } 
-    // MODE SÉLECTION / DRAG
-    else {
-        let foundIdx = -1;
-        let foundPart = null;
-
-        // On boucle à l'envers pour sélectionner le dernier dessiné (au dessus)
-        for (let i = window.DrawingManager.drawings.length - 1; i >= 0; i--) {
-            const d = window.DrawingManager.drawings[i];
-            const p1 = window.DrawingManager.getPix(d.start);
-            const p2 = window.DrawingManager.getPix(d.end);
-            const tool = window.DrawingManager.tools[d.type];
-
-            if (p1 && p2 && tool && tool.isPointNear) {
-                const hit = tool.isPointNear({ x, y }, p1, p2);
-                if (hit) {
-                    foundIdx = i;
-                    foundPart = hit;
-                    break;
-                }
-            }
-        }
-
-        window.DrawingManager.selectedIdx = (foundIdx !== -1) ? foundIdx : null;
-        
-        if (foundIdx !== -1) {
-            window.DrawingManager.isDragging = true;
-            window.DrawingManager.dragPart = foundPart;
-            
-            // Si on déplace tout l'objet, on stocke l'offset initial
-            if (foundPart === 'move') {
-                const d = window.DrawingManager.drawings[foundIdx];
-                window.DrawingManager.dragOffset = {
-                    startTime: d.start.time - time,
-                    startPrice: d.start.price - price,
-                    endTime: d.end.time - time,
-                    endPrice: d.end.price - price
-                };
-            }
-        }
-    }
-    window.DrawingManager.redraw();
-});
-
-canvas.addEventListener('mousemove', e => {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    window.DrawingManager.lastMousePos = { x, y };
-
-    // Gestion des curseurs visuels
-    if (!window.DrawingManager.isDragging && !window.DrawingManager.mode) {
-        let hover = false;
-        window.DrawingManager.drawings.forEach(d => {
-            const p1 = window.DrawingManager.getPix(d.start);
-            const p2 = window.DrawingManager.getPix(d.end);
-            const tool = window.DrawingManager.tools[d.type];
-            if (p1 && p2 && tool?.isPointNear) {
-                const hit = tool.isPointNear({ x, y }, p1, p2);
-                if (hit) {
-                    canvas.style.cursor = (hit === 'move') ? 'move' : 'pointer';
-                    hover = true;
-                }
-            }
-        });
-        if (!hover) canvas.style.cursor = 'crosshair';
-    }
-
-    // Si on est en train de dessiner ou de glisser
-    if (window.DrawingManager.mode && window.DrawingManager.tempStart) {
-        window.DrawingManager.redraw();
-    }
-
-    if (window.DrawingManager.isDragging && window.DrawingManager.selectedIdx !== null) {
-        const time = window.chart.timeScale().coordinateToTime(x);
-        const series = window.DrawingManager.getActiveSeries();
-        const price = series.coordinateToPrice(y);
-        
-        if (!time || price === null) return;
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
 
         const d = window.DrawingManager.drawings[window.DrawingManager.selectedIdx];
+        const x1 = window.chart.timeScale().timeToCoordinate(d.start.time);
+        const y1 = mainSeries.priceToCoordinate(d.start.price);
+        const x2 = window.chart.timeScale().timeToCoordinate(d.end.time);
+        const y2 = mainSeries.priceToCoordinate(d.end.price);
 
-        if (window.DrawingManager.dragPart === 'start') {
-            d.start = { time, price };
-        } else if (window.DrawingManager.dragPart === 'end') {
-            d.end = { time, price };
-        } else if (window.DrawingManager.dragPart === 'move') {
-            const off = window.DrawingManager.dragOffset;
-            d.start = { time: time + off.startTime, price: price + off.startPrice };
-            d.end = { time: time + off.endTime, price: price + off.endPrice };
+        // 1. Vérifier si on clique sur un point d'ancrage (Redimensionner)
+        if (Math.hypot(x - x1, y - y1) < 15) {
+            window.DrawingManager.dragTarget = { type: 'p1', index: window.DrawingManager.selectedIdx };
+        } else if (Math.hypot(x - x2, y - y2) < 15) {
+            window.DrawingManager.dragTarget = { type: 'p2', index: window.DrawingManager.selectedIdx };
+        } 
+        // 2. Vérifier si on clique sur la ligne (Déplacer toute la ligne)
+        else {
+            // Logique simplifiée : si sélectionné et on clique proche, on déplace
+            window.DrawingManager.dragTarget = { type: 'line', index: window.DrawingManager.selectedIdx };
         }
-        window.DrawingManager.redraw();
-    }
-});
+    });
 
-window.addEventListener('mouseup', () => {
-    if (window.DrawingManager.isDragging) {
-        window.DrawingManager.saveDrawings();
-    }
-    window.DrawingManager.isDragging = false;
-    window.DrawingManager.dragPart = null;
-});
+    window.addEventListener('mouseup', () => {
+        if (window.DrawingManager.dragTarget) {
+            window.DrawingManager.saveDrawings();
+            window.DrawingManager.dragTarget = null;
+        }
+    });
 
-// Suppression avec la touche Delete ou Backspace
-window.addEventListener('keydown', e => {
-    if ((e.key === 'Delete' || e.key === 'Backspace') && window.DrawingManager.selectedIdx !== null) {
-        window.DrawingManager.drawings.splice(window.DrawingManager.selectedIdx, 1);
-        window.DrawingManager.selectedIdx = null;
-        window.DrawingManager.saveDrawings();
-        window.DrawingManager.redraw();
-    }
-});
+    window.chart.subscribeClick(param => {
+        if (!param.point || window.DrawingManager.dragTarget) return;
+        const price = mainSeries.coordinateToPrice(param.point.y);
+
+        if (window.DrawingManager.mode) {
+            if (!window.DrawingManager.tempStart) {
+                window.DrawingManager.tempStart = { time: param.time, price, x: param.point.x, y: param.point.y };
+            } else {
+                const series = window.DrawingManager.createLineSeries();
+                series.setData([{ time: window.DrawingManager.tempStart.time, value: window.DrawingManager.tempStart.price }, { time: param.time, value: price }]);
+                window.DrawingManager.drawings.push({ start: {time: window.DrawingManager.tempStart.time, price: window.DrawingManager.tempStart.price}, end: {time: param.time, price}, series });
+                window.DrawingManager.tempStart = null;
+                window.DrawingManager.updateSVG(null);
+                window.DrawingManager.setMode(null);
+                window.DrawingManager.saveDrawings();
+            }
+        } else {
+            // Sélection par proximité
+            let foundIdx = null;
+            window.DrawingManager.drawings.forEach((d, i) => {
+                const x1 = window.chart.timeScale().timeToCoordinate(d.start.time);
+                const x2 = window.chart.timeScale().timeToCoordinate(d.end.time);
+                const y1 = mainSeries.priceToCoordinate(d.start.price);
+                const y2 = mainSeries.priceToCoordinate(d.end.price);
+                if (x1 === null || x2 === null) return;
+                const dx = x2 - x1, dy = y2 - y1;
+                const t = ((param.point.x - x1) * dx + (param.point.y - y1) * dy) / (dx * dx + dy * dy);
+                const cx = x1 + Math.max(0, Math.min(1, t)) * dx;
+                const cy = y1 + Math.max(0, Math.min(1, t)) * dy;
+                if (Math.hypot(param.point.x - cx, param.point.y - cy) < 10) foundIdx = i;
+            });
+            window.DrawingManager.selectedIdx = foundIdx;
+            window.DrawingManager.redraw();
+        }
+    });
+
+    window.chart.subscribeCrosshairMove(param => {
+        if (!param.point) return;
+
+        // Aperçu du dessin
+        if (window.DrawingManager.mode && window.DrawingManager.tempStart) {
+            window.DrawingManager.updateSVG(window.DrawingManager.tempStart, param.point);
+        }
+
+        // --- LOGIQUE DE DÉPLACEMENT / REDIMENSIONNEMENT ---
+        if (window.DrawingManager.dragTarget) {
+            const d = window.DrawingManager.drawings[window.DrawingManager.dragTarget.index];
+            const price = mainSeries.coordinateToPrice(param.point.y);
+            const time = param.time;
+
+            if (window.DrawingManager.dragTarget.type === 'p1') {
+                d.start = { time, price };
+            } else if (window.DrawingManager.dragTarget.type === 'p2') {
+                d.end = { time, price };
+            } else if (window.DrawingManager.dragTarget.type === 'line') {
+                // Pour déplacer la ligne entière, on calcule le delta (plus complexe en temps/prix)
+                // Ici version simple : déplace le point le plus proche vers la souris
+                const dist1 = Math.abs(param.point.x - window.chart.timeScale().timeToCoordinate(d.start.time));
+                const dist2 = Math.abs(param.point.x - window.chart.timeScale().timeToCoordinate(d.end.time));
+                if (dist1 < dist2) d.start = { time, price }; else d.end = { time, price };
+            }
+
+            d.series.setData([
+                { time: d.start.time, value: d.start.price },
+                { time: d.end.time, value: d.end.price }
+            ]);
+        }
+    });
+};

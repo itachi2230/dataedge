@@ -2,49 +2,40 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DataEdge Pro Engine</title>
+    <title>DataEdge Backtest</title>
     <link rel="stylesheet" href="style.css">
-    
 </head>
 <body>
-
     <div id="toolbar">
         <div class="tool-group">
-            <span class="label">Vue</span>
-            <button id="themeBtn" onclick="toggleTheme()">🌓</button>
-			<button id="gridBtn" onclick="toggleGrid()">Grid</button>
+            <button onclick="toggleTheme()">🌓</button>
+            <button onclick="toggleGrid()">Grid</button>
         </div>
-
         <div class="tool-group" id="drawing-tools">
-            <span class="label">Outils</span>
-            <button onclick="resetChart()">🗑️</button>
-			
+            <button id="btn-trendline" onclick="DrawingManager.setMode('trendline')">🖊️ Ligne</button>
+            <button onclick="window.chart.timeScale().fitContent()">🔄 Reset</button>
         </div>
-		
         <div class="tool-group">
-            <span class="label">Couleurs</span>
             <input type="color" id="upColor" value="#00FFFF" onchange="updateColors()">
             <input type="color" id="downColor" value="#FF007F" onchange="updateColors()">
         </div>
     </div>
 
     <div id="chart-container">
-        <canvas id="drawing-canvas"></canvas>
-		<div class="tv-scale-angle-zone">
+        <div class="tv-scale-angle-zone">
             <div class="price-scale-controls">
-                <button id="btn-percent-scale" onclick="togglePercentScale()" title="Pourcentage">P</button>
-                <button id="btn-log-scale" onclick="toggleLogScale()" title="Logarithmique">L</button>
-                <button id="btn-auto-scale" onclick="toggleAutoScale()" title="Auto Scale">A</button>
+                <button id="btn-percent-scale" onclick="/*...*/">P</button>
+                <button id="btn-log-scale" onclick="/*...*/">L</button>
+                <button id="btn-auto-scale" class="active" onclick="toggleAutoScale()">A</button>
             </div>
         </div>
     </div>
-    
+
     <div id="debug-console"></div>
 
     <script src="lightweight-charts.js"></script>
-	<script src="chart_engine.js"></script>
+	<script src="drawing_plugin.js"></script>
 	<script src="drawing_manager.js"></script>
-	<script src="tools/trendline.js"></script>
+    <script src="chart_engine.js"></script>
 </body>
 </html>

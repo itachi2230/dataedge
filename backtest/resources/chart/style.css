@@ -4,92 +4,137 @@
     --border-dark: #363c4e;
     --text-dark: #d1d4dc;
     --accent: #00FFFF;
+    --tv-blue: #2962ff;
 }
-body { margin: 0; padding: 0; background	-color: var(--bg-dark); overflow: hidden; font-family: 'Segoe UI', sans-serif; }
-#chart-container { width: 100vw; height: 100vh; position: relative; }
+
+body { 
+    margin: 0; 
+    padding: 0; 
+    background-color: var(--bg-dark); 
+    overflow: hidden; 
+    font-family: 'Segoe UI', sans-serif; 
+}
+
+#chart-container { 
+    width: 100vw; 
+    height: 100vh; 
+    position: relative; 
+}
+
+/* Toolbar */
 #toolbar {
-    position: absolute; top: 10px; left: 10px; z-index: 100;
-    background: var(--panel-dark); padding: 5px 15px; border-radius: 6px;
-    border: 1px solid var(--border-dark); display: flex; gap: 15px; align-items: center;
+    position: absolute; 
+    top: 10px; 
+    left: 10px; 
+    z-index: 100;
+    background: var(--panel-dark); 
+    padding: 5px 15px; 
+    border-radius: 6px;
+    border: 1px solid var(--border-dark); 
+    display: flex; 
+    gap: 15px; 
+    align-items: center;
+    backdrop-filter: blur(4px); /* Effet moderne */
 }
-.tool-group { display: flex; align-items: center; gap: 8px; border-right: 1px solid #444; padding-right: 10px; }
-select, button { background: #2a2e39; color: white; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
-button.active { background: var(--accent); color: black; }
-.label { color: var(--text-dark); font-size: 11px; font-weight: bold; text-transform: uppercase; }
-#drawing-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 50; }
-#drawing-canvas.active { pointer-events: auto; cursor: crosshair; }
+
+.tool-group { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    border-right: 1px solid #444; 
+    padding-right: 10px; 
+}
+
+.tool-group:last-child { border-right: none; }
+
+select, button { 
+    background: #2a2e39; 
+    color: white; 
+    border: 1px solid #444; 
+    padding: 4px 8px; 
+    border-radius: 4px; 
+    font-size: 12px; 
+    cursor: pointer; 
+}
+
+button:hover { border-color: var(--accent); }
+
+/* État actif pour les outils de dessin */
+button.active { 
+    background: var(--accent) !important; 
+    color: black !important; 
+    font-weight: bold;
+}
+
+.label { 
+    color: var(--text-dark); 
+    font-size: 10px; 
+    font-weight: bold; 
+    text-transform: uppercase; 
+    letter-spacing: 0.5px;
+}
+
+/* Console de debug */
 #debug-console {
-    /* On le décale à gauche pour qu'il ne recouvre pas les boutons A, L, P */
     position: absolute; 
     bottom: 10px; 
-    left: 10px; /* Changé de right à left */
+    left: 10px; 
     width: 250px;
-    z-index: 200; /* Sous les contrôles au cas où */
-    pointer-events: none; /* Pour pouvoir cliquer à travers si besoin */
+    max-height: 100px;
+    overflow-y: auto;
+    z-index: 50; 
+    pointer-events: none; 
+    color: var(--accent);
+    font-family: monospace;
+    font-size: 11px;
+    opacity: 0.7;
 }
-/* La zone de détection invisible dans l'angle */
+
+/* --- ZONE DE SCALE (TRADINGVIEW STYLE) --- */
+
 .tv-scale-angle-zone {
     position: absolute;
     bottom: 0;
     right: 0;
     width: 120px; 
     height: 100px;
-    z-index: 1000; /* Doit être très élevé */
+    z-index: 1000;
     background: transparent;
-    pointer-events: auto;
 }
 
-/* Le conteneur des boutons (caché par défaut) */
 .price-scale-controls {
     position: absolute;
-    /* Ajuste le bottom pour qu'il soit pile au dessus de la barre de temps */
     bottom: 35px; 
     right: 10px;
     display: flex;
-    gap: 2px;
+    gap: 4px;
     opacity: 0;
     transition: opacity 0.2s ease;
     pointer-events: none;
 }
 
-/* Quand on survol la ZONE, on montre les boutons */
 .tv-scale-angle-zone:hover .price-scale-controls {
     opacity: 1;
-    pointer-events: auto; /* Active les clics sur les boutons */
+    pointer-events: auto;
 }
 
-/* Style des petits boutons flottants TV */
 .price-scale-controls button {
-    background: #1e222d; /* Couleur de TV sombre */
-    color: #b2b5be; /* Couleur de texte TV */
+    background: #1e222d;
+    color: #b2b5be;
     border: 1px solid #363a45;
-    border-radius: 2px;
-    width: 26px; /* Légèrement plus petit */
-    height: 26px;
-    font-size: 10px;
-    cursor: pointer;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3); /* Petit relief */
-}
-
-/* Style hover/active de TV */
-.price-scale-controls button:hover {
-    background: #2a2e39;
-    border-color: #4c525e;
-    color: #f0f3fa;
+    border-radius: 3px;
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
 }
 
 .price-scale-controls button.active {
-    color: #2962ff; /* Bleu de TV */
-    border-color: #2962ff;
-    background: rgba(41, 98, 255, 0.08); /* Fond bleu très léger */
+    color: white;
+    background: var(--tv-blue);
+    border-color: var(--tv-blue);
 }
-#drawing-canvas {
-    position: absolute;
-    top: 0; left: 0;
-    z-index: 10;
-    pointer-events: auto; /* CRITIQUE */
-}
+
+/* SUPPRESSION DU CANVAS : 
+   On ne garde plus de style pour #drawing-canvas car le mode Plugin 
+   utilise le canvas interne de Lightweight Charts. */

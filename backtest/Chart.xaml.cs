@@ -10,6 +10,7 @@ using CefSharp;
 using CefSharp.Wpf;
 using backtest.services;
 using Newtonsoft.Json;
+using System.Threading;
 
 namespace backtest
 {
@@ -24,11 +25,11 @@ namespace backtest
         private bool _isLoadingMore = false;
         private bool _endOfDataReached = false;
 
+        private CancellationTokenSource _ctsGlobal;
+
         public Chart()
         {
             InitializeComponent();
-
-            // 1. Charger les derniers réglages sauvegardés avant d'initialiser le reste
             LoadUserSettings();
 
             _dataService = new Dataservice("https://fxdataedge.com/");
@@ -41,9 +42,8 @@ namespace backtest
 
         private void LoadUserSettings()
         {
-            // Récupération des réglages (avec valeurs par défaut si vide)
             _currentSymbol = !string.IsNullOrEmpty(Properties.Settings.Default.LastSymbol)
-                             ? Properties.Settings.Default.LastSymbol : "EURUSD";
+                            ? Properties.Settings.Default.LastSymbol : "EURUSD";
             TxtCurrentSymbol.Text = _currentSymbol;
             _currentTF = !string.IsNullOrEmpty(Properties.Settings.Default.LastTimeframe)
                          ? Properties.Settings.Default.LastTimeframe : "15m";
@@ -51,7 +51,6 @@ namespace backtest
 
         private void SaveUserSettings()
         {
-            // Sauvegarde dans les paramètres de l'application
             Properties.Settings.Default.LastSymbol = _currentSymbol;
             Properties.Settings.Default.LastTimeframe = _currentTF;
             Properties.Settings.Default.Save();
@@ -63,8 +62,6 @@ namespace backtest
             {
                 var list = await _dataService.GetWatchlistAsync();
                 WatchlistItems.ItemsSource = list;
-
-                // Optionnel : Sélectionner visuellement la paire actuelle dans la liste
                 var current = list.FirstOrDefault(x => x.Symbol == _currentSymbol);
                 if (current != null) WatchlistItems.SelectedItem = current;
             }
@@ -82,7 +79,6 @@ namespace backtest
                 new TimeframeItem { Name = "4h", Value = "4h" },
                 new TimeframeItem { Name = "D", Value = "d" }
             };
-
             foreach (var item in tfs) item.IsActive = (item.Value.ToLower() == _currentTF.ToLower());
             TimeframeSelector.ItemsSource = tfs;
         }
@@ -92,72 +88,96 @@ namespace backtest
             var settings = new BrowserSettings { WebGl = CefState.Enabled, DefaultEncoding = "UTF-8" };
             ChartBrowser.BrowserSettings = settings;
             ChartBrowser.JavascriptObjectRepository.Settings.LegacyBindingEnabled = true;
-
             ChartBrowser.JavascriptObjectRepository.Register("chartService", _chartBridge, isAsync: true);
 
             ChartBrowser.FrameLoadEnd += async (s, e) => {
-                if (e.Frame.IsMain) await Dispatcher.InvokeAsync(async () => await LoadBacktestData());
+                if (e.Frame.IsMain)
+                {
+                    await Dispatcher.InvokeAsync(async () => {
+                        _ctsGlobal?.Cancel();
+                        _ctsGlobal = new CancellationTokenSource();
+                        await LoadBacktestData(_ctsGlobal.Token);
+                    });
+                }
             };
 
             string indexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources/chart", "index.html");
             if (File.Exists(indexPath)) ChartBrowser.Address = indexPath;
         }
 
-        public async Task LoadBacktestData()
+        // Méthode utilitaire pour exécuter du JS sans crash
+        private async Task SafeExecuteJs(string script)
+        {
+            if (ChartBrowser.CanExecuteJavascriptInMainFrame)
+            {
+                await ChartBrowser.EvaluateScriptAsync(script);
+            }
+        }
+
+        public async Task LoadBacktestData(CancellationToken ct)
         {
             _endOfDataReached = false;
+            _isLoadingMore = false;
+
             try
             {
                 SetStatus("Chargement...", "#FFB900");
+                _currentYear = DateTime.Now.Year;
 
-                // On s'assure que l'année est remise au maximum pour un changement de paire/TF
-                if (!_isLoadingMore) _currentYear = DateTime.Now.Year;
-
-                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, _currentYear.ToString());
+                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, _currentYear.ToString(), ct);
 
                 if (result.success)
                 {
-                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
-                    if (candles.Count > 0)
-                    {
-                        string json = JsonConvert.SerializeObject(candles);
-                        await ChartBrowser.EvaluateScriptAsync($"updateChartData({json}, '{_currentSymbol}');");
+                    ct.ThrowIfCancellationRequested();
+                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath), ct);
 
-                        SetStatus(_currentSymbol + " " + _currentTF, "#00FF7F");
-                        SaveUserSettings(); // On sauvegarde à chaque succès de chargement
+                    if (candles != null && candles.Count > 0)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        string json = JsonConvert.SerializeObject(candles);
+
+                        await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}');");
+
+                        SetStatus(_currentSymbol + " OK", "#00FF7F");
+                        SaveUserSettings();
                         return;
                     }
                 }
+
+                await SafeExecuteJs($"updateChartData([], '{_currentSymbol}');");
                 SetStatus("Aucune donnée", "#FF4B4B");
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex) { SetStatus("Erreur: " + ex.Message, "#FF4B4B"); }
-        }
-
-        private void SetStatus(string msg, string colorHex)
-        {
-            TxtStatus.Text = msg.ToUpper();
-            TxtStatus.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(colorHex);
         }
 
         public async Task LoadMoreData()
         {
             if (_isLoadingMore || _endOfDataReached) return;
+
+            if (_ctsGlobal == null) _ctsGlobal = new CancellationTokenSource();
+            var ct = _ctsGlobal.Token;
+
             _isLoadingMore = true;
 
             try
             {
-                _currentYear--;
-                SetStatus($"Chargement historique {_currentYear}...", "#FFB900");
+                int yearToLoad = _currentYear - 1;
+                SetStatus($"Historique {yearToLoad}...", "#FFB900");
 
-                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, _currentYear.ToString());
+                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, yearToLoad.ToString(), ct);
 
                 if (result.success)
                 {
-                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
-                    if (candles.Count > 0)
+                    ct.ThrowIfCancellationRequested();
+                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath), ct);
+
+                    if (candles != null && candles.Count > 0)
                     {
+                        ct.ThrowIfCancellationRequested();
+                        _currentYear = yearToLoad;
                         string json = JsonConvert.SerializeObject(candles);
-                        await ChartBrowser.EvaluateScriptAsync($"prependChartData({json});");
+                        await SafeExecuteJs($"prependChartData({json});");
                         SetStatus(_currentSymbol + " " + _currentTF, "#00FF7F");
                         return;
                     }
@@ -166,39 +186,74 @@ namespace backtest
                 _endOfDataReached = true;
                 SetStatus("FIN DES DONNÉES", "#FF4B4B");
             }
-            catch { }
-            finally { _isLoadingMore = false; }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                await SafeExecuteJs($"cyberLog('Erreur LoadMore: {ex.Message.Replace("'", "\\'")}');");
+            }
+            finally
+            {
+                _isLoadingMore = false;
+            }
         }
 
         private List<CandleModel> ParseCsvToCandles(string filePath)
         {
             var candles = new List<CandleModel>();
             var culture = CultureInfo.InvariantCulture;
+            int lineCount = 0;
+
             try
             {
-                using (var reader = new StreamReader(filePath))
+                using (var reader = new StreamReader(filePath, System.Text.Encoding.UTF8, true, 65536))
                 {
-                    reader.ReadLine(); // Skip header
+                    reader.ReadLine();
                     while (!reader.EndOfStream)
                     {
+                        lineCount++;
                         var line = reader.ReadLine();
+                        if (string.IsNullOrWhiteSpace(line)) continue;
                         var parts = line.Split(',');
                         if (parts.Length < 5) continue;
 
-                        DateTime dt = DateTime.ParseExact(parts[0], "yyyy.MM.dd HH:mm:ss", culture);
-                        candles.Add(new CandleModel
+                        try
                         {
-                            time = ((DateTimeOffset)dt).ToUnixTimeSeconds(),
-                            open = double.Parse(parts[1], culture),
-                            high = double.Parse(parts[2], culture),
-                            low = double.Parse(parts[3], culture),
-                            close = double.Parse(parts[4], culture)
-                        });
+                            if (DateTime.TryParseExact(parts[0], "yyyy.MM.dd HH:mm:ss", culture, DateTimeStyles.None, out DateTime dt))
+                            {
+                                candles.Add(new CandleModel
+                                {
+                                    time = ((DateTimeOffset)dt).ToUnixTimeSeconds(),
+                                    open = double.Parse(parts[1], culture),
+                                    high = double.Parse(parts[2], culture),
+                                    low = double.Parse(parts[3], culture),
+                                    close = double.Parse(parts[4], culture)
+                                });
+                            }
+                        }
+                        catch { continue; }
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                if (ChartBrowser.CanExecuteJavascriptInMainFrame)
+                {
+                    string errorMsg = $"Erreur Parsing ligne {lineCount}: {ex.Message}";
+                    ChartBrowser.ExecuteScriptAsync($"cyberLog('{errorMsg.Replace("'", "\\'")}', true);");
+                }
+            }
             return candles;
+        }
+
+        private void SetStatus(string msg, string colorHex)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => SetStatus(msg, colorHex));
+                return;
+            }
+            TxtStatus.Text = msg.ToUpper();
+            TxtStatus.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(colorHex);
         }
 
         #region Events
@@ -207,10 +262,12 @@ namespace backtest
         {
             if (sender is Button btn && btn.Tag != null)
             {
+                _ctsGlobal?.Cancel();
+                _ctsGlobal = new CancellationTokenSource();
+
                 _currentTF = btn.Tag.ToString().ToLower();
-                _currentYear = DateTime.Now.Year;
                 InitTimeframeButtons();
-                await LoadBacktestData();
+                await LoadBacktestData(_ctsGlobal.Token);
             }
         }
 
@@ -218,18 +275,29 @@ namespace backtest
         {
             if (WatchlistItems.SelectedItem is WatchlistSymbol selected)
             {
-                // Mise à jour de la paire
-                _currentSymbol = selected.Symbol;
-                _currentYear = DateTime.Now.Year;
-                TxtCurrentSymbol.Text = _currentSymbol;
-                // On relance le chargement complet
-                await LoadBacktestData();
+                _ctsGlobal?.Cancel();
+                _ctsGlobal = new CancellationTokenSource();
+                var token = _ctsGlobal.Token;
+
+                try
+                {
+                    _currentSymbol = selected.Symbol;
+                    TxtCurrentSymbol.Text = _currentSymbol;
+
+                    await SafeExecuteJs($"window.cyberLog('Changement vers {_currentSymbol}...');");
+                    await LoadBacktestData(token);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    await SafeExecuteJs($"window.cyberLog('Erreur sélection: {ex.Message}', true);");
+                }
             }
         }
 
         private void ResetChart_Click(object sender, RoutedEventArgs e)
         {
-            if (ChartBrowser.IsBrowserInitialized)
+            if (ChartBrowser.CanExecuteJavascriptInMainFrame)
                 ChartBrowser.ExecuteScriptAsync("resetChart();");
         }
 
