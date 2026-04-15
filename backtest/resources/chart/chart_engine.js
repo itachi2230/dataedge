@@ -10,7 +10,6 @@ const themes = {
     light: { bg: '#ffffff', text: '#131722', grid: '#f0f3fa', up: '#26a69a', down: '#ef5350' }
 };
 
-// --- CONSOLE DE DEBUG & ERREUR ---
 window.cyberLog = function(msg, isError = false) {
     const el = document.getElementById('debug-console');
     if(!el) return;
@@ -19,11 +18,8 @@ window.cyberLog = function(msg, isError = false) {
     el.innerHTML = `<div style="${style}">[${time}] ${msg}</div>` + el.innerHTML;
 };
 
-window.onerror = function(msg, url, line) {
-    window.cyberLog(`ERREUR JS: ${msg} (Ligne: ${line})`, true);
-};
-
 window.initChart = function() {
+    if (window.chart) return; // Sécurité contre double init
     const container = document.getElementById('chart-container');
     const t = themes.dark;
 
@@ -37,24 +33,104 @@ window.initChart = function() {
         timeScale: { timeVisible: true, borderVisible: false, rightOffset: 50, barSpacing: 10 },
         handleScroll: true,
         handleScale: true,
-		
+		crosshair: {
+            // Mode Normal = le curseur ne colle pas aux bougies
+            mode: LightweightCharts.CrosshairMode.Normal, 
+            
+            // Tu peux aussi personnaliser le style des lignes ici
+            vertLine: {
+                width: 1,
+                color: '#758696',
+                style: 3, // Pointillés
+                labelBackgroundColor: '#131722',
+            },
+            horzLine: {
+                width: 1,
+                color: '#758696',
+                style: 3,
+                labelBackgroundColor: '#131722',
+            },
+        },
     });
+
 
     window.candleSeries = window.chart.addCandlestickSeries({
         upColor: t.up, downColor: t.down, borderVisible: false, wickUpColor: t.up, wickDownColor: t.down
     });
-
+    
     window.setupLazyLoading();
-	setTimeout(() => {
-    window.DrawingManager.loadDrawings();
-    window.syncDrawingWithChart();
-    window.cyberLog("Système de dessin prêt.");
-}, 50);
+     
+    setTimeout(() => {
+        if(window.DrawingManager) {
+            window.DrawingManager.loadDrawings();
+            window.syncDrawingWithChart();
+            window.cyberLog("Système de dessin prêt.");
+        }
+    }, 50);
+
     window.updateScaleButtonsUI();
-    window.cyberLog("Moteur initialisé.");
+    window.cyberLog("Moteur initialisé (WebView2).");
 };
 
-// TIMELINE ÉTENDUE (GARDÉE)
+// --- LOGIQUE DE DONNÉES CORRIGÉE ---
+window.updateChartData = function(data, symbol = "Default") {
+    if (!window.candleSeries) {
+        window.initChart(); 
+    }
+
+    window.cyberLog(`Symbole : ${symbol}`);
+    window.currentSymbol = symbol;
+    window.isProcessingData = true;
+    
+    // 1. On injecte les données
+    const timeline = getExtendedTimeline(data);
+    window.candleSeries.setData(timeline);
+    
+    // 2. FORCE L'AUTOSCALE (Réinitialise l'échelle de prix)
+    window.chart.priceScale('right').applyOptions({
+        autoScale: true,
+    });
+
+    // 3. CADRAGE INTELLIGENT
+    // Au lieu de fitContent (qui montre tout), on cadre sur les bougies réelles
+    if (data.length > 0) {
+        const lastIndex = timeline.length - 150; // On retire la marge de droite
+        const firstVisibleIndex = lastIndex - 100; // On montre les 100 dernières bougies
+        
+        window.chart.timeScale().setVisibleLogicalRange({
+            from: firstVisibleIndex,
+            to: lastIndex + 20, // Petite marge pour voir le prix actuel
+        });
+    }
+
+    // 4. SYNC DESSINS
+    if(window.DrawingManager) window.DrawingManager.loadDrawings();
+    
+    window.updateScaleButtonsUI();
+
+    setTimeout(() => { 
+        window.isProcessingData = false;
+        window.cyberLog(`${symbol} centré.`);
+    }, 200);
+};
+
+// --- LE RESTE RESTE IDENTIQUE À TON NOUVEAU CODE ---
+window.setupLazyLoading = function() {
+    window.chart.timeScale().subscribeVisibleTimeRangeChange(async range => {
+        if (!range || window.isProcessingData) return;
+        const data = window.candleSeries.data().filter(d => d.close !== undefined);
+        if (data.length && range.from <= data[0].time) {
+            window.isProcessingData = true;
+            try {
+                const bridge = chrome.webview.hostObjects.chartService;
+                if (bridge) await bridge.loadPreviousYear();
+            } catch (err) {
+                window.isProcessingData = false;
+            }
+        }
+    });
+};
+
 function getExtendedTimeline(realData) {
     if (!realData.length) return [];
     const interval = realData.length > 1 ? (realData[1].time - realData[0].time) : 3600;
@@ -65,78 +141,35 @@ function getExtendedTimeline(realData) {
     return timeline;
 }
 
-window.updateChartData = function(data, symbol = "Default") {
-    window.cyberLog(`Chargement de ${symbol}...`);
-    window.currentSymbol = symbol;
-    window.isProcessingData = true; // Verrouille le lazy loading pendant l'injection
-    
-    window.candleSeries.setData(getExtendedTimeline(data));
-    window.chart.timeScale().fitContent();
-    window.DrawingManager.loadDrawings();
-    
-    setTimeout(() => { 
-        window.isProcessingData = false;
-        window.cyberLog(`${symbol} prêt.`);
-    }, 200);
-};
-
 window.prependChartData = function(newData) {
-    window.cyberLog(`Fusion historique (${newData.length} bougies)`);
     const current = window.candleSeries.data().filter(d => d.close !== undefined);
     const combined = [...newData, ...current].sort((a,b) => a.time - b.time);
     window.candleSeries.setData(getExtendedTimeline(combined));
     window.isProcessingData = false;
 };
 
-window.setupLazyLoading = function() {
-    window.chart.timeScale().subscribeVisibleTimeRangeChange(range => {
-        if (!range || window.isProcessingData) return;
-        const data = window.candleSeries.data().filter(d => d.close !== undefined);
-        if (data.length && range.from <= data[0].time) {
-            window.isProcessingData = true; // Évite les appels multiples
-            window.cyberLog(`Détection bord gauche. Appel C#...`);
-            // On vérifie le nom de ton bridge CefSharp
-            // Si tu l'as nommé différemment en C#, change le nom ici
-            const bridge = window.chartService || window.CefSharp?.BindObjectAsync("chartService");
-
-            if (bridge && bridge.loadPreviousYear) {
-                bridge.loadPreviousYear();
-				 window.cyberLog("chargement de lanné precedent demandé..", false);
-            } else {
-                window.cyberLog("ERREUR : chartService (Bridge C#) non trouvé !", true);
-                window.isProcessingData = false; // On déverrouille car l'appel a échoué
-            }
-        }
-    });
-};
-
-// --- FONCTIONS MANQUANTES RE-INTÉGRÉES ---
 window.toggleGrid = function() {
     window.isGridVisible = !window.isGridVisible;
     window.chart.applyOptions({
         grid: { vertLines: { visible: window.isGridVisible }, horzLines: { visible: window.isGridVisible } }
     });
-    window.cyberLog(`Grille: ${window.isGridVisible ? 'ON' : 'OFF'}`);
 };
-
 window.updateColors = function() {
     const up = document.getElementById('upColor').value;
     const down = document.getElementById('downColor').value;
     window.candleSeries.applyOptions({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down });
     window.cyberLog("Couleurs mises à jour.");
 };
-
 window.toggleTheme = function() {
     window.isDarkMode = !window.isDarkMode;
     const t = window.isDarkMode ? themes.dark : themes.light;
     window.chart.applyOptions({ layout: { background: { color: t.bg }, textColor: t.text } });
-    window.cyberLog(`Thème: ${window.isDarkMode ? 'Sombre' : 'Clair'}`);
 };
 
-// GESTION DES BOUTONS SCALE TV
 window.updateScaleButtonsUI = function() {
     const opts = window.chart.priceScale('right').options();
-    document.getElementById('btn-auto-scale')?.classList.toggle('active', opts.autoScale);
+    const btn = document.getElementById('btn-auto-scale');
+    if(btn) btn.classList.toggle('active', opts.autoScale);
 };
 
 window.toggleAutoScale = function() {
@@ -145,4 +178,7 @@ window.toggleAutoScale = function() {
     window.updateScaleButtonsUI();
 };
 
-window.initChart();
+// INITIALISATION
+document.addEventListener('DOMContentLoaded', () => {
+    window.initChart();
+});

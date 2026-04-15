@@ -35,8 +35,9 @@ namespace backtest
             _chartBridge = new ChartBridge(this);
 
             InitTimeframeButtons();
-            InitBrowser();
             LoadWatchlist();
+            InitBrowser();
+            
         }
 
         private void LoadUserSettings()
@@ -100,6 +101,7 @@ namespace backtest
             // On navigue vers l'URL virtuelle au lieu du chemin file://
             // Cela règle DEFINITIVEMENT les problèmes de sécurité Cross-Origin
             ChartBrowser.CoreWebView2.Navigate("https://dataedge.local/index.html");
+           
         }
 
         // Méthode utilitaire pour exécuter du JS sans crash
