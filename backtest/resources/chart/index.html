@@ -1,4 +1,5 @@
 ﻿<!DOCTYPE html>
+/*point fonctionnel avec rectangle*/
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -12,9 +13,11 @@
             <button onclick="toggleGrid()">Grid</button>
         </div>
         <div class="tool-group" id="drawing-tools">
-            <button id="btn-trendline" onclick="DrawingManager.setMode('trendline')">🖊️ Ligne</button>
-            <button onclick="window.chart.timeScale().fitContent()">🔄 Reset</button>
-        </div>
+			<button id="btn-trendline" onclick="DrawingManager.setMode('trendline')">🖊️ Ligne</button>
+			<button id="btn-rectangle" onclick="DrawingManager.setMode('rectangle')">🟦 Rectangle</button>
+			<button id="btn-clear-all" onclick="DrawingManager.clearAllDrawings()" style="color: #FF4444;">🗑️ Tout supprimer</button>
+			<button onclick="window.chart.timeScale().fitContent()">🔄 Reset</button>
+		</div>
         <div class="tool-group">
             <input type="color" id="upColor" value="#00FFFF" onchange="updateColors()">
             <input type="color" id="downColor" value="#FF007F" onchange="updateColors()">
@@ -34,6 +37,7 @@
     <div id="debug-console"></div>
 
     <script src="lightweight-charts.js"></script>
+	<script src="drawing_utils.js"></script>
 	<script src="drawing_plugin.js"></script>
 	<script src="drawing_manager.js"></script>
     <script src="chart_engine.js"></script>

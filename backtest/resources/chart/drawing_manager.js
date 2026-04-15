@@ -1,57 +1,85 @@
-﻿window.DrawingManager = {
+﻿//point fonctionnel avec rectangle
+window.DrawingManager = {
     mode: null,
     drawings: [], 
     tempStart: null,
     selectedIdx: null,
-    dragTarget: null, // Sera { type: 'p1'|'p2'|'line', index: x, offset: {x, y} }
-
+    dragTarget: null,
     setMode(id) {
         this.mode = (this.mode === id) ? null : id;
         const container = document.getElementById('chart-container');
         if (container) container.style.cursor = this.mode ? 'crosshair' : 'default';
-
         document.querySelectorAll('#drawing-tools button').forEach(b => b.classList.remove('active'));
         if (this.mode) document.getElementById(`btn-${id}`)?.classList.add('active');
-
-        this.selectedIdx = null;
         this.tempStart = null;
-        this.updateSVG(null); 
+        window.DrawingUtils.updatePreview(null);
         this.redraw();
     },
+	clearAllDrawings() {
+        if (!confirm("Supprimer tous les dessins de cette paire ?")) return;
 
+        // 1. Retirer chaque série du graphique
+        this.drawings.forEach(d => {
+            if (d.series) {
+                window.chart.removeSeries(d.series);
+            }
+        });
+
+        // 2. Vider le tableau en mémoire
+        this.drawings = [];
+        this.selectedIdx = null;
+
+        // 3. Supprimer du localStorage pour cette paire spécifique
+        if (window.currentSymbol) {
+            localStorage.removeItem('Draw_' + window.currentSymbol);
+        }
+
+        // 4. Rafraîchir l'affichage
+        this.redraw();
+        console.log("Tous les dessins ont été supprimés pour " + window.currentSymbol);
+    },
     getActiveSeries: () => window.candleSeries,
 
-    createLineSeries() {
-        if (!window.chart) return null;
-        return window.chart.addLineSeries({
-            color: window.isDarkMode ? '#00FFFF' : '#2196F3',
-            lineWidth: 2,
-            priceLineVisible: false,
-            lastPriceAnimation: 0,
-            crosshairMarkerVisible: false,
-            autoscaleInfoProvider: () => null,
-        });
+    addDrawing(type, start, end) {
+        if (!start || !end || (start.time === end.time && start.price === end.price)) return;
+        
+        const typeConfig = window.DrawingUtils.types[type] || window.DrawingUtils.types.trendline;
+        const series = typeConfig.create(window.chart);
+        
+        const drawing = { data: { type, start, end }, series: series };
+        this.drawings.push(drawing);
+        this.updateDrawingSeries(drawing);
+        return drawing;
     },
 
-    updateSVG(p1, p2) {
-        let svgLine = document.getElementById('temp-line');
-        if (!svgLine) {
-            const container = document.getElementById('chart-container');
-            container.insertAdjacentHTML('beforeend', `
-                <svg id="drawing-svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1000;">
-                    <line id="temp-line" stroke="${window.isDarkMode ? '#00FFFF' : '#2196F3'}" stroke-width="2" stroke-dasharray="5,5" style="display:none"/>
-                </svg>`);
-            svgLine = document.getElementById('temp-line');
-        }
-        if (!p1 || !p2) { svgLine.style.display = 'none'; return; }
-        svgLine.setAttribute('x1', p1.x); svgLine.setAttribute('y1', p1.y);
-        svgLine.setAttribute('x2', p2.x); svgLine.setAttribute('y2', p2.y);
-        svgLine.style.display = 'block';
+    updateDrawingSeries(drawing) {
+        if (!drawing.series) return;
+        try {
+            const typeConfig = window.DrawingUtils.types[drawing.data.type];
+            typeConfig.update(drawing.series, drawing.data);
+        } catch (e) { console.error("Erreur de rendu:", e); }
+    },
+
+    redraw() {
+        this.drawings.forEach((d, i) => {
+            const isSel = (i === this.selectedIdx);
+            const color = isSel ? '#FFD700' : (window.isDarkMode ? '#00FFFF' : '#2196F3');
+            
+            if (d.data.type === 'rectangle') {
+                d.series.applyOptions({
+                    lineColor: color,
+                    topColor: isSel ? 'rgba(255, 215, 0, 0.3)' : 'rgba(33, 150, 243, 0.2)',
+                    bottomColor: isSel ? 'rgba(255, 215, 0, 0.3)' : 'rgba(33, 150, 243, 0.2)',
+                });
+            } else {
+                d.series.applyOptions({ color: color, lineWidth: isSel ? 4 : 2 });
+            }
+        });
     },
 
     saveDrawings() {
         if (window.currentSymbol && window.currentSymbol !== "Default") {
-            const data = this.drawings.map(d => ({ type: d.type, start: d.start, end: d.end }));
+            const data = this.drawings.map(d => ({ type: d.data.type, start: d.data.start, end: d.data.end }));
             localStorage.setItem('Draw_' + window.currentSymbol, JSON.stringify(data));
         }
     },
@@ -61,15 +89,11 @@
         this.drawings.forEach(d => { if(d.series) window.chart.removeSeries(d.series); });
         this.drawings = [];
         const saved = localStorage.getItem('Draw_' + window.currentSymbol);
-        if (!saved) return;
-        try {
-            const rawData = JSON.parse(saved);
-            rawData.forEach(d => {
-                const series = this.createLineSeries();
-                series.setData([{ time: d.start.time, value: d.start.price }, { time: d.end.time, value: d.end.price }]);
-                this.drawings.push({ ...d, series });
-            });
-        } catch (e) { console.error(e); }
+        if (saved) {
+            try {
+                JSON.parse(saved).forEach(d => this.addDrawing(d.type, d.start, d.end));
+            } catch (e) { console.error(e); }
+        }
     },
 
     deleteSelected() {
@@ -79,123 +103,78 @@
         this.selectedIdx = null;
         this.saveDrawings();
         this.redraw();
-    },
-
-    redraw() {
-        this.drawings.forEach((d, i) => {
-            const isSel = (i === this.selectedIdx);
-            d.series.applyOptions({
-                lineWidth: isSel ? 4 : 2,
-                color: isSel ? '#FFD700' : (window.isDarkMode ? '#00FFFF' : '#2196F3')
-            });
-        });
     }
 };
 
+// Initialisation de la synchro (à appeler une fois le graphique créé)
 window.syncDrawingWithChart = function() {
     const container = document.getElementById('chart-container');
     const mainSeries = window.DrawingManager.getActiveSeries();
 
-    // --- GESTION DU MOUSE DOWN (DÉBUT DU DÉPLACEMENT) ---
     container.addEventListener('mousedown', (e) => {
         if (window.DrawingManager.mode || window.DrawingManager.selectedIdx === null) return;
-
         const rect = container.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        const d = window.DrawingManager.drawings[window.DrawingManager.selectedIdx];
+        const x = e.clientX - rect.left, y = e.clientY - rect.top;
+        const drawing = window.DrawingManager.drawings[window.DrawingManager.selectedIdx];
+        const d = drawing.data;
         const x1 = window.chart.timeScale().timeToCoordinate(d.start.time);
-        const y1 = mainSeries.priceToCoordinate(d.start.price);
         const x2 = window.chart.timeScale().timeToCoordinate(d.end.time);
+        const y1 = mainSeries.priceToCoordinate(d.start.price);
         const y2 = mainSeries.priceToCoordinate(d.end.price);
 
-        // 1. Vérifier si on clique sur un point d'ancrage (Redimensionner)
-        if (Math.hypot(x - x1, y - y1) < 15) {
-            window.DrawingManager.dragTarget = { type: 'p1', index: window.DrawingManager.selectedIdx };
-        } else if (Math.hypot(x - x2, y - y2) < 15) {
-            window.DrawingManager.dragTarget = { type: 'p2', index: window.DrawingManager.selectedIdx };
-        } 
-        // 2. Vérifier si on clique sur la ligne (Déplacer toute la ligne)
-        else {
-            // Logique simplifiée : si sélectionné et on clique proche, on déplace
-            window.DrawingManager.dragTarget = { type: 'line', index: window.DrawingManager.selectedIdx };
-        }
+        if (Math.hypot(x - x1, y - y1) < 15) window.DrawingManager.dragTarget = { type: 'p1', index: window.DrawingManager.selectedIdx };
+        else if (Math.hypot(x - x2, y - y2) < 15) window.DrawingManager.dragTarget = { type: 'p2', index: window.DrawingManager.selectedIdx };
+        else window.DrawingManager.dragTarget = { type: 'line', index: window.DrawingManager.selectedIdx };
     });
 
     window.addEventListener('mouseup', () => {
-        if (window.DrawingManager.dragTarget) {
-            window.DrawingManager.saveDrawings();
-            window.DrawingManager.dragTarget = null;
-        }
+        if (window.DrawingManager.dragTarget) { window.DrawingManager.saveDrawings(); window.DrawingManager.dragTarget = null; }
     });
 
     window.chart.subscribeClick(param => {
         if (!param.point || window.DrawingManager.dragTarget) return;
         const price = mainSeries.coordinateToPrice(param.point.y);
-
         if (window.DrawingManager.mode) {
             if (!window.DrawingManager.tempStart) {
                 window.DrawingManager.tempStart = { time: param.time, price, x: param.point.x, y: param.point.y };
             } else {
-                const series = window.DrawingManager.createLineSeries();
-                series.setData([{ time: window.DrawingManager.tempStart.time, value: window.DrawingManager.tempStart.price }, { time: param.time, value: price }]);
-                window.DrawingManager.drawings.push({ start: {time: window.DrawingManager.tempStart.time, price: window.DrawingManager.tempStart.price}, end: {time: param.time, price}, series });
+                window.DrawingManager.addDrawing(window.DrawingManager.mode, window.DrawingManager.tempStart, {time: param.time, price});
                 window.DrawingManager.tempStart = null;
-                window.DrawingManager.updateSVG(null);
+                window.DrawingUtils.updatePreview(null);
                 window.DrawingManager.setMode(null);
                 window.DrawingManager.saveDrawings();
             }
         } else {
-            // Sélection par proximité
-            let foundIdx = null;
-            window.DrawingManager.drawings.forEach((d, i) => {
-                const x1 = window.chart.timeScale().timeToCoordinate(d.start.time);
-                const x2 = window.chart.timeScale().timeToCoordinate(d.end.time);
-                const y1 = mainSeries.priceToCoordinate(d.start.price);
-                const y2 = mainSeries.priceToCoordinate(d.end.price);
-                if (x1 === null || x2 === null) return;
-                const dx = x2 - x1, dy = y2 - y1;
-                const t = ((param.point.x - x1) * dx + (param.point.y - y1) * dy) / (dx * dx + dy * dy);
-                const cx = x1 + Math.max(0, Math.min(1, t)) * dx;
-                const cy = y1 + Math.max(0, Math.min(1, t)) * dy;
-                if (Math.hypot(param.point.x - cx, param.point.y - cy) < 10) foundIdx = i;
+            let found = null;
+            window.DrawingManager.drawings.forEach((dr, i) => {
+                const x1 = window.chart.timeScale().timeToCoordinate(dr.data.start.time);
+                const x2 = window.chart.timeScale().timeToCoordinate(dr.data.end.time);
+                const y1 = mainSeries.priceToCoordinate(dr.data.start.price);
+                const y2 = mainSeries.priceToCoordinate(dr.data.end.price);
+                const t = ((param.point.x - x1) * (x2 - x1) + (param.point.y - y1) * (y2 - y1)) / (Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+                const cx = x1 + Math.max(0, Math.min(1, t)) * (x2 - x1), cy = y1 + Math.max(0, Math.min(1, t)) * (y2 - y1);
+                if (Math.hypot(param.point.x - cx, param.point.y - cy) < 15) found = i;
             });
-            window.DrawingManager.selectedIdx = foundIdx;
+            window.DrawingManager.selectedIdx = found;
             window.DrawingManager.redraw();
         }
     });
 
     window.chart.subscribeCrosshairMove(param => {
         if (!param.point) return;
-
-        // Aperçu du dessin
-        if (window.DrawingManager.mode && window.DrawingManager.tempStart) {
-            window.DrawingManager.updateSVG(window.DrawingManager.tempStart, param.point);
-        }
-
-        // --- LOGIQUE DE DÉPLACEMENT / REDIMENSIONNEMENT ---
+        if (window.DrawingManager.mode && window.DrawingManager.tempStart) window.DrawingUtils.updatePreview(window.DrawingManager.mode, window.DrawingManager.tempStart, param.point);
         if (window.DrawingManager.dragTarget) {
-            const d = window.DrawingManager.drawings[window.DrawingManager.dragTarget.index];
-            const price = mainSeries.coordinateToPrice(param.point.y);
-            const time = param.time;
-
-            if (window.DrawingManager.dragTarget.type === 'p1') {
-                d.start = { time, price };
-            } else if (window.DrawingManager.dragTarget.type === 'p2') {
-                d.end = { time, price };
-            } else if (window.DrawingManager.dragTarget.type === 'line') {
-                // Pour déplacer la ligne entière, on calcule le delta (plus complexe en temps/prix)
-                // Ici version simple : déplace le point le plus proche vers la souris
-                const dist1 = Math.abs(param.point.x - window.chart.timeScale().timeToCoordinate(d.start.time));
-                const dist2 = Math.abs(param.point.x - window.chart.timeScale().timeToCoordinate(d.end.time));
-                if (dist1 < dist2) d.start = { time, price }; else d.end = { time, price };
+            const dr = window.DrawingManager.drawings[window.DrawingManager.dragTarget.index];
+            const p = mainSeries.coordinateToPrice(param.point.y), t = param.time;
+            if (window.DrawingManager.dragTarget.type === 'p1') dr.data.start = { time: t, price: p };
+            else if (window.DrawingManager.dragTarget.type === 'p2') dr.data.end = { time: t, price: p };
+            else {
+                // Déplacement global simplifié
+                const d1 = Math.abs(param.point.x - window.chart.timeScale().timeToCoordinate(dr.data.start.time));
+                const d2 = Math.abs(param.point.x - window.chart.timeScale().timeToCoordinate(dr.data.end.time));
+                if (d1 < d2) dr.data.start = { time: t, price: p }; else dr.data.end = { time: t, price: p };
             }
-
-            d.series.setData([
-                { time: d.start.time, value: d.start.price },
-                { time: d.end.time, value: d.end.price }
-            ]);
+            window.DrawingManager.updateDrawingSeries(dr);
         }
     });
 };

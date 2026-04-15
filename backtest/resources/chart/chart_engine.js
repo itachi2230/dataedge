@@ -1,4 +1,6 @@
-﻿window.chart = null;
+﻿//point fonctionnel avec rectangle
+
+window.chart = null;
 window.candleSeries = null;
 window.isDarkMode = true;
 window.isGridVisible = true;
