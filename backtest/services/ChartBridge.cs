@@ -1,9 +1,11 @@
 ﻿using System;
-using System.Windows; // <--- C'est ce namespace qui manquait pour 'Application'
-using CefSharp;
+using System.Windows;
+using System.Runtime.InteropServices; // <--- AJOUTÉ pour [ComVisible]
 
-namespace backtest
+namespace backtest.services
 {
+    // Indispensable pour WebView2 : cela permet au JS de voir cette classe
+    [ComVisible(true)]
     public class ChartBridge
     {
         private readonly Chart _chartInstance;
@@ -12,19 +14,15 @@ namespace backtest
         {
             _chartInstance = instance;
         }
+
         public void OnSetupCreated(string jsonDrawing)
         {
-            // Ici tu reçois le type de dessin, le prix et le temps.
-            // Tu peux le parser pour remplir tes formulaires de trading automatiquement.
+            // Logique de dessin
         }
-        /// <summary>
-        /// Cette méthode est appelée par le JavaScript (chart_index.html) 
-        /// via window.chartService.loadPreviousYear()
-        /// </summary>
+
         public void loadPreviousYear()
         {
-            // Log pour debug (optionnel : regarde ta console de sortie VS)
-            System.Diagnostics.Debug.WriteLine("Appel JS reçu !");
+            System.Diagnostics.Debug.WriteLine("Appel JS reçu via WebView2 !");
 
             Application.Current.Dispatcher.Invoke(async () =>
             {

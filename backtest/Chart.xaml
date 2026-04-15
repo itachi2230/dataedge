@@ -3,14 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-             xmlns:cef="clr-namespace:CefSharp.Wpf;assembly=CefSharp.Wpf"
-             mc:Ignorable="d" 
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"             mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="1200">
 
     <Grid Background="#0B0E11">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="3"/>
-            <ColumnDefinition/>
+            <ColumnDefinition/> 
             <ColumnDefinition Width="138"/>
         </Grid.ColumnDefinitions>
 
@@ -57,8 +56,7 @@
             </StackPanel>
         </Border>
 
-        <cef:ChromiumWebBrowser x:Name="ChartBrowser" Grid.Row="1" Grid.Column="1"/>
-
+        <wv2:WebView2 x:Name="ChartBrowser" Grid.Row="1" Grid.Column="1" />
         <Border Grid.Row="1" Grid.Column="2" Background="#131722" BorderBrush="#2A2E39" BorderThickness="1,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>

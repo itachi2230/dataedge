@@ -6,11 +6,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Globalization;
 using System.Linq;
-using CefSharp;
-using CefSharp.Wpf;
 using backtest.services;
 using Newtonsoft.Json;
 using System.Threading;
+using Microsoft.Web.WebView2.Core;
 
 namespace backtest
 {
@@ -83,34 +82,32 @@ namespace backtest
             TimeframeSelector.ItemsSource = tfs;
         }
 
-        private void InitBrowser()
+        private async void InitBrowser()
         {
-            var settings = new BrowserSettings { WebGl = CefState.Enabled, DefaultEncoding = "UTF-8" };
-            ChartBrowser.BrowserSettings = settings;
-            ChartBrowser.JavascriptObjectRepository.Settings.LegacyBindingEnabled = true;
-            ChartBrowser.JavascriptObjectRepository.Register("chartService", _chartBridge, isAsync: true);
+            await ChartBrowser.EnsureCoreWebView2Async(null);
 
-            ChartBrowser.FrameLoadEnd += async (s, e) => {
-                if (e.Frame.IsMain)
-                {
-                    await Dispatcher.InvokeAsync(async () => {
-                        _ctsGlobal?.Cancel();
-                        _ctsGlobal = new CancellationTokenSource();
-                        await LoadBacktestData(_ctsGlobal.Token);
-                    });
-                }
-            };
+            // On mappe le dossier local vers un nom de domaine virtuel "dataedge.local"
+            string rootFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "chart");
 
-            string indexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources/chart", "index.html");
-            if (File.Exists(indexPath)) ChartBrowser.Address = indexPath;
+            ChartBrowser.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "dataedge.local",
+                rootFolder,
+                CoreWebView2HostResourceAccessKind.Allow);
+
+            // On enregistre le bridge
+            ChartBrowser.CoreWebView2.AddHostObjectToScript("chartService", _chartBridge);
+
+            // On navigue vers l'URL virtuelle au lieu du chemin file://
+            // Cela règle DEFINITIVEMENT les problèmes de sécurité Cross-Origin
+            ChartBrowser.CoreWebView2.Navigate("https://dataedge.local/index.html");
         }
 
         // Méthode utilitaire pour exécuter du JS sans crash
         private async Task SafeExecuteJs(string script)
         {
-            if (ChartBrowser.CanExecuteJavascriptInMainFrame)
+            if (ChartBrowser != null && ChartBrowser.CoreWebView2 != null)
             {
-                await ChartBrowser.EvaluateScriptAsync(script);
+                await ChartBrowser.ExecuteScriptAsync(script);
             }
         }
 
@@ -236,10 +233,12 @@ namespace backtest
             }
             catch (Exception ex)
             {
-                if (ChartBrowser.CanExecuteJavascriptInMainFrame)
+                if (ChartBrowser?.CoreWebView2 != null)
                 {
                     string errorMsg = $"Erreur Parsing ligne {lineCount}: {ex.Message}";
-                    ChartBrowser.ExecuteScriptAsync($"cyberLog('{errorMsg.Replace("'", "\\'")}', true);");
+                    // On échappe bien les quotes pour éviter de casser le script JS
+                    string safeError = errorMsg.Replace("'", "\\'").Replace("\r", "").Replace("\n", "");
+                    ChartBrowser.ExecuteScriptAsync($"cyberLog('{safeError}', true);");
                 }
             }
             return candles;
@@ -295,10 +294,12 @@ namespace backtest
             }
         }
 
-        private void ResetChart_Click(object sender, RoutedEventArgs e)
+        private async void ResetChart_Click(object sender, RoutedEventArgs e)
         {
-            if (ChartBrowser.CanExecuteJavascriptInMainFrame)
-                ChartBrowser.ExecuteScriptAsync("resetChart();");
+            if (ChartBrowser?.CoreWebView2 != null)
+            {
+                await ChartBrowser.ExecuteScriptAsync("resetChart();");
+            }
         }
 
         #endregion

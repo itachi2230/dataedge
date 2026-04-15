@@ -16,7 +16,6 @@ using backtest.Services;
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using System.Threading.Tasks;
-using CefSharp;
 
 namespace backtest
 {
@@ -32,22 +31,9 @@ namespace backtest
         public MainWindow()
         {
             // À faire UNE SEULE FOIS au lancement de l'app
-            if (!Cef.IsInitialized)
-            {
-                var cefSettings = new CefSharp.Wpf.CefSettings();
-
-                // Définir un dossier pour stocker les dessins et le cache
-                string cachePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DataEdge\\CefCache");
-                if (!Directory.Exists(cachePath)) Directory.CreateDirectory(cachePath);
-
-                cefSettings.CachePath = cachePath;
-                cefSettings.PersistSessionCookies = true;
-
-                Cef.Initialize(cefSettings);
-            }
+            
             InitializeComponent();
             currentWeekStart = GetStartOfWeek(DateTime.Now);
-            CefSharpSettings.ConcurrentTaskExecution = true;
 
             // Initialisation des données
             LoadNotesForCurrentWeek();
@@ -720,9 +706,22 @@ namespace backtest
                 ((IInputElement)sender).ReleaseMouseCapture();
             }
         }
-        private void LoadInvestingCalendar()
+        private async void LoadInvestingCalendar()
         {
-            try { InvestingCalendarBrowser.Address = "https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=110,17,25,34,32,6,37,26,5,22,39,93,14,48,10,35,105,43,38,4,36,12,72&calType=week&timeZone=55&lang=5"; } catch { }
+            try
+            {
+                // On attend que le moteur WebView2 soit initialisé
+                await InvestingCalendarBrowser.EnsureCoreWebView2Async(null);
+
+                // On navigue vers l'URL d'Investing
+                string url = "https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=110,17,25,34,32,6,37,26,5,22,39,93,14,48,10,35,105,43,38,4,36,12,72&calType=week&timeZone=55&lang=5";
+                InvestingCalendarBrowser.CoreWebView2.Navigate(url);
+            }
+            catch (Exception ex)
+            {
+                // Optionnel : un petit log pour toi en debug
+                System.Diagnostics.Debug.WriteLine("Erreur WebView2 : " + ex.Message);
+            }
         }
         private DateTime GetStartOfWeek(DateTime date)
         {
