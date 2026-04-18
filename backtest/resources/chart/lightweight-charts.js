@@ -1,4 +1,4 @@
-﻿/*!
+/*!
  * @license
  * TradingView Lightweight Charts™ v4.1.1
  * Copyright (c) 2023 TradingView, Inc.

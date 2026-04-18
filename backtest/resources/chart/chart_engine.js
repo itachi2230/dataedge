@@ -1,5 +1,4 @@
-﻿//point fonctionnel avec rectangle
-
+﻿
 window.chart = null;
 window.candleSeries = null;
 window.isDarkMode = true;
@@ -21,57 +20,28 @@ window.cyberLog = function(msg, isError = false) {
 };
 
 window.initChart = function() {
-    if (window.chart) return; // Sécurité contre double init
+    if (window.chart) return;
     const container = document.getElementById('chart-container');
-    const t = themes.dark;
 
     window.chart = LightweightCharts.createChart(container, {
-        layout: { background: { color: t.bg }, textColor: t.text },
-        grid: { 
-            vertLines: { color: t.grid, visible: window.isGridVisible }, 
-            horzLines: { color: t.grid, visible: window.isGridVisible } 
-        },
-        rightPriceScale: { autoScale: true, borderVisible: false },
-        timeScale: { timeVisible: true, borderVisible: false, rightOffset: 50, barSpacing: 10 },
-        handleScroll: true,
-        handleScale: true,
-		crosshair: {
-            // Mode Normal = le curseur ne colle pas aux bougies
-            mode: LightweightCharts.CrosshairMode.Normal, 
-            
-            // Tu peux aussi personnaliser le style des lignes ici
-            vertLine: {
-                width: 1,
-                color: '#758696',
-                style: 3, // Pointillés
-                labelBackgroundColor: '#131722',
-            },
-            horzLine: {
-                width: 1,
-                color: '#758696',
-                style: 3,
-                labelBackgroundColor: '#131722',
-            },
-        },
+        layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
+        grid: { vertLines: { color: '#2a2e39' }, horzLines: { color: '#2a2e39' } },
+        crosshair: { mode: 0 }, // Mode Normal (libre) par défaut
+        timeScale: { timeVisible: true }
     });
 
-
+    // En v4, on utilise addCandlestickSeries normalement
     window.candleSeries = window.chart.addCandlestickSeries({
-        upColor: t.up, downColor: t.down, borderVisible: false, wickUpColor: t.up, wickDownColor: t.down
+        upColor: '#00FFFF', downColor: '#FF007F',
+        borderUpColor: '#00FFFF', borderDownColor: '#FF007F',
+        wickUpColor: '#00FFFF', wickDownColor: '#FF007F'
     });
-    
-    window.setupLazyLoading();
-     
-    setTimeout(() => {
-        if(window.DrawingManager) {
-            window.DrawingManager.loadDrawings();
-            window.syncDrawingWithChart();
-            window.cyberLog("Système de dessin prêt.");
-        }
-    }, 50);
 
-    window.updateScaleButtonsUI();
-    window.cyberLog("Moteur initialisé (WebView2).");
+    window.DrawingManager.init(window.chart, window.candleSeries);
+    window.syncDrawingWithChart();
+    window.DrawingManager.load();
+    
+    console.log("DataEdge v4.1.1 Engine Fully Loaded.");
 };
 
 // --- LOGIQUE DE DONNÉES CORRIGÉE ---

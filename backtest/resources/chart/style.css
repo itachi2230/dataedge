@@ -6,7 +6,6 @@
     --accent: #00FFFF;
     --tv-blue: #2962ff;
 }
-/*point fonctionnel avec rectangle*/
 body { 
     margin: 0; 
     padding: 0; 
@@ -16,9 +15,10 @@ body {
 }
 
 #chart-container { 
-    width: 100vw; 
+    width: 100%; /* Utilise 100% au lieu de 100vw */
     height: 100vh; 
-    position: relative; 
+    position: relative;
+    display: block; /* Force le rendu block */
 }
 
 /* Toolbar */
@@ -96,21 +96,14 @@ button.active {
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 120px; 
-    height: 100px;
-    z-index: 1000;
-    background: transparent;
+    width: 60px; /* Réduis la largeur */
+    height: 30px; /* Réduis la hauteur pour ne pas monter sur le prix */
+    z-index: 10;   /* Baisse le z-index pour laisser le graphique prioritaire */
+    pointer-events: none; /* Laisse passer les clics vers le graphique par défaut */
 }
 
 .price-scale-controls {
-    position: absolute;
-    bottom: 35px; 
-    right: 10px;
-    display: flex;
-    gap: 4px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
+    pointer-events: auto; /* Réactive les clics uniquement sur les boutons */
 }
 
 .tv-scale-angle-zone:hover .price-scale-controls {
