@@ -4,30 +4,124 @@
     <meta charset="UTF-8">
     <title>DataEdge Backtest</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="toolbar.css">
 </head>
 <body>
-    <div id="toolbar">
-        <div class="tool-group">
-            <button onclick="toggleTheme()">🌓</button>
-            <button onclick="toggleGrid()">Grid</button>
-        </div>
-        <div class="tool-group" id="drawing-tools">
-			<button id="btn-trendline" onclick="DrawingManager.setMode('trendline')">🖊️ Ligne</button>
-			<button id="btn-rectangle" onclick="DrawingManager.setMode('rectangle')">🟦 Rectangle</button>
-			<button id="btn-clear-all" onclick="DrawingManager.clearAllDrawings()" style="color: #FF4444;">🗑️ Tout supprimer</button>
-			<button onclick="window.chart.timeScale().fitContent()">🔄 Reset</button>
-		</div>
-        <div class="tool-group">
-            <input type="color" id="upColor" value="#00FFFF" onchange="updateColors()">
-            <input type="color" id="downColor" value="#FF007F" onchange="updateColors()">
-        </div>
+    <div id="side-toolbar">
+        <button class="side-btn active" title="Cross"><svg viewBox="0 0 18 18"><path d="M9 1v16M1 9h16" stroke="currentColor" stroke-width="1.2"/></svg></button>
+        
+        <button id="btn-rectangle" class="side-btn" onclick="DrawingManager.setMode('rectangle')" title="Rectangle">
+            <svg viewBox="0 0 18 18"><rect x="3" y="5" width="12" height="8" rx="0.5" stroke="currentColor" fill="none" stroke-width="1.2"/><circle cx="3" cy="5" r="1.5" fill="currentColor"/><circle cx="15" cy="5" r="1.5" fill="currentColor"/><circle cx="3" cy="13" r="1.5" fill="currentColor"/><circle cx="15" cy="13" r="1.5" fill="currentColor"/></svg>
+        </button>
+
+        <button id="btn-trendline" class="side-btn" onclick="DrawingManager.setMode('trendline')" title="Ligne de tendance">
+            <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><circle cx="14" cy="4" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5l7-7" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+
+        <button class="side-btn" title="Position Courte">
+            <svg viewBox="0 0 18 18"><path d="M4 7h10M4 11h10M4 7v4m10-4v4" stroke="currentColor" fill="none"/><path d="M9 7V4m0 7v3" stroke="currentColor"/><text x="8" y="10" font-size="5" fill="currentColor" text-anchor="middle">S</text></svg>
+        </button>
+
+        <button class="side-btn" title="Position Longue">
+            <svg viewBox="0 0 18 18"><path d="M4 7h10M4 11h10M4 7v4m10-4v4" stroke="currentColor" fill="none"/><path d="M9 7V4m0 7v3" stroke="currentColor"/><text x="8" y="10" font-size="5" fill="currentColor" text-anchor="middle">L</text></svg>
+        </button>
+
+        <button class="side-btn" title="Courbe">
+            <svg viewBox="0 0 18 18"><path d="M4 14s2-10 5-10 5 10 5 10" stroke="currentColor" fill="none" stroke-width="1.2"/><circle cx="4" cy="14" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="14" cy="14" r="1" fill="currentColor"/></svg>
+        </button>
+
+        <button class="side-btn" title="Texte"><svg viewBox="0 0 18 18"><path d="M5 5h8M9 5v9" stroke="currentColor" stroke-width="1.5"/></svg></button>
+
+        <button id="btn-horz_ray" class="side-btn" onclick="DrawingManager.setMode('horz_ray')" title="Rayon Horizontal">
+            <svg viewBox="0 0 18 18"><circle cx="5" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M6.5 9H17" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+
+        <button class="side-btn" title="Ligne Horizontale">
+            <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M1 9h16" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+
+        <button class="side-btn" title="Chemin">
+            <svg viewBox="0 0 18 18"><path d="M4 14l4-8 6 4" stroke="currentColor" fill="none"/><circle cx="4" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="6" r="1" fill="currentColor"/><path d="M14 10l2-2" stroke="currentColor"/></svg>
+        </button>
+
+        <button class="side-btn" title="Retracement Fibonacci">
+            <svg viewBox="0 0 18 18"><path d="M3 5h12M3 8h12M3 11h12M3 14h12" stroke="currentColor" stroke-opacity="0.5"/><circle cx="3" cy="14" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/></svg>
+        </button>
+
+        <button class="side-btn" title="Ligne Verticale">
+            <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M9 1v16" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+
+        <button class="side-btn" title="Rayon">
+            <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5L16 2" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+
+        <button class="side-btn" title="Plage de prix">
+            <svg viewBox="0 0 18 18"><path d="M6 5h6M6 13h6M9 5v8" stroke="currentColor"/><path d="M7 7l2-2 2 2M7 11l2 2 2-2" stroke="currentColor" fill="none"/></svg>
+        </button>
+
+        <button class="side-btn" title="Plage de date">
+            <svg viewBox="0 0 18 18"><path d="M5 6v6M13 6v6M5 9h8" stroke="currentColor"/><path d="M7 7l-2 2 2 2M11 7l2 2-2 2" stroke="currentColor" fill="none"/></svg>
+        </button>
+
+        <button class="side-btn" title="Flèche">
+            <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5L14 4" stroke="currentColor"/><path d="M10 4h4v4" stroke="currentColor" fill="none"/></svg>
+        </button>
+
+        <button class="side-btn" title="Marqueur fléché">
+            <svg viewBox="0 0 18 18"><path d="M4 14l10-10M8 4h6v6" fill="currentColor" stroke="currentColor"/></svg>
+        </button>
+
+        <button class="side-btn" title="Cercle">
+            <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="6" stroke="currentColor" fill="none"/><circle cx="15" cy="9" r="1.5" fill="currentColor"/></svg>
+        </button>
+
+        <div class="side-separator"></div>
+        <button id="btn-clear-all" class="side-btn" onclick="DrawingManager.clearAllDrawings()" title="Tout supprimer" style="color: #FF4444;">
+            <svg viewBox="0 0 18 18"><path d="M3 5h12M6 5V3h6v2M7 8v5M11 8v5M4 5l1 10h8l1-10" stroke="currentColor" fill="none"/></svg>
+        </button>
     </div>
+
+    <div id="toolbar">
+    <div class="tool-group">
+        <button class="icon-btn" onclick="toggleTheme()" title="Changer le thème">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                <circle cx="12" cy="12" r="4"/>
+            </svg>
+        </button>
+        <button class="icon-btn" onclick="toggleGrid()" title="Afficher/Masquer la grille">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="3" y1="15" x2="21" y2="15"/>
+                <line x1="9" y1="3" x2="9" y2="21"/>
+                <line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="tool-group">
+        <div class="color-picker-wrapper">
+            <input type="color" id="upColor" value="#00FFFF" onchange="updateColors()" title="Couleur Hausse">
+        </div>
+        <div class="color-picker-wrapper">
+            <input type="color" id="downColor" value="#FF007F" onchange="updateColors()" title="Couleur Baisse">
+        </div>
+        <button class="icon-btn" onclick="window.chart.timeScale().fitContent()" title="Réinitialiser la vue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+            </svg>
+        </button>
+    </div>
+</div>
 
     <div id="chart-container">
         <div class="tv-scale-angle-zone">
             <div class="price-scale-controls">
-                <button id="btn-percent-scale" onclick="/*...*/">P</button>
-                <button id="btn-log-scale" onclick="/*...*/">L</button>
+                <button id="btn-percent-scale">P</button>
+                <button id="btn-log-scale">L</button>
                 <button id="btn-auto-scale" class="active" onclick="toggleAutoScale()">A</button>
             </div>
         </div>
@@ -36,9 +130,9 @@
     <div id="debug-console"></div>
 
     <script src="lightweight-charts.js"></script>
-	<script src="drawing_utils.js"></script>
-	<script src="drawing_plugin.js"></script>
-	<script src="drawing_manager.js"></script>
+    <script src="drawing_utils.js"></script>
+    <script src="drawing_plugin.js"></script>
+    <script src="drawing_manager.js"></script>
     <script src="chart_engine.js"></script>
 </body>
 </html>

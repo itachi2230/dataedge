@@ -1,0 +1,76 @@
+﻿#side-toolbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 50px;
+    background: #1e222d;
+    border-right: 1px solid #363c4e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+    z-index: 1001;
+    
+    /* ACTIVATION DU SCROLL */
+    overflow-y: auto;
+    overflow-x: hidden;
+    
+    /* Empêche le rebond du scroll sur certains navigateurs */
+    overscroll-behavior: contain; 
+}
+#side-toolbar::-webkit-scrollbar {
+    width: 3px;
+}
+#side-toolbar::-webkit-scrollbar-thumb {
+    background: #363c4e;
+    border-radius: 10px;}
+
+#side-toolbar {
+    scrollbar-width: none; /* Cache la barre sur Firefox */
+    -ms-overflow-style: none; /* Cache la barre sur IE/Edge */
+}
+
+.side-btn {
+    /* On s'assure que le bouton ne rétrécit pas dans le flex */
+    flex-shrink: 0; 
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: none;
+    color: #b2b5be;
+    margin-bottom: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+/* Correction de la taille des SVG */
+.side-btn svg {
+    /* Attention : 100px est trop grand pour un bouton de 40px */
+    /* 24px est la taille standard pour ces icônes */
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.side-btn:hover {
+    background: #2a2e39;
+    color: #d1d4dc;
+}
+
+.side-btn.active {
+    background: rgba(41, 98, 255, 0.2);
+    color: #2962ff;
+}
+
+.side-separator {
+    flex-shrink: 0;
+    width: 25px;
+    height: 1px;
+    background: #363c4e;
+    margin: 8px 0;
+}

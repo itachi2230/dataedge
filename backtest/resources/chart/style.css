@@ -15,25 +15,28 @@ body {
     font-family: 'Segoe UI', sans-serif; 
 }
 
+/* --- LAYOUT PRINCIPAL --- */
 #chart-container { 
-    width: 100%;
+    margin-left: 50px; /* Espace pour la barre latérale */
+    width: calc(100% - 50px);
     height: 100vh; 
     position: relative;
     display: block;
 }
 
-/* Toolbar */
+/* --- TOOLBAR HORIZONTALE (HAUT) --- */
 #toolbar {
     position: absolute; 
     top: 10px; 
-    left: 10px; 
+    left: 65px; /* Décalage pour ne pas chevaucher la barre latérale */
     z-index: 100;
     background: var(--panel-dark); 
-    padding: 5px 15px; 
+    height: 38px;
+    padding: 0 12px;
     border-radius: 6px;
     border: 1px solid var(--border-dark); 
     display: flex; 
-    gap: 15px; 
+    gap: 12px; 
     align-items: center;
     backdrop-filter: blur(4px);
 }
@@ -41,13 +44,68 @@ body {
 .tool-group { 
     display: flex; 
     align-items: center; 
-    gap: 8px; 
+    gap: 12px; 
     border-right: 1px solid #444; 
-    padding-right: 10px; 
+    padding-right: 12px; 
+    height: 60%;
 }
 
-.tool-group:last-child { border-right: none; }
+.tool-group:last-child { 
+    border-right: none; 
+    padding-right: 0;
+}
 
+/* --- BOUTONS D'ICÔNES (MODERNES) --- */
+.icon-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #b2b5be;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.icon-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.icon-btn:hover {
+    background: #2a2e39;
+    color: var(--accent);
+    border-color: #444;
+}
+
+/* --- COLOR PICKERS PERSONNALISÉS --- */
+.color-picker-wrapper {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid #444;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.color-picker-wrapper input[type="color"] {
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    border: none;
+    background: none;
+}
+
+/* --- BOUTONS STANDARDS & ÉTATS --- */
 button { 
     background: #2a2e39; 
     color: white; 
@@ -59,9 +117,11 @@ button {
     transition: all 0.2s;
 }
 
-button:hover { border-color: var(--accent); }
+button:hover { 
+    border-color: var(--accent); 
+}
 
-/* État actif pour les outils de dessin ET le scale */
+/* État actif global (utilisé par DrawingManager) */
 button.active { 
     background: var(--accent) !important; 
     color: black !important; 
@@ -69,53 +129,52 @@ button.active {
     font-weight: bold;
 }
 
-/* Spécifique pour les boutons de prix style TradingView (Zone A) */
-.price-scale-controls button.active {
-    background: var(--tv-blue) !important;
-    color: white !important;
-    border-color: var(--tv-blue) !important;
-}
-
-/* Console de debug */
-#debug-console {
+/* --- CONSOLE & UI GRAPHIQUE --- */
+#debug-console { 
     position: absolute; 
     bottom: 10px; 
-    left: 10px; 
-    width: 300px;
+    left: 65px; 
+    width: 300px; 
     max-height: 120px;
     overflow-y: auto;
     z-index: 50; 
     pointer-events: none; 
-    color: var(--accent);
+    color: var(--accent); 
     font-family: 'Consolas', monospace;
-    font-size: 11px;
+    font-size: 11px; 
     opacity: 0.8;
     background: linear-gradient(transparent, rgba(0,0,0,0.5));
 }
 
-/* ZONE DE SCALE */
-.tv-scale-angle-zone {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 60px;
-    height: 35px;
-    z-index: 100;
+/* ZONE DE SCALE (P-L-A) */
+.tv-scale-angle-zone { 
+    position: absolute; 
+    bottom: 0; 
+    right: 0; 
+    width: 60px; 
+    height: 35px; 
+    z-index: 100; 
 }
 
-.price-scale-controls {
-    display: flex;
-    gap: 2px;
-    padding: 4px;
+.price-scale-controls { 
+    display: flex; 
+    gap: 2px; 
+    padding: 4px; 
 }
 
-.price-scale-controls button {
-    background: #1e222d;
-    color: #b2b5be;
-    border: 1px solid #363a45;
+.price-scale-controls button { 
+    background: #1e222d; 
+    color: #b2b5be; 
+    border: 1px solid #363a45; 
     border-radius: 3px;
-    width: 26px;
-    height: 26px;
-    font-size: 10px;
-    cursor: pointer;
+    width: 26px; 
+    height: 26px; 
+    font-size: 10px; 
+    cursor: pointer; 
+}
+
+.price-scale-controls button.active {
+    background: var(--tv-blue) !important;
+    color: white !important;
+    border-color: var(--tv-blue) !important;
 }

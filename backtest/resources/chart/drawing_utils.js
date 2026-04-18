@@ -26,7 +26,18 @@
             rect.setAttribute('stroke', color);
             rect.setAttribute('stroke-dasharray', '5,5');
             svg.appendChild(rect);
-        } else {
+        } 
+		else if (mode === 'horz_ray') {
+			const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+			line.setAttribute('x1', p1.x); 
+			line.setAttribute('y1', p1.y);
+			line.setAttribute('x2', 2000); // On simule l'infini vers la droite
+			line.setAttribute('y2', p1.y); // On force l'horizontalité sur p1.y
+			line.setAttribute('stroke', color);
+			line.setAttribute('stroke-dasharray', '5,5');
+			svg.appendChild(line);
+		}
+		else {
             const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
             line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
             line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
