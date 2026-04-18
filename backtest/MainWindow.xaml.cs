@@ -25,6 +25,7 @@ namespace backtest
         private readonly string notesFolderPath = Path.Combine(Environment.CurrentDirectory, "Notes");
         private ObservableCollection<Trade> Journal;
         SettingsView settingsView;
+        Chart chart ;
         private FxCloudService _cloudService = new FxCloudService();
         private readonly string _sessionFilePath;
 
@@ -42,7 +43,7 @@ namespace backtest
             settingsView = new SettingsView();
             _sessionFilePath = _cloudService._sessionFilePath;
             LoadUserProfile();
-
+            chart = new Chart();
             if (utils.HasOldDataToMigrate())
             {
                 var result = MessageBox.Show(
@@ -468,7 +469,7 @@ namespace backtest
         private void ShowChart()
         {
             // 1. Création du contrôle de statistiques
-            var chart = new Chart();
+            
 
             // 2. On remplace le contenu du conteneur central (ContentControl dans ton XAML)
             MainViewContainer.Content = chart;

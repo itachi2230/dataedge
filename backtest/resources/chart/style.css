@@ -6,6 +6,7 @@
     --accent: #00FFFF;
     --tv-blue: #2962ff;
 }
+
 body { 
     margin: 0; 
     padding: 0; 
@@ -15,10 +16,10 @@ body {
 }
 
 #chart-container { 
-    width: 100%; /* Utilise 100% au lieu de 100vw */
+    width: 100%;
     height: 100vh; 
     position: relative;
-    display: block; /* Force le rendu block */
+    display: block;
 }
 
 /* Toolbar */
@@ -34,7 +35,7 @@ body {
     display: flex; 
     gap: 15px; 
     align-items: center;
-    backdrop-filter: blur(4px); /* Effet moderne */
+    backdrop-filter: blur(4px);
 }
 
 .tool-group { 
@@ -47,7 +48,7 @@ body {
 
 .tool-group:last-child { border-right: none; }
 
-select, button { 
+button { 
     background: #2a2e39; 
     color: white; 
     border: 1px solid #444; 
@@ -55,23 +56,24 @@ select, button {
     border-radius: 4px; 
     font-size: 12px; 
     cursor: pointer; 
+    transition: all 0.2s;
 }
 
 button:hover { border-color: var(--accent); }
 
-/* État actif pour les outils de dessin */
+/* État actif pour les outils de dessin ET le scale */
 button.active { 
     background: var(--accent) !important; 
     color: black !important; 
+    border-color: white !important;
     font-weight: bold;
 }
 
-.label { 
-    color: var(--text-dark); 
-    font-size: 10px; 
-    font-weight: bold; 
-    text-transform: uppercase; 
-    letter-spacing: 0.5px;
+/* Spécifique pour les boutons de prix style TradingView (Zone A) */
+.price-scale-controls button.active {
+    background: var(--tv-blue) !important;
+    color: white !important;
+    border-color: var(--tv-blue) !important;
 }
 
 /* Console de debug */
@@ -79,36 +81,32 @@ button.active {
     position: absolute; 
     bottom: 10px; 
     left: 10px; 
-    width: 250px;
-    max-height: 100px;
+    width: 300px;
+    max-height: 120px;
     overflow-y: auto;
     z-index: 50; 
     pointer-events: none; 
     color: var(--accent);
-    font-family: monospace;
+    font-family: 'Consolas', monospace;
     font-size: 11px;
-    opacity: 0.7;
+    opacity: 0.8;
+    background: linear-gradient(transparent, rgba(0,0,0,0.5));
 }
 
-/* --- ZONE DE SCALE (TRADINGVIEW STYLE) --- */
-
+/* ZONE DE SCALE */
 .tv-scale-angle-zone {
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 60px; /* Réduis la largeur */
-    height: 30px; /* Réduis la hauteur pour ne pas monter sur le prix */
-    z-index: 10;   /* Baisse le z-index pour laisser le graphique prioritaire */
-    pointer-events: none; /* Laisse passer les clics vers le graphique par défaut */
+    width: 60px;
+    height: 35px;
+    z-index: 100;
 }
 
 .price-scale-controls {
-    pointer-events: auto; /* Réactive les clics uniquement sur les boutons */
-}
-
-.tv-scale-angle-zone:hover .price-scale-controls {
-    opacity: 1;
-    pointer-events: auto;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
 }
 
 .price-scale-controls button {
@@ -116,18 +114,8 @@ button.active {
     color: #b2b5be;
     border: 1px solid #363a45;
     border-radius: 3px;
-    width: 28px;
-    height: 28px;
-    font-size: 11px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    width: 26px;
+    height: 26px;
+    font-size: 10px;
+    cursor: pointer;
 }
-
-.price-scale-controls button.active {
-    color: white;
-    background: var(--tv-blue);
-    border-color: var(--tv-blue);
-}
-
-/* SUPPRESSION DU CANVAS : 
-   On ne garde plus de style pour #drawing-canvas car le mode Plugin 
-   utilise le canvas interne de Lightweight Charts. */

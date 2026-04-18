@@ -18,16 +18,28 @@
     setMode(id) {
         this.mode = (this.mode === id) ? null : id;
         document.body.style.cursor = this.mode ? 'crosshair' : 'default';
+        
+        // UI Update
         document.querySelectorAll('#drawing-tools button').forEach(b => b.classList.remove('active'));
-        if (this.mode) document.getElementById(`btn-${id}`)?.classList.add('active');
+        if (this.mode) {
+            const btn = document.getElementById(`btn-${id}`);
+            if (btn) btn.classList.add('active');
+        }
+        
         this.tempStart = null;
-        window.DrawingUtils.updatePreview(null);
+        if (window.DrawingUtils) window.DrawingUtils.updatePreview(null);
     },
 
     addDrawing(type, start, end) {
-        this.drawings.push({ data: { type, start, end } });
+        this.drawings.push({ 
+            data: { 
+                type, 
+                start: { time: start.time, price: start.price }, 
+                end: { time: end.time, price: end.price } 
+            } 
+        });
         this.save();
-        this.series.applyOptions({}); // Force repaint
+        this.series.applyOptions({}); // Force le rafraîchissement du plugin
     },
 
     deleteSelected() {
@@ -39,16 +51,28 @@
         }
     },
 
+    clearAllDrawings() {
+        if (this.drawings.length > 0 && confirm("Supprimer tous les dessins ?")) {
+            this.drawings = [];
+            this.save();
+            this.series.applyOptions({});
+            window.cyberLog("Tous les dessins supprimés.");
+        }
+    },
+
     save() {
         if (!window.currentSymbol) return;
-        localStorage.setItem('Drawings_' + window.currentSymbol, JSON.stringify(this.drawings.map(d => d.data)));
+        const key = 'Drawings_' + window.currentSymbol;
+        localStorage.setItem(key, JSON.stringify(this.drawings.map(d => d.data)));
     },
 
     load() {
         if (!window.currentSymbol) return;
-        const saved = localStorage.getItem('Drawings_' + window.currentSymbol);
+        const key = 'Drawings_' + window.currentSymbol;
+        const saved = localStorage.getItem(key);
         this.drawings = saved ? JSON.parse(saved).map(d => ({ data: d })) : [];
-        this.series.applyOptions({});
+        if (this.series) this.series.applyOptions({});
+        window.cyberLog(`Dessins chargés (${this.drawings.length})`);
     }
 };
 

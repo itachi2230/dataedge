@@ -1,5 +1,4 @@
-﻿
-window.chart = null;
+﻿window.chart = null;
 window.candleSeries = null;
 window.isDarkMode = true;
 window.isGridVisible = true;
@@ -24,59 +23,78 @@ window.initChart = function() {
     const container = document.getElementById('chart-container');
 
     window.chart = LightweightCharts.createChart(container, {
-        layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
-        grid: { vertLines: { color: '#2a2e39' }, horzLines: { color: '#2a2e39' } },
-        crosshair: { mode: 0 }, // Mode Normal (libre) par défaut
-        timeScale: { timeVisible: true }
+        layout: { 
+            background: { type: 'solid', color: themes.dark.bg }, 
+            textColor: themes.dark.text 
+        },
+        grid: { 
+            vertLines: { color: themes.dark.grid, visible: window.isGridVisible }, 
+            horzLines: { color: themes.dark.grid, visible: window.isGridVisible } 
+        },
+       crosshair: {
+            // Mode Normal = le curseur ne colle pas aux bougies
+            mode: LightweightCharts.CrosshairMode.Normal, 
+            
+            // Tu peux aussi personnaliser le style des lignes ici
+            vertLine: {
+                width: 1,
+                color: '#758696',
+                style: 3, // Pointillés
+                labelBackgroundColor: '#131722',
+            },
+            horzLine: {
+                width: 1,
+                color: '#758696',
+                style: 3,
+                labelBackgroundColor: '#131722',
+            },
+        },
+        timeScale: { 
+            timeVisible: true,
+            borderVisible: false,
+        },
+        rightPriceScale: {
+            borderVisible: false,
+            autoScale: true
+        }
     });
 
-    // En v4, on utilise addCandlestickSeries normalement
     window.candleSeries = window.chart.addCandlestickSeries({
-        upColor: '#00FFFF', downColor: '#FF007F',
-        borderUpColor: '#00FFFF', borderDownColor: '#FF007F',
-        wickUpColor: '#00FFFF', wickDownColor: '#FF007F'
+        upColor: themes.dark.up, downColor: themes.dark.down,
+        borderUpColor: themes.dark.up, borderDownColor: themes.dark.down,
+        wickUpColor: themes.dark.up, wickDownColor: themes.dark.down
     });
 
     window.DrawingManager.init(window.chart, window.candleSeries);
     window.syncDrawingWithChart();
-    window.DrawingManager.load();
+    window.setupLazyLoading(); // Ne pas oublier d'activer le listener de scroll
     
     console.log("DataEdge v4.1.1 Engine Fully Loaded.");
 };
 
-// --- LOGIQUE DE DONNÉES CORRIGÉE ---
 window.updateChartData = function(data, symbol = "Default") {
-    if (!window.candleSeries) {
-        window.initChart(); 
-    }
+    if (!window.candleSeries) window.initChart(); 
 
     window.cyberLog(`Symbole : ${symbol}`);
     window.currentSymbol = symbol;
     window.isProcessingData = true;
     
-    // 1. On injecte les données
     const timeline = getExtendedTimeline(data);
     window.candleSeries.setData(timeline);
     
-    // 2. FORCE L'AUTOSCALE (Réinitialise l'échelle de prix)
-    window.chart.priceScale('right').applyOptions({
-        autoScale: true,
-    });
+    window.chart.priceScale('right').applyOptions({ autoScale: true });
 
-    // 3. CADRAGE INTELLIGENT
-    // Au lieu de fitContent (qui montre tout), on cadre sur les bougies réelles
     if (data.length > 0) {
-        const lastIndex = timeline.length - 150; // On retire la marge de droite
-        const firstVisibleIndex = lastIndex - 100; // On montre les 100 dernières bougies
+        const lastIndex = timeline.length - 150; 
+        const firstVisibleIndex = lastIndex - 100; 
         
         window.chart.timeScale().setVisibleLogicalRange({
             from: firstVisibleIndex,
-            to: lastIndex + 20, // Petite marge pour voir le prix actuel
+            to: lastIndex + 20, 
         });
     }
 
-    // 4. SYNC DESSINS
-    if(window.DrawingManager) window.DrawingManager.loadDrawings();
+    if(window.DrawingManager) window.DrawingManager.load(); // Corrigé : load() au lieu de loadDrawings()
     
     window.updateScaleButtonsUI();
 
@@ -86,7 +104,6 @@ window.updateChartData = function(data, symbol = "Default") {
     }, 200);
 };
 
-// --- LE RESTE RESTE IDENTIQUE À TON NOUVEAU CODE ---
 window.setupLazyLoading = function() {
     window.chart.timeScale().subscribeVisibleTimeRangeChange(async range => {
         if (!range || window.isProcessingData) return;
@@ -94,7 +111,7 @@ window.setupLazyLoading = function() {
         if (data.length && range.from <= data[0].time) {
             window.isProcessingData = true;
             try {
-                const bridge = chrome.webview.hostObjects.chartService;
+                const bridge = window.chrome.webview.hostObjects.chartService;
                 if (bridge) await bridge.loadPreviousYear();
             } catch (err) {
                 window.isProcessingData = false;
@@ -118,6 +135,7 @@ window.prependChartData = function(newData) {
     const combined = [...newData, ...current].sort((a,b) => a.time - b.time);
     window.candleSeries.setData(getExtendedTimeline(combined));
     window.isProcessingData = false;
+    window.cyberLog("Historique fusionné.");
 };
 
 window.toggleGrid = function() {
@@ -126,17 +144,26 @@ window.toggleGrid = function() {
         grid: { vertLines: { visible: window.isGridVisible }, horzLines: { visible: window.isGridVisible } }
     });
 };
+
+window.toggleTheme = function() {
+    window.isDarkMode = !window.isDarkMode;
+    const t = window.isDarkMode ? themes.dark : themes.light;
+    window.chart.applyOptions({ 
+        layout: { background: { color: t.bg }, textColor: t.text },
+        grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } }
+    });
+    window.candleSeries.applyOptions({
+        upColor: t.up, downColor: t.down, wickUpColor: t.up, wickDownColor: t.down,
+        borderUpColor: t.up, borderDownColor: t.down
+    });
+};
 window.updateColors = function() {
     const up = document.getElementById('upColor').value;
     const down = document.getElementById('downColor').value;
     window.candleSeries.applyOptions({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down });
     window.cyberLog("Couleurs mises à jour.");
 };
-window.toggleTheme = function() {
-    window.isDarkMode = !window.isDarkMode;
-    const t = window.isDarkMode ? themes.dark : themes.light;
-    window.chart.applyOptions({ layout: { background: { color: t.bg }, textColor: t.text } });
-};
+
 
 window.updateScaleButtonsUI = function() {
     const opts = window.chart.priceScale('right').options();

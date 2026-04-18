@@ -36,8 +36,8 @@ namespace backtest
 
             InitTimeframeButtons();
             LoadWatchlist();
-            InitBrowser();
-            
+            InitBrowser(); // On initialise le browser, c'est lui qui déclenchera la suite
+            _ctsGlobal = new CancellationTokenSource();
         }
 
         private void LoadUserSettings()
@@ -87,7 +87,6 @@ namespace backtest
         {
             await ChartBrowser.EnsureCoreWebView2Async(null);
 
-            // On mappe le dossier local vers un nom de domaine virtuel "dataedge.local"
             string rootFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "chart");
 
             ChartBrowser.CoreWebView2.SetVirtualHostNameToFolderMapping(
@@ -95,14 +94,20 @@ namespace backtest
                 rootFolder,
                 CoreWebView2HostResourceAccessKind.Allow);
 
-            // On enregistre le bridge
             ChartBrowser.CoreWebView2.AddHostObjectToScript("chartService", _chartBridge);
 
-            // On navigue vers l'URL virtuelle au lieu du chemin file://
-            // Cela règle DEFINITIVEMENT les problèmes de sécurité Cross-Origin
+            // IMPORTANT : On attend que la page soit chargée avant d'envoyer les données
+            ChartBrowser.NavigationCompleted += async (s, e) =>
+            {
+                if (e.IsSuccess)
+                {
+                    // La page est prête, on charge les données de la paire par défaut
+                    await LoadBacktestData(_ctsGlobal.Token);
+                }
+            };
+
             ChartBrowser.CoreWebView2.Navigate("https://dataedge.local/index.html");
-           
-        }
+        }   
 
         // Méthode utilitaire pour exécuter du JS sans crash
         private async Task SafeExecuteJs(string script)
@@ -115,6 +120,9 @@ namespace backtest
 
         public async Task LoadBacktestData(CancellationToken ct)
         {
+            // Sécurité : si le browser n'est pas encore initialisé, on quitte
+            if (ChartBrowser?.CoreWebView2 == null) return;
+
             _endOfDataReached = false;
             _isLoadingMore = false;
 
@@ -135,7 +143,10 @@ namespace backtest
                         ct.ThrowIfCancellationRequested();
                         string json = JsonConvert.SerializeObject(candles);
 
-                        await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}');");
+                        // On s'assure d'être sur le thread UI pour le JS
+                        await Dispatcher.InvokeAsync(async () => {
+                            await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}');");
+                        });
 
                         SetStatus(_currentSymbol + " OK", "#00FF7F");
                         SaveUserSettings();
@@ -149,7 +160,6 @@ namespace backtest
             catch (OperationCanceledException) { }
             catch (Exception ex) { SetStatus("Erreur: " + ex.Message, "#FF4B4B"); }
         }
-
         public async Task LoadMoreData()
         {
             if (_isLoadingMore || _endOfDataReached) return;
