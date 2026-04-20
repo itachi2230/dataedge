@@ -1,6 +1,6 @@
 ﻿window.DrawingUtils = {
     // Vérifie si la souris est sur un point (ancre)
-    isOverPoint(px, py, x, y, radius = 8) {
+    isOverPoint(px, py, x, y, radius = 12) {
         return Math.hypot(px - x, py - y) < radius;
     },
 

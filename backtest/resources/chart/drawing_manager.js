@@ -45,18 +45,19 @@
         }
     },
 
-    finishDrawing() {
+   finishDrawing() {
     if (this.points.length > 0) {
         const type = this.mode;
+        // On crée l'objet avec les points
         this.drawings.push({ 
             data: { type: type, points: [...this.points] } 
         });
-        this.save();
         
+        this.save();
         const lastIdx = this.drawings.length - 1;
         
-        // On attend que l'événement de clic soit totalement terminé
         if (type === 'text') {
+            // On force l'édition immédiate après la création
             setTimeout(() => this.editText(lastIdx), 100);
         }
     }
@@ -66,53 +67,45 @@
     const dr = this.drawings[index];
     if (!dr || dr.data.type !== 'text') return;
 
-    // Supprime un ancien éditeur s'il existe
+    // Suppression de l'ancien s'il existe
     const old = document.getElementById('temp-text-editor');
     if (old) old.remove();
 
     const container = document.getElementById('chart-container');
-    
-    // Création d'un mini-champ en haut du graphique
     const input = document.createElement('input');
     input.id = 'temp-text-editor';
     input.type = 'text';
+    // On charge le texte actuel ou rien s'il n'y a pas encore de texte
     input.value = dr.data.points[0].text || "";
-    input.placeholder = "Tapez votre texte ici...";
     
     input.style.cssText = `
-        position: absolute;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 2000;
-        background: #1e222d;
-        color: #00FFFF;
-        border: 2px solid #00FFFF;
-        padding: 8px 15px;
-        border-radius: 4px;
-        outline: none;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        min-width: 200px;
+        position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+        z-index: 2000; background: #1e222d; color: #00FFFF;
+        border: 2px solid #00FFFF; padding: 8px 15px; border-radius: 4px;
+        outline: none; min-width: 200px;
     `;
 
     container.appendChild(input);
     input.focus();
-    input.select();
+    if(input.value) input.select();
 
     const saveAndClose = () => {
-        if (input.value.trim() !== "") {
-            dr.data.points[0].text = input.value;
-        }
-        input.remove();
-        this.save();
-        this.series.applyOptions({}); // Rafraîchit le texte sur le canvas
-    };
+		const newValue = input.value.trim();
+		if (newValue !== "") {
+			// On enregistre dans le point SOURCE (celui qui est sauvegardé en JSON)
+			this.drawings[index].data.points[0].text = newValue;
+			window.cyberLog(`Texte enregistré dans la source : ${newValue}`);
+		}
+    
+		if (input.parentNode) input.remove();
+		this.save(); // Sauvegarde dans le localStorage
+		this.series.applyOptions({}); // Force le plugin à relire les sources
+	};
 
-    // Events
     input.onblur = saveAndClose;
     input.onkeydown = (e) => {
         if (e.key === 'Enter') saveAndClose();
-        if (e.key === 'Escape') { input.value = dr.data.points[0].text || ""; input.remove(); }
+        if (e.key === 'Escape') { input.remove(); }
     };
 },
     deleteSelected() {
@@ -156,7 +149,7 @@ window.syncDrawingWithChart = function() {
             mgr.series.applyOptions({});
             return;
         }
-
+			
         const price = window.candleSeries.coordinateToPrice(param.point.y);
         window.cyberLog(`Clic détecté - Mode: ${mgr.mode || 'Sélection'} | Prix: ${price.toFixed(2)}`);
 
@@ -174,23 +167,67 @@ window.syncDrawingWithChart = function() {
             mgr.addPoint(param.time, price);
         } else {
             // MODE SÉLECTION
-            let found = null;
-            
-            mgr.drawings.forEach((dr, i) => {
-                const pts = dr.data.points.map(p => ({
-                    x: window.chart.timeScale().timeToCoordinate(p.time),
-                    y: window.candleSeries.priceToCoordinate(p.price)
-                }));
-                
-                const isOverStart = pts[0] && window.DrawingUtils.isOverPoint(param.point.x, param.point.y, pts[0].x, pts[0].y);
-                const isOverSegment = pts[0] && pts[1] && window.DrawingUtils.getDistanceToSegment(param.point.x, param.point.y, pts[0].x, pts[0].y, pts[1].x, pts[1].y) < 8;
+            // Dans window.chart.subscribeClick(param => { ... })
+// Remplace la logique de détection 'found' par celle-ci :
 
-                if (isOverStart || isOverSegment) {
-                    found = i;
-                }
-            });
+let found = null;
+mgr.drawings.forEach((dr, i) => {
+    const pts = dr.data.points.map(p => ({
+        x: window.chart.timeScale().timeToCoordinate(p.time),
+        y: window.candleSeries.priceToCoordinate(p.price)
+    }));
 
-            if (found !== null) {
+    const mouseX = param.point.x;
+    const mouseY = param.point.y;
+
+    // 1. Détection sur les points d'ancrage (pour tous les objets)
+    const isOverAnyPoint = pts.some(pt => window.DrawingUtils.isOverPoint(mouseX, mouseY, pt.x, pt.y, 15)); // Rayon plus large (15px)
+
+    // 2. Détection spécifique au texte (boîte de collision autour du texte)
+    let isOverText = false;
+    if (dr.data.type === 'text') {
+        const textWidth = dr.lastMeasuredWidth || 100; // Estimation de la largeur du texte
+        const textHeight = 20;
+       isOverText = (mouseX >= pts[0].x - 5 && mouseX <= pts[0].x + textWidth + 5 &&
+                  mouseY >= pts[0].y - textHeight && mouseY <= pts[0].y + 5);
+    }
+
+    // 3. Détection sur les segments (Trendlines, Rectangles, etc.)
+    let isOverLine = false;
+	   if (pts.length >= 2) {
+		if (dr.data.type === 'rectangle') {
+			// Définition des 4 coins à partir des 2 points diagonaux
+			const xMin = Math.min(pts[0].x, pts[1].x);
+			const xMax = Math.max(pts[0].x, pts[1].x);
+			const yMin = Math.min(pts[0].y, pts[1].y);
+			const yMax = Math.max(pts[0].y, pts[1].y);
+
+			// On vérifie la proximité avec l'un des 4 bords
+			const dTop = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMax, yMin);
+			const dBottom = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMax, xMax, yMax);
+			const dLeft = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMin, yMax);
+			const dRight = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMax, yMin, xMax, yMax);
+
+			if (Math.min(dTop, dBottom, dLeft, dRight) < 10) {
+				isOverLine = true;
+			}
+        
+			// Optionnel : Sélection par l'intérieur du rectangle
+			if (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax) {
+				isOverLine = true;
+			}
+		} else {
+			// Détection standard pour les lignes simples (trendline, etc.)
+			isOverLine = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y) < 10;
+		}
+	}
+
+    if (isOverAnyPoint || isOverText || isOverLine) {
+        found = i;
+    }
+});
+
+            if (found!== null) {
                 window.cyberLog(`Dessin trouvé à l'index: ${found}`);
             } else {
                 window.cyberLog("Aucun dessin touché. Désélection.");
@@ -199,6 +236,15 @@ window.syncDrawingWithChart = function() {
             // Mise à jour de la sélection
             mgr.selectedIdx = found;
             mgr.series.applyOptions({});
+			if (found !== null) {
+				const dr = mgr.drawings[found];
+				if (dr.data.type === 'text' && !mgr.dragState) { // <--- Ajout !mgr.dragState
+					setTimeout(() => {
+						// On vérifie qu'on n'est pas en train de draguer avant d'ouvrir
+						if (!mgr.dragState) mgr.editText(found);
+					}, 150); 
+				}
+			}
         }
     });
 
@@ -218,7 +264,12 @@ window.syncDrawingWithChart = function() {
             const py = window.candleSeries.priceToCoordinate(p.price);
             if (window.DrawingUtils.isOverPoint(x, y, px, py)) {
                 window.cyberLog(`Resize activé sur point index: ${i}`);
-                mgr.dragState = { type: 'resize', index: i };
+
+                mgr.dragState = { 
+                type: 'resize', 
+                index: i, 
+                currentText: p.text // <--- SAUVEGARDE DU TEXTE ICI
+            };
             }
         });
 
@@ -251,7 +302,8 @@ window.syncDrawingWithChart = function() {
         if (mgr.dragState.type === 'resize') {
             dr.data.points[mgr.dragState.index] = { 
                 time: timeScale.coordinateToTime(x), 
-                price: window.candleSeries.coordinateToPrice(y) 
+                price: window.candleSeries.coordinateToPrice(y),
+				text: mgr.dragState.currentText
             };
         } else if (mgr.dragState.type === 'move') {
             const dx = x - mgr.dragState.lastX;
@@ -261,10 +313,11 @@ window.syncDrawingWithChart = function() {
                 const nx = timeScale.timeToCoordinate(p.time) + dx;
                 const ny = window.candleSeries.priceToCoordinate(p.price) + dy;
                 return { 
-                    time: timeScale.coordinateToTime(nx), 
-                    price: window.candleSeries.coordinateToPrice(ny) 
-                };
-            });
+                time: timeScale.coordinateToTime(nx), 
+                price: window.candleSeries.coordinateToPrice(ny),
+                text: p.text // <--- PROTECTION ICI
+            };
+                    });
             mgr.dragState.lastX = x; 
             mgr.dragState.lastY = y;
         }
@@ -283,9 +336,8 @@ window.syncDrawingWithChart = function() {
    container.addEventListener('dblclick', () => { 
 		if (mgr.selectedIdx !== null) {
 			const dr = mgr.drawings[mgr.selectedIdx];
-			if (dr.data.type === 'text') {
-				mgr.editText(mgr.selectedIdx);
-			}
+			window.cyberLog(`dbclick`);
+			
 		} else if (mgr.mode === 'path' || mgr.mode === 'polyline') {
 			mgr.finishDrawing(); 
 		}

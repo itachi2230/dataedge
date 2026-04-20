@@ -22,9 +22,15 @@
                             const isSelected = (index === this.manager.selectedIdx);
                             const coords = d.data.points.map(p => ({
                                 x: this.chart.timeScale().timeToCoordinate(p.time),
-                                y: this.series.priceToCoordinate(p.price)
+                                y: this.series.priceToCoordinate(p.price),
+								text: p.text
                             }));
-
+							if (d.data.type === 'text') {
+								const text = d.data.points[0].text || "Cliquez pour modifier";
+								canvasCtx.font = "14px Arial";
+								// On mesure et on stocke la largeur dans l'objet pour le manager
+								d.lastMeasuredWidth = canvasCtx.measureText(text).width;
+							}
                             if (coords[0].x === null) return;
 
                             canvasCtx.strokeStyle =  '#00FFFF';

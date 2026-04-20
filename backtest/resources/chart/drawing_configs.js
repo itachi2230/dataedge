@@ -36,16 +36,18 @@
 		}
 	},
 	'text': { 
-		clicks: 1, 
-		render: (ctx, p1) => { 
-			ctx.font = "14px Arial"; 
-			ctx.fillStyle = "#00FFFF";
-			// Si vide, on affiche un texte d'aide
-			const content = (p1.text && p1.text.trim() !== "") ? p1.text : "Texte (Double-clic)";
-			ctx.fillText(content, p1.x, p1.y); 
-		},
-		preview: (p1) => `<text x="${p1.x}" y="${p1.y}" fill="#00FFFF" font-size="14">Saisie...</text>` 
-	},
+    clicks: 1, 
+    render: (ctx, p1) => { 
+        ctx.font = "14px Arial"; 
+        ctx.fillStyle = "#00FFFF";
+        
+        // On vérifie p1.text qui vient maintenant du plugin
+        const content = (p1.text && p1.text.trim() !== "") ? p1.text : "Cliquer ici pour modifier";
+        
+        ctx.fillText(content, p1.x, p1.y); 
+    },
+    preview: (p1) => `<text x="${p1.x}" y="${p1.y}" fill="#00FFFF" font-size="14">Saisie...</text>` 
+},
     'horz_ray': { clicks: 1, render: (ctx, p1, p2, w) => { ctx.moveTo(p1.x, p1.y); ctx.lineTo(w, p1.y); },
         preview: (p1) => `<line x1="${p1.x}" y1="${p1.y}" x2="3000" y2="${p1.y}" stroke="#00FFFF" stroke-dasharray="5,5" />` },
 
