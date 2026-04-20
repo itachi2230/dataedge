@@ -182,7 +182,6 @@ mgr.drawings.forEach((dr, i) => {
 
     // 1. Détection sur les points d'ancrage (pour tous les objets)
     const isOverAnyPoint = pts.some(pt => window.DrawingUtils.isOverPoint(mouseX, mouseY, pt.x, pt.y, 15)); // Rayon plus large (15px)
-
     // 2. Détection spécifique au texte (boîte de collision autour du texte)
     let isOverText = false;
 	const type = dr.data.type;
@@ -237,7 +236,15 @@ mgr.drawings.forEach((dr, i) => {
 			if (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax) {
 				isOverLine = true;
 			}
-		} else {
+		}
+		else if (dr.data.type === 'path') {
+		for (let j = 0; j < pts.length - 1; j++) {
+			const d = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
+			if (d < 10) { isOverLine = true; break; }
+		}
+	}
+		
+		else {
 			// Détection standard pour les lignes simples (trendline, etc.)
 			isOverLine = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y) < 10;
 		}

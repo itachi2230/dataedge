@@ -11,15 +11,31 @@
         return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
     },
 
-    updatePreview(mode, p1, p2) {
-        let svg = document.getElementById('drawing-svg');
-        if (!svg) {
-            document.getElementById('chart-container').insertAdjacentHTML('beforeend', 
-                `<svg id="drawing-svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100"></svg>`);
-            svg = document.getElementById('drawing-svg');
-        }
-        svg.innerHTML = '';
-        if (!p1 || !p2 || !mode || !window.DrawingConfigs[mode]) return;
-        svg.innerHTML = window.DrawingConfigs[mode].preview(p1, p2);
+  updatePreview(mode, p1, p2) {
+    let svg = document.getElementById('drawing-svg');
+    if (!svg) {
+        document.getElementById('chart-container').insertAdjacentHTML('beforeend', 
+            `<svg id="drawing-svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100"></svg>`);
+        svg = document.getElementById('drawing-svg');
     }
+    svg.innerHTML = '';
+    
+    if (!p1 || !p2 || !mode || !window.DrawingConfigs[mode]) return;
+
+    // --- LOGIQUE SPÉCIFIQUE AU PATH ---
+    let startPoint = p1;
+    const mgr = window.DrawingManager;
+
+    if (mode === 'path' && mgr.points.length > 0) {
+        const lastPt = mgr.points[mgr.points.length - 1];
+        // On convertit le dernier prix/temps en pixels pour le SVG
+        startPoint = {
+            x: window.chart.timeScale().timeToCoordinate(lastPt.time),
+            y: window.candleSeries.priceToCoordinate(lastPt.price)
+        };
+    }
+
+    // On passe startPoint au lieu de p1 à la config
+    svg.innerHTML = window.DrawingConfigs[mode].preview(startPoint, p2);
+}
 };

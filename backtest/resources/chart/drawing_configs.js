@@ -74,11 +74,35 @@
 		},
 		preview: (p1, p2) => `<line x1="${p1.x}" y1="0" x2="${p1.x}" y2="5000" stroke="#00FFFF" stroke-dasharray="5,5" />` 
 	},
-    'path': { clicks: Infinity, render: (ctx, ...pts) => {
-        if(pts.length < 2) return; ctx.moveTo(pts[0].x, pts[0].y);
-        for(let i=1; i<pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    }, preview: (p1, p2) => `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#00FFFF" stroke-dasharray="5,5" />` },
+    'path': { 
+    clicks: Infinity, 
+    render: (ctx, ...pts) => {
+        const coords = pts.filter(p => typeof p === 'object' && p.x !== undefined);
+        if (coords.length < 2) return;
 
+        ctx.beginPath();
+        ctx.moveTo(coords[0].x, coords[0].y);
+        for (let i = 1; i < coords.length; i++) {
+            ctx.lineTo(coords[i].x, coords[i].y);
+        }
+        ctx.stroke();
+
+        // Flèche finale
+        const last = coords[coords.length - 1];
+        const prev = coords[coords.length - 2];
+        const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
+        const headLen = 15;
+
+        ctx.beginPath();
+        ctx.moveTo(last.x, last.y);
+        ctx.lineTo(last.x - headLen * Math.cos(angle - Math.PI/6), last.y - headLen * Math.sin(angle - Math.PI/6));
+        ctx.moveTo(last.x, last.y);
+        ctx.lineTo(last.x - headLen * Math.cos(angle + Math.PI/6), last.y - headLen * Math.sin(angle + Math.PI/6));
+        ctx.stroke();
+    },
+    // La preview suivra maintenant le dernier point grâce au changement dans updatePreview
+    preview: (p1, p2) => `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#00FFFF" stroke-dasharray="5,5" />`
+},
     'arrow': { clicks: 2, render: (ctx, p1, p2) => {
         const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
         ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
