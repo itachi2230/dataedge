@@ -36,27 +36,44 @@
 		}
 	},
 	'text': { 
-    clicks: 1, 
-    render: (ctx, p1) => { 
-        ctx.font = "14px Arial"; 
-        ctx.fillStyle = "#00FFFF";
+		clicks: 1, 
+		render: (ctx, p1) => { 
+			ctx.font = "14px Arial"; 
+			ctx.fillStyle = "#00FFFF";
         
-        // On vérifie p1.text qui vient maintenant du plugin
-        const content = (p1.text && p1.text.trim() !== "") ? p1.text : "Cliquer ici pour modifier";
+			// On vérifie p1.text qui vient maintenant du plugin
+			const content = (p1.text && p1.text.trim() !== "") ? p1.text : "Cliquer ici pour modifier";
         
-        ctx.fillText(content, p1.x, p1.y); 
-    },
-    preview: (p1) => `<text x="${p1.x}" y="${p1.y}" fill="#00FFFF" font-size="14">Saisie...</text>` 
-},
-    'horz_ray': { clicks: 1, render: (ctx, p1, p2, w) => { ctx.moveTo(p1.x, p1.y); ctx.lineTo(w, p1.y); },
-        preview: (p1) => `<line x1="${p1.x}" y1="${p1.y}" x2="3000" y2="${p1.y}" stroke="#00FFFF" stroke-dasharray="5,5" />` },
+			ctx.fillText(content, p1.x, p1.y); 
+		},
+		preview: (p1) => `<text x="${p1.x}" y="${p1.y}" fill="#00FFFF" font-size="14">Saisie...</text>` 
+	},
+    'horz_ray': { 
+		clicks: 1, 
+		render: (ctx, p1, width, height) => { 
+			ctx.moveTo(p1.x, p1.y); 
+			ctx.lineTo(width, p1.y); // Rayon : du point vers le bord droit
+		},
+		preview: (p1, p2) => `<line x1="${p1.x}" y1="${p1.y}" x2="5000" y2="${p1.y}" stroke="#00FFFF" stroke-dasharray="5,5" />` 
+	},
 
-    'horz_line': { clicks: 1, render: (ctx, p1, p2, w) => { ctx.moveTo(0, p1.y); ctx.lineTo(w, p1.y); },
-        preview: (p1) => `<line x1="0" y1="${p1.y}" x2="3000" y2="${p1.y}" stroke="#00FFFF" stroke-dasharray="5,5" />` },
+	'horz_line': { 
+		clicks: 1, 
+		render: (ctx, p1, width, height) => { 
+			ctx.moveTo(0, p1.y); 
+			ctx.lineTo(width, p1.y); // Ligne infinie : de gauche à droite
+		},
+		preview: (p1, p2) => `<line x1="0" y1="${p1.y}" x2="5000" y2="${p1.y}" stroke="#00FFFF" stroke-dasharray="5,5" />` 
+	},
 
-    'vert_line': { clicks: 1, render: (ctx, p1, p2, w, h) => { ctx.moveTo(p1.x, 0); ctx.lineTo(p1.x, h); },
-        preview: (p1) => `<line x1="${p1.x}" y1="0" x2="${p1.x}" y2="2000" stroke="#00FFFF" stroke-dasharray="5,5" />` },
-
+	'vert_line': { 
+		clicks: 1, 
+		render: (ctx, p1, width, height) => { 
+			ctx.moveTo(p1.x, 0); 
+			ctx.lineTo(p1.x, height); // Ligne verticale : de haut en bas
+		},
+		preview: (p1, p2) => `<line x1="${p1.x}" y1="0" x2="${p1.x}" y2="5000" stroke="#00FFFF" stroke-dasharray="5,5" />` 
+	},
     'path': { clicks: Infinity, render: (ctx, ...pts) => {
         if(pts.length < 2) return; ctx.moveTo(pts[0].x, pts[0].y);
         for(let i=1; i<pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);

@@ -185,12 +185,33 @@ mgr.drawings.forEach((dr, i) => {
 
     // 2. Détection spécifique au texte (boîte de collision autour du texte)
     let isOverText = false;
-    if (dr.data.type === 'text') {
+	const type = dr.data.type;
+    if (type === 'text') {
         const textWidth = dr.lastMeasuredWidth || 100; // Estimation de la largeur du texte
         const textHeight = 20;
        isOverText = (mouseX >= pts[0].x - 5 && mouseX <= pts[0].x + textWidth + 5 &&
                   mouseY >= pts[0].y - textHeight && mouseY <= pts[0].y + 5);
     }
+	
+	else if (type === 'horz_line' || type === 'horz_ray') {
+		// Si la souris est à la même hauteur (Y) que la ligne (marge de 10px)
+		const isAtCorrectHeight = Math.abs(mouseY - pts[0].y) < 10;
+    
+		if (type === 'horz_line' && isAtCorrectHeight) {
+			found = i;
+		} else if (type === 'horz_ray' && isAtCorrectHeight && mouseX >= pts[0].x - 5) {
+			// Pour le rayon, il faut aussi être à droite du point d'origine
+			found = i;
+		}
+	} 
+
+	else if (type === 'vert_line') {
+		// Si la souris est à la même position horizontale (X) que la ligne
+		if (Math.abs(mouseX - pts[0].x) < 10) {
+			found = i;
+		}
+	}
+	else{}
 
     // 3. Détection sur les segments (Trendlines, Rectangles, etc.)
     let isOverLine = false;
