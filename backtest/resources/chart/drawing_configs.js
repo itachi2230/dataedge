@@ -5,20 +5,95 @@
     'rectangle': { clicks: 2, fill: true, render: (ctx, p1, p2) => { ctx.rect(Math.min(p1.x, p2.x), Math.min(p1.y, p2.y), Math.abs(p2.x - p1.x), Math.abs(p2.y - p1.y)); },
         preview: (p1, p2) => `<rect x="${Math.min(p1.x, p2.x)}" y="${Math.min(p1.y, p2.y)}" width="${Math.abs(p2.x - p1.x)}" height="${Math.abs(p2.y - p1.y)}" fill="rgba(0,255,255,0.1)" stroke="#00FFFF" stroke-dasharray="5,5" />` },
     
-    'long_pos': { clicks: 1, fill: true, render: (ctx, p1, p2) => {
-        const h = Math.abs(p2.y - p1.y) || 40; 
-        ctx.fillStyle = "rgba(0, 255, 0, 0.2)"; ctx.fillRect(p1.x, p1.y - h, (p2.x - p1.x) || 100, h);
-        ctx.fillStyle = "rgba(255, 0, 0, 0.2)"; ctx.fillRect(p1.x, p1.y, (p2.x - p1.x) || 100, h);
-        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p1.x + 100, p1.y);
-    }, preview: (p1, p2) => `<rect x="${p1.x}" y="${p1.y-40}" width="100" height="40" fill="rgba(0,255,0,0.2)"/><rect x="${p1.x}" y="${p1.y}" width="100" height="40" fill="rgba(255,0,0,0.2)"/>` },
+   'long_pos': {
+    clicks: 1,
+    render: (ctx, p1, p2, p3) => {
+        if (!p1 || !p2 || !p3) return;
+        const entry = p1;
+        const target = p2;
+        const stop = p3;
+        const width = target.x - entry.x;
 
-    'short_pos': { clicks: 1, fill: true, render: (ctx, p1, p2) => {
-        const h = Math.abs(p2.y - p1.y) || 40;
-        ctx.fillStyle = "rgba(255, 0, 0, 0.2)"; ctx.fillRect(p1.x, p1.y - h, (p2.x - p1.x) || 100, h);
-        ctx.fillStyle = "rgba(0, 255, 0, 0.2)"; ctx.fillRect(p1.x, p1.y, (p2.x - p1.x) || 100, h);
-        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p1.x + 100, p1.y);
-    }, preview: (p1, p2) => `<rect x="${p1.x}" y="${p1.y-40}" width="100" height="40" fill="rgba(255,0,0,0.2)"/><rect x="${p1.x}" y="${p1.y}" width="100" height="40" fill="rgba(0,255,0,0.2)"/>` },
+        // 1. Zones de couleur
+        ctx.fillStyle = "rgba(0, 255, 187, 0.3)";
+        ctx.fillRect(entry.x, target.y, width, entry.y - target.y);
+        ctx.fillStyle = "rgba(255, 82, 82, 0.3)";
+        ctx.fillRect(entry.x, entry.y, width, stop.y - entry.y);
 
+        // 2. Ligne d'entrée
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(entry.x, entry.y);
+        ctx.lineTo(entry.x + width, entry.y);
+        ctx.stroke();
+
+        // 3. Calcul et Affichage du Ratio R:R
+        const risk = Math.abs(entry.y - stop.y);
+        const reward = Math.abs(entry.y - target.y);
+        const rr = risk !== 0 ? (reward / risk).toFixed(2) : "0.00";
+
+        // Dessin du badge RR (Fond noir semi-transparent)
+        const badgeW = 70;
+        const badgeH = 20;
+        const badgeX = entry.x + (width / 2) - (badgeW / 2);
+        const badgeY = entry.y - (badgeH / 2);
+
+        //ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+        //ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+        
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "bold 12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`R/R: ${rr}`, entry.x + width+30, badgeY + 10);
+        ctx.textAlign = "start"; // Reset pour les autres dessins
+    }
+},
+
+'short_pos': {
+    clicks: 1,
+    render: (ctx, p1, p2, p3) => {
+        if (!p1 || !p2 || !p3) return;
+        const entry = p1;
+        const target = p2;
+        const stop = p3;
+        const width = target.x - entry.x;
+
+        // Zones (Inversées pour Short)
+        ctx.fillStyle = "rgba(0, 255, 187, 0.3)";
+        ctx.fillRect(entry.x, entry.y, width, target.y - entry.y);
+        ctx.fillStyle = "rgba(255, 82, 82, 0.3)";
+        ctx.fillRect(entry.x, stop.y, width, entry.y - stop.y);
+
+        // Ligne d'entrée
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(entry.x, entry.y);
+        ctx.lineTo(entry.x + width, entry.y);
+        ctx.stroke();
+
+        // Calcul R:R
+        const risk = Math.abs(entry.y - stop.y);
+        const reward = Math.abs(entry.y - target.y);
+        const rr = risk !== 0 ? (reward / risk).toFixed(2) : "0.00";
+
+        // Badge RR
+        const badgeW = 70;
+        const badgeH = 20;
+        const badgeX = entry.x + (width / 2) - (badgeW / 2);
+        const badgeY = entry.y - (badgeH / 2);	
+
+        //ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+        //ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+        
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "bold 12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`R/R: ${rr}`, entry.x + width+30, badgeY + 10);
+        ctx.textAlign = "start";
+    }
+},
     'curve': { 
     clicks: 3, 
     render: (ctx, p1, p2, p3) => {

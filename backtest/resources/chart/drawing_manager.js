@@ -48,20 +48,49 @@
    finishDrawing() {
     if (this.points.length > 0) {
         const type = this.mode;
-        // On crée l'objet avec les points
+        let finalPoints = [...this.points];
+
+        // LOGIQUE SPÉCIFIQUE POUR POSITION LONG/SHORT
+        if (type === 'long_pos' || type === 'short_pos') {
+            const p = this.points[0];
+            const timeScale = this.chart.timeScale();
+            
+            // On calcule un décalage horizontal (largeur) de 20 bougies environ
+            const currentX = timeScale.timeToCoordinate(p.time);
+            const futureTime = timeScale.coordinateToTime(currentX + 150); 
+
+            // On calcule un décalage vertical par défaut (ex: 1% du prix actuel)
+            const priceOffset = p.price * 0.01; 
+
+            if (type === 'long_pos') {
+                finalPoints = [
+                    { time: p.time, price: p.price },            // 0: Entrée (Milieu Gauche)
+                    { time: futureTime, price: p.price + priceOffset }, // 1: TP (Haut Droite)
+                    { time: futureTime, price: p.price - priceOffset }  // 2: SL (Bas Droite)
+                ];
+            } else {
+                finalPoints = [
+                    { time: p.time, price: p.price },            // 0: Entrée
+                    { time: futureTime, price: p.price - priceOffset }, // 1: TP (Bas Droite)
+                    { time: futureTime, price: p.price + priceOffset }  // 2: SL (Haut Droite)
+                ];
+            }
+        }
+
+        // On ajoute le dessin avec les points finaux (soit 1, soit 3 pour les positions)
         this.drawings.push({ 
-            data: { type: type, points: [...this.points] } 
+            data: { type: type, points: finalPoints } 
         });
         
         this.save();
         const lastIdx = this.drawings.length - 1;
         
         if (type === 'text') {
-            // On force l'édition immédiate après la création
             setTimeout(() => this.editText(lastIdx), 100);
         }
     }
     this.setMode(null);
+    this.series.applyOptions({}); // Rafraîchit le graphique pour afficher l'objet
 },
 	editText(index) {
     const dr = this.drawings[index];
@@ -236,7 +265,25 @@ mgr.drawings.forEach((dr, i) => {
 			if (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax) {
 				isOverLine = true;
 			}
-		}
+			}
+		else if (dr.data.type === 'long_pos' || dr.data.type === 'short_pos') {
+				const entry = pts[0];
+				const target = pts[1];
+				const stop = pts[2];
+
+				// Calcul des limites du rectangle total
+				const xMin = entry.x;
+				const xMax = target.x; // Rappel: TP et SL ont le même X (time)
+    
+				// On trouve le point le plus haut et le plus bas pour couvrir tout le setup
+				const yMin = Math.min(entry.y, target.y, stop.y);
+				const yMax = Math.max(entry.y, target.y, stop.y);
+
+				// Vérification : est-ce que la souris est à l'intérieur de cette zone ?
+				if (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax) {
+					isOverLine = true; 
+				}
+			}
 		else if (dr.data.type === 'path') {
 		for (let j = 0; j < pts.length - 1; j++) {
 			const d = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
@@ -335,13 +382,36 @@ mgr.drawings.forEach((dr, i) => {
         const dr = mgr.drawings[mgr.selectedIdx];
         const timeScale = window.chart.timeScale();
 
-        if (mgr.dragState.type === 'resize') {
-            dr.data.points[mgr.dragState.index] = { 
-                time: timeScale.coordinateToTime(x), 
-                price: window.candleSeries.coordinateToPrice(y),
-				text: mgr.dragState.currentText
-            };
-        } else if (mgr.dragState.type === 'move') {
+       if (mgr.dragState.type === 'resize') {
+    const newTime = timeScale.coordinateToTime(x);
+    const newPrice = window.candleSeries.coordinateToPrice(y);
+
+    if (dr.data.type === 'long_pos' || dr.data.type === 'short_pos') {
+        const idx = mgr.dragState.index;
+
+        if (idx === 1 || idx === 2) {
+            // SYNCHRONISATION DE LA LARGEUR (Temps)
+            // On applique le nouveau temps aux deux points (TP et SL)
+            dr.data.points[1].time = newTime;
+            dr.data.points[2].time = newTime;
+            
+            // MISE À JOUR DU PRIX SPECIFIQUE
+            // Seul le point cliqué change de hauteur (prix)
+            dr.data.points[idx].price = newPrice;
+        } else if (idx === 0) {
+            // Si on bouge le point d'entrée, on ne change que son prix/temps
+            dr.data.points[0].time = newTime;
+            dr.data.points[0].price = newPrice;
+        }
+    } else {
+        // LOGIQUE STANDARD pour les autres dessins
+        dr.data.points[mgr.dragState.index] = { 
+            time: newTime, 
+            price: newPrice,
+            text: mgr.dragState.currentText
+        };
+    }
+} else if (mgr.dragState.type === 'move') {
             const dx = x - mgr.dragState.lastX;
             const dy = y - mgr.dragState.lastY;
             

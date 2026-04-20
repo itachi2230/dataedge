@@ -9,6 +9,12 @@ const themes = {
     dark: { bg: '#131722', text: '#d1d4dc', grid: '#2a2e39', up: '#00FFFF', down: '#FF007F' },
     light: { bg: '#ffffff', text: '#131722', grid: '#f0f3fa', up: '#26a69a', down: '#ef5350' }
 };
+const PriceScaleMode = {
+    Normal: 0,
+    Logarithmic: 1, // Note: Dans les versions récentes, c'est une option booléenne séparée
+    Percentage: 2,
+    IndexedTo100: 3,
+};
 
 window.cyberLog = function(msg, isError = false) {
     const el = document.getElementById('debug-console');
@@ -102,6 +108,16 @@ window.updateChartData = function(data, symbol = "Default") {
         window.isProcessingData = false;
         window.cyberLog(`${symbol} centré.`);
     }, 200);
+	setTimeout(() => {
+        const s = window.chart.priceScale('right');
+        s.applyOptions({ autoScale: false });
+        
+        // On met à jour l'UI des boutons (ton bouton 'A' passera en gris/off)
+        if (typeof window.updateScaleButtonsUI === 'function') {
+            window.updateScaleButtonsUI();
+        }
+        console.log("AutoScale released - Chart is now free-move.");
+    }, 500);
 };
 
 window.setupLazyLoading = function() {
@@ -166,11 +182,45 @@ window.updateColors = function() {
 
 
 window.updateScaleButtonsUI = function() {
-    const opts = window.chart.priceScale('right').options();
-    const btn = document.getElementById('btn-auto-scale');
-    if(btn) btn.classList.toggle('active', opts.autoScale);
+    const s = window.chart.priceScale('right');
+    const opts = s.options();
+    
+    // Auto Scale
+    const btnAuto = document.getElementById('btn-auto-scale');
+    if(btnAuto) btnAuto.classList.toggle('active', opts.autoScale);
+
+    // Percentage Mode
+    const btnPercent = document.getElementById('btn-percent-scale');
+    if(btnPercent) btnPercent.classList.toggle('active', opts.mode === 2); // 2 = Percentage
+
+    // Logarithmic Mode
+    const btnLog = document.getElementById('btn-log-scale');
+    if(btnLog) btnLog.classList.toggle('active', opts.mode === 1); // 1 = Logarithmic
 };
 
+// Toggle POURCENTAGE
+window.togglePercentScale = function() {
+    const s = window.chart.priceScale('right');
+    const isPercent = s.options().mode === 2;
+    
+    s.applyOptions({
+        mode: isPercent ? 0 : 2 // Revient en Normal (0) ou passe en Percent (2)
+    });
+    window.updateScaleButtonsUI();
+};
+
+// Toggle LOGARITHMIQUE
+window.toggleLogScale = function() {
+    const s = window.chart.priceScale('right');
+    const isLog = s.options().mode === 1;
+    
+    s.applyOptions({
+        mode: isLog ? 0 : 1 // Revient en Normal (0) ou passe en Log (1)
+    });
+    window.updateScaleButtonsUI();
+};
+
+// Ton AutoScale reste identique mais on s'assure qu'il update bien l'UI
 window.toggleAutoScale = function() {
     const s = window.chart.priceScale('right');
     s.applyOptions({ autoScale: !s.options().autoScale });

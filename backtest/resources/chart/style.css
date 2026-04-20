@@ -150,7 +150,7 @@ button.active {
 .tv-scale-angle-zone { 
     position: absolute; 
     bottom: 0; 
-    right: 0; 
+    right: 30px; 
     width: 60px; 
     height: 35px; 
     z-index: 100; 
