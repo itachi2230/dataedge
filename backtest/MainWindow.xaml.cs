@@ -95,6 +95,7 @@ namespace backtest
             journalMenu.Items.Add(deleteTrade);
             TradesDataGri.ContextMenu = journalMenu;
             PerformSystemHandshake();
+            ShowChart();
         }
 
         #region CHARGEMENT DES STRATÉGIES ET JOURNAL ET NOTIFS

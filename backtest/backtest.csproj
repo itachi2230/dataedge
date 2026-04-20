@@ -234,6 +234,9 @@
     <Content Include="resources\chart\chart_engine.js">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="resources\chart\drawing_configs.js">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="resources\chart\drawing_manager.js">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

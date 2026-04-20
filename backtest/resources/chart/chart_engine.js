@@ -85,7 +85,7 @@ window.updateChartData = function(data, symbol = "Default") {
     window.chart.priceScale('right').applyOptions({ autoScale: true });
 
     if (data.length > 0) {
-        const lastIndex = timeline.length - 150; 
+        const lastIndex = timeline.length - 800; 
         const firstVisibleIndex = lastIndex - 100; 
         
         window.chart.timeScale().setVisibleLogicalRange({
@@ -124,9 +124,9 @@ function getExtendedTimeline(realData) {
     if (!realData.length) return [];
     const interval = realData.length > 1 ? (realData[1].time - realData[0].time) : 3600;
     let timeline = [];
-    for (let i = 50; i > 0; i--) timeline.push({ time: realData[0].time - (i * interval) });
+    for (let i = 150; i > 0; i--) timeline.push({ time: realData[0].time - (i * interval) });
     timeline = [...timeline, ...realData];
-    for (let i = 1; i <= 150; i++) timeline.push({ time: realData[realData.length-1].time + (i * interval) });
+    for (let i = 1; i <= 800; i++) timeline.push({ time: realData[realData.length-1].time + (i * interval) });
     return timeline;
 }
 

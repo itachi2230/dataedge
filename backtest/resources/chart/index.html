@@ -7,80 +7,64 @@
     <link rel="stylesheet" href="toolbar.css">
 </head>
 <body>
-    <div id="side-toolbar">
-        <button class="side-btn active" title="Cross"><svg viewBox="0 0 18 18"><path d="M9 1v16M1 9h16" stroke="currentColor" stroke-width="1.2"/></svg></button>
-        
-        <button id="btn-rectangle" class="side-btn" onclick="DrawingManager.setMode('rectangle')" title="Rectangle">
-            <svg viewBox="0 0 18 18"><rect x="3" y="5" width="12" height="8" rx="0.5" stroke="currentColor" fill="none" stroke-width="1.2"/><circle cx="3" cy="5" r="1.5" fill="currentColor"/><circle cx="15" cy="5" r="1.5" fill="currentColor"/><circle cx="3" cy="13" r="1.5" fill="currentColor"/><circle cx="15" cy="13" r="1.5" fill="currentColor"/></svg>
-        </button>
+   <div id="side-toolbar">
+    <button class="side-btn active" onclick="DrawingManager.setMode(null)" title="Cross">
+        <svg viewBox="0 0 18 18"><path d="M9 1v16M1 9h16" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
+    
+    <button id="btn-rectangle" class="side-btn" onclick="DrawingManager.setMode('rectangle')" title="Rectangle">
+        <svg viewBox="0 0 18 18"><rect x="3" y="5" width="12" height="8" rx="0.5" stroke="currentColor" fill="none" stroke-width="1.2"/><circle cx="3" cy="5" r="1.5" fill="currentColor"/><circle cx="15" cy="5" r="1.5" fill="currentColor"/><circle cx="3" cy="13" r="1.5" fill="currentColor"/><circle cx="15" cy="13" r="1.5" fill="currentColor"/></svg>
+    </button>
 
-        <button id="btn-trendline" class="side-btn" onclick="DrawingManager.setMode('trendline')" title="Ligne de tendance">
-            <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><circle cx="14" cy="4" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5l7-7" stroke="currentColor" stroke-width="1.2"/></svg>
-        </button>
+    <button id="btn-trendline" class="side-btn" onclick="DrawingManager.setMode('trendline')" title="Ligne de tendance">
+        <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><circle cx="14" cy="4" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5l7-7" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
 
-        <button class="side-btn" title="Position Courte">
-            <svg viewBox="0 0 18 18"><path d="M4 7h10M4 11h10M4 7v4m10-4v4" stroke="currentColor" fill="none"/><path d="M9 7V4m0 7v3" stroke="currentColor"/><text x="8" y="10" font-size="5" fill="currentColor" text-anchor="middle">S</text></svg>
-        </button>
+    <button id="btn-long_pos" class="side-btn" onclick="DrawingManager.setMode('long_pos')" title="Position Longue">
+        <svg viewBox="0 0 18 18"><path d="M4 7h10M4 11h10M4 7v4m10-4v4" stroke="currentColor" fill="none"/><path d="M9 7V4m0 7v3" stroke="currentColor"/><text x="8" y="10" font-size="5" fill="currentColor" text-anchor="middle">L</text></svg>
+    </button>
 
-        <button class="side-btn" title="Position Longue">
-            <svg viewBox="0 0 18 18"><path d="M4 7h10M4 11h10M4 7v4m10-4v4" stroke="currentColor" fill="none"/><path d="M9 7V4m0 7v3" stroke="currentColor"/><text x="8" y="10" font-size="5" fill="currentColor" text-anchor="middle">L</text></svg>
-        </button>
+    <button id="btn-short_pos" class="side-btn" onclick="DrawingManager.setMode('short_pos')" title="Position Courte">
+        <svg viewBox="0 0 18 18"><path d="M4 7h10M4 11h10M4 7v4m10-4v4" stroke="currentColor" fill="none"/><path d="M9 7V4m0 7v3" stroke="currentColor"/><text x="8" y="10" font-size="5" fill="currentColor" text-anchor="middle">S</text></svg>
+    </button>
 
-        <button class="side-btn" title="Courbe">
-            <svg viewBox="0 0 18 18"><path d="M4 14s2-10 5-10 5 10 5 10" stroke="currentColor" fill="none" stroke-width="1.2"/><circle cx="4" cy="14" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="14" cy="14" r="1" fill="currentColor"/></svg>
-        </button>
+    <button id="btn-curve" class="side-btn" onclick="DrawingManager.setMode('curve')" title="Courbe">
+        <svg viewBox="0 0 18 18"><path d="M4 14s2-10 5-10 5 10 5 10" stroke="currentColor" fill="none" stroke-width="1.2"/><circle cx="4" cy="14" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="14" cy="14" r="1" fill="currentColor"/></svg>
+    </button>
 
-        <button class="side-btn" title="Texte"><svg viewBox="0 0 18 18"><path d="M5 5h8M9 5v9" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    <button id="btn-text" class="side-btn" onclick="DrawingManager.setMode('text')" title="Texte">
+        <svg viewBox="0 0 18 18"><path d="M5 5h8M9 5v9" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
 
-        <button id="btn-horz_ray" class="side-btn" onclick="DrawingManager.setMode('horz_ray')" title="Rayon Horizontal">
-            <svg viewBox="0 0 18 18"><circle cx="5" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M6.5 9H17" stroke="currentColor" stroke-width="1.2"/></svg>
-        </button>
+    <button id="btn-horz_ray" class="side-btn" onclick="DrawingManager.setMode('horz_ray')" title="Rayon Horizontal">
+        <svg viewBox="0 0 18 18"><circle cx="5" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M6.5 9H17" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
 
-        <button class="side-btn" title="Ligne Horizontale">
-            <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M1 9h16" stroke="currentColor" stroke-width="1.2"/></svg>
-        </button>
+    <button id="btn-horz_line" class="side-btn" onclick="DrawingManager.setMode('horz_line')" title="Ligne Horizontale">
+        <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M1 9h16" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
 
-        <button class="side-btn" title="Chemin">
-            <svg viewBox="0 0 18 18"><path d="M4 14l4-8 6 4" stroke="currentColor" fill="none"/><circle cx="4" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="6" r="1" fill="currentColor"/><path d="M14 10l2-2" stroke="currentColor"/></svg>
-        </button>
+    <button id="btn-vert_line" class="side-btn" onclick="DrawingManager.setMode('vert_line')" title="Ligne Verticale">
+        <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M9 1v16" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
 
-        <button class="side-btn" title="Retracement Fibonacci">
-            <svg viewBox="0 0 18 18"><path d="M3 5h12M3 8h12M3 11h12M3 14h12" stroke="currentColor" stroke-opacity="0.5"/><circle cx="3" cy="14" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/></svg>
-        </button>
+    <button id="btn-path" class="side-btn" onclick="DrawingManager.setMode('path')" title="Chemin">
+        <svg viewBox="0 0 18 18"><path d="M4 14l4-8 6 4" stroke="currentColor" fill="none"/><circle cx="4" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="6" r="1" fill="currentColor"/><path d="M14 10l2-2" stroke="currentColor"/></svg>
+    </button>
 
-        <button class="side-btn" title="Ligne Verticale">
-            <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="1.5" stroke="currentColor" fill="none"/><path d="M9 1v16" stroke="currentColor" stroke-width="1.2"/></svg>
-        </button>
+    <button id="btn-arrow" class="side-btn" onclick="DrawingManager.setMode('arrow')" title="Flèche">
+        <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5L14 4" stroke="currentColor"/><path d="M10 4h4v4" stroke="currentColor" fill="none"/></svg>
+    </button>
 
-        <button class="side-btn" title="Rayon">
-            <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5L16 2" stroke="currentColor" stroke-width="1.2"/></svg>
-        </button>
+    <button id="btn-fibo" class="side-btn" onclick="DrawingManager.setMode('fibo')" title="Retracement Fibonacci">
+        <svg viewBox="0 0 18 18"><path d="M3 5h12M3 8h12M3 11h12M3 14h12" stroke="currentColor" stroke-opacity="0.5"/><circle cx="3" cy="14" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/></svg>
+    </button>
 
-        <button class="side-btn" title="Plage de prix">
-            <svg viewBox="0 0 18 18"><path d="M6 5h6M6 13h6M9 5v8" stroke="currentColor"/><path d="M7 7l2-2 2 2M7 11l2 2 2-2" stroke="currentColor" fill="none"/></svg>
-        </button>
-
-        <button class="side-btn" title="Plage de date">
-            <svg viewBox="0 0 18 18"><path d="M5 6v6M13 6v6M5 9h8" stroke="currentColor"/><path d="M7 7l-2 2 2 2M11 7l2 2-2 2" stroke="currentColor" fill="none"/></svg>
-        </button>
-
-        <button class="side-btn" title="Flèche">
-            <svg viewBox="0 0 18 18"><circle cx="4" cy="14" r="1.5" stroke="currentColor" fill="none"/><path d="M5.5 12.5L14 4" stroke="currentColor"/><path d="M10 4h4v4" stroke="currentColor" fill="none"/></svg>
-        </button>
-
-        <button class="side-btn" title="Marqueur fléché">
-            <svg viewBox="0 0 18 18"><path d="M4 14l10-10M8 4h6v6" fill="currentColor" stroke="currentColor"/></svg>
-        </button>
-
-        <button class="side-btn" title="Cercle">
-            <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="6" stroke="currentColor" fill="none"/><circle cx="15" cy="9" r="1.5" fill="currentColor"/></svg>
-        </button>
-
-        <div class="side-separator"></div>
-        <button id="btn-clear-all" class="side-btn" onclick="DrawingManager.clearAllDrawings()" title="Tout supprimer" style="color: #FF4444;">
-            <svg viewBox="0 0 18 18"><path d="M3 5h12M6 5V3h6v2M7 8v5M11 8v5M4 5l1 10h8l1-10" stroke="currentColor" fill="none"/></svg>
-        </button>
-    </div>
+    <div class="side-separator"></div>
+    <button id="btn-clear-all" class="side-btn" onclick="DrawingManager.clearAllDrawings()" title="Tout supprimer" style="color: #FF4444;">
+        <svg viewBox="0 0 18 18"><path d="M3 5h12M6 5V3h6v2M7 8v5M11 8v5M4 5l1 10h8l1-10" stroke="currentColor" fill="none"/></svg>
+    </button>
+</div>
 
     <div id="toolbar">
     <div class="tool-group">
@@ -130,9 +114,15 @@
     <div id="debug-console"></div>
 
     <script src="lightweight-charts.js"></script>
-    <script src="drawing_utils.js"></script>
-    <script src="drawing_plugin.js"></script>
-    <script src="drawing_manager.js"></script>
-    <script src="chart_engine.js"></script>
+
+	<script src="drawing_configs.js"></script>
+
+	<script src="drawing_utils.js"></script>
+
+	<script src="drawing_plugin.js"></script>
+
+	<script src="drawing_manager.js"></script>
+
+	<script src="chart_engine.js"></script>
 </body>
 </html>
