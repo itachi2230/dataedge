@@ -207,12 +207,59 @@
         ctx.moveTo(p2.x, p2.y); ctx.lineTo(p2.x - 12 * Math.cos(angle + Math.PI/6), p2.y - 12 * Math.sin(angle + Math.PI/6));
     }, preview: (p1, p2) => `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#00FFFF" stroke-dasharray="5,5" />` },
 
-    'fibo': { clicks: 2, render: (ctx, p1, p2, w) => {
-        const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-        levels.forEach(l => { 
-            const y = p1.y + (p2.y - p1.y) * l;
-            ctx.moveTo(0, y); ctx.lineTo(w, y);
-            ctx.fillText(l.toString(), 10, y - 2);
+// Dans drawing_configs.js
+'fibo': { 
+    clicks: 2, 
+    // On remplace 'settings' par 'isSelected' et 'd' pour matcher l'appel du plugin
+    render: (ctx, p1, p2, w, h, isSelected, d) => {
+        if(!p1 || !p2) return;
+
+        // ON RÉCUPÈRE LES SETTINGS DEPUIS L'OBJET 'd'
+        const settings = d.data.settings;
+        const activeLevels = settings?.levels || [0, 0.382, 0.5, 0.618, 1];
+        const showFill = settings?.showFill || false;
+
+        const xMin = Math.min(p1.x, p2.x);
+        const xMax = Math.max(p1.x, p2.x);
+        const price1 = window.candleSeries.coordinateToPrice(p1.y);
+        const price2 = window.candleSeries.coordinateToPrice(p2.y);
+        const priceDiff = price1 - price2; 
+
+        ctx.save();
+        
+        // Style de ligne pour la Fibo
+        ctx.strokeStyle = isSelected ? "#00FFFF" : "rgba(0, 255, 255, 0.5)";
+        ctx.lineWidth = 1;
+
+        activeLevels.forEach((l) => {
+            const y = p2.y + (p1.y - p2.y) * l;
+            const currentPrice = (price2 + priceDiff * l).toFixed(2);
+
+            ctx.beginPath();
+            ctx.moveTo(xMin, y);
+            ctx.lineTo(xMax, y);
+            ctx.stroke();
+
+            ctx.fillStyle = "#00FFFF";
+            ctx.font = "10px Arial";
+            ctx.fillText(`${l} (${currentPrice})`, xMax + 5, y + 3);
         });
-    }, preview: (p1, p2) => `<line x1="0" y1="${p1.y}" x2="2000" y2="${p1.y}" stroke="#00FFFF" opacity="0.3"/><line x1="0" y1="${p2.y}" x2="2000" y2="${p2.y}" stroke="#00FFFF" opacity="0.3"/>` }
+
+        // Remplissage (Fill)
+        if (showFill && activeLevels.length >= 2) {
+            const sorted = [...activeLevels].sort((a,b) => a-b);
+            ctx.fillStyle = "rgba(0, 255, 255, 0.1)";
+            const yStart = p2.y + (p1.y - p2.y) * sorted[0];
+            const yEnd = p2.y + (p1.y - p2.y) * sorted[sorted.length - 1];
+            ctx.fillRect(xMin, Math.min(yStart, yEnd), xMax - xMin, Math.abs(yEnd - yStart));
+        }
+
+        // Diagonale de contrôle
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        ctx.restore();
+    },
+    preview: (p1, p2) => `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#00FFFF" stroke-dasharray="5,5" />`
+},
+
 };

@@ -68,8 +68,28 @@
                     { time: futureTime, price: p.price + priceOffset }, // 1: TP (Haut Droite)
                     { time: futureTime, price: p.price - priceOffset }  // 2: SL (Bas Droite)
                 ];
-            } else {
-                finalPoints = [
+            }
+			
+		else if (type === 'fibo') {
+			// 1. On prépare les données par défaut
+			const fiboData = {
+				type: 'fibo',
+				points: finalPoints,
+				settings: {
+					levels: [0, 0.382, 0.5, 0.618, 1],
+					showFill: false
+				}
+			};
+    
+			// 2. On ajoute aux dessins
+			this.drawings.push({ data: fiboData });
+			this.save();
+    
+			// 3. On ouvre l'éditeur visuel (non-bloquant)
+			const lastIdx = this.drawings.length - 1;
+			setTimeout(() => this.editFibo(lastIdx), 100);
+		}else {
+                finalPoints = [	
                     { time: p.time, price: p.price },            // 0: Entrée
                     { time: futureTime, price: p.price - priceOffset }, // 1: TP (Bas Droite)
                     { time: futureTime, price: p.price + priceOffset }  // 2: SL (Haut Droite)
@@ -91,6 +111,82 @@
     }
     this.setMode(null);
     this.series.applyOptions({}); // Rafraîchit le graphique pour afficher l'objet
+},
+editFibo(index) {
+    const dr = this.drawings[index];
+    if (!dr || dr.data.type !== 'fibo') return;
+
+    const old = document.getElementById('temp-fibo-editor');
+    if (old) old.remove();
+
+    const container = document.getElementById('chart-container');
+    const panel = document.createElement('div');
+    panel.id = 'temp-fibo-editor';
+    
+    panel.style.cssText = `
+        position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+        z-index: 2000; background: #1e222d; color: #00FFFF;
+        border: 2px solid #00FFFF; padding: 10px 15px; border-radius: 6px;
+        display: flex; flex-direction: column; gap: 8px; min-width: 280px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-family: sans-serif;
+    `;
+
+    const allLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+    const currentLevels = dr.data.settings?.levels || [0, 0.382, 0.5, 0.618, 1];
+    const currentFill = dr.data.settings?.showFill || false;
+
+    // Construction de la grille de checkboxes
+    let levelsHtml = `<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">`;
+    allLevels.forEach(lvl => {
+        const isChecked = currentLevels.includes(lvl) ? 'checked' : '';
+        levelsHtml += `
+            <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" class="fibo-lvl-cb" value="${lvl}" ${isChecked}> ${lvl}
+            </label>`;
+    });
+    levelsHtml += `</div>`;
+
+    panel.innerHTML = `
+        <div style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 5px;">Niveaux Fibonacci</div>
+        ${levelsHtml}
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; pt: 5px; margin-top: 5px;">
+            <label style="font-size: 12px; display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                <input type="checkbox" id="fibo-fill-checkbox" ${currentFill ? 'checked' : ''}> Remplissage
+            </label>
+            <button id="fibo-ok-btn" style="background: #00FFFF; color: #1e222d; border: none; padding: 3px 10px; border-radius: 3px; cursor: pointer; font-weight: bold; font-size: 11px;">OK</button>
+        </div>
+    `;
+
+    container.appendChild(panel);
+
+    const saveSettings = () => {
+        const selectedLevels = Array.from(panel.querySelectorAll('.fibo-lvl-cb:checked'))
+            .map(cb => parseFloat(cb.value));
+
+        // On injecte les settings dans l'objet source du dessin
+        dr.data.settings = {
+            levels: selectedLevels,
+            showFill: panel.querySelector('#fibo-fill-checkbox').checked
+        };
+        
+        this.save(); 
+        this.series.applyOptions({}); // Déclenche le rafraîchissement du plugin
+    };
+
+    // Events pour mise à jour immédiate
+    panel.querySelectorAll('input').forEach(input => {
+        input.onchange = saveSettings;
+    });
+
+    panel.querySelector('#fibo-ok-btn').onclick = () => panel.remove();
+
+    const closeOnOutside = (e) => {
+        if (!panel.contains(e.target)) {
+            panel.remove();
+            document.removeEventListener('mousedown', closeOnOutside);
+        }
+    };
+    setTimeout(() => document.addEventListener('mousedown', closeOnOutside), 100);
 },
 	editText(index) {
     const dr = this.drawings[index];
@@ -284,6 +380,16 @@ mgr.drawings.forEach((dr, i) => {
 					isOverLine = true; 
 				}
 			}
+		else if (type === 'fibo') {
+			// On permet la sélection si on clique entre le niveau 0 et le niveau 1
+			const yMin = Math.min(pts[0].y, pts[1].y);
+			const yMax = Math.max(pts[0].y, pts[1].y);
+    
+			// Si on clique dans la zone verticale couverte par la fibo
+			if (mouseY >= yMin && mouseY <= yMax) {
+				isOverLine = true;
+			}
+		}
 		else if (dr.data.type === 'path') {
 		for (let j = 0; j < pts.length - 1; j++) {
 			const d = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
@@ -316,7 +422,7 @@ mgr.drawings.forEach((dr, i) => {
                 window.cyberLog("Aucun dessin touché. Désélection.");
             }
 
-            // Mise à jour de la sélection
+            // Mise à jour de la sélection	
             mgr.selectedIdx = found;
             mgr.series.applyOptions({});
 			if (found !== null) {
@@ -326,6 +432,9 @@ mgr.drawings.forEach((dr, i) => {
 						// On vérifie qu'on n'est pas en train de draguer avant d'ouvrir
 						if (!mgr.dragState) mgr.editText(found);
 					}, 150); 
+				}
+				if (dr.data.type === 'fibo' && mgr.selectedIdx === found) {
+					mgr.editFibo(found);
 				}
 			}
         }

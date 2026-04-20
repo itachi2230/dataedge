@@ -25,6 +25,7 @@
                                 y: this.series.priceToCoordinate(p.price),
 								text: p.text
                             }));
+							const settings = d.data.settings || null;
 							if (d.data.type === 'text') {
 								const text = d.data.points[0].text || "Cliquez pour modifier";
 								canvasCtx.font = "14px Arial";
