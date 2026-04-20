@@ -20,21 +20,43 @@
     }, preview: (p1, p2) => `<rect x="${p1.x}" y="${p1.y-40}" width="100" height="40" fill="rgba(255,0,0,0.2)"/><rect x="${p1.x}" y="${p1.y}" width="100" height="40" fill="rgba(0,255,0,0.2)"/>` },
 
     'curve': { 
-		clicks: 3, 
-		render: (ctx, p1, p2, p3) => {
-			if (!p1 || !p2 || !p3) return;
-			ctx.moveTo(p1.x, p1.y);
-			ctx.quadraticCurveTo(p3.x, p3.y, p2.x, p2.y);
-		},
-		preview: (p1, p2, p3) => {
-			if (!p3) {
-				// Entre clic 1 et 2 : ligne droite pour montrer la direction
-				return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#00FFFF" stroke-dasharray="5,5" />`;
-			}
-			// Entre clic 2 et 3 : aperçu de la courbe avec la position actuelle de la souris
-			return `<path d="M ${p1.x} ${p1.y} Q ${p3.x} ${p3.y} ${p2.x} ${p2.y}" fill="none" stroke="#00FFFF" stroke-dasharray="5,5" />`;
-		}
-	},
+    clicks: 3, 
+    render: (ctx, p1, p2, p3) => {
+        if (!p1 || !p2 || !p3) return;
+        
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        // p1 = Départ
+        // p2 = Courbure (cliqué en 3ème, mais utilisé comme point de contrôle)
+        // p3 = Fin (cliqué en 2ème)
+        
+        // Note: Si ton DrawingManager envoie les points dans l'ordre chronologique:
+        // pts[0] = clic 1, pts[1] = clic 2, pts[2] = clic 3
+        ctx.quadraticCurveTo(p3.x, p3.y, p2.x, p2.y); 
+        ctx.stroke();
+    },
+    preview: (p1, p2) => {
+        const mgr = window.DrawingManager;
+        
+        // ÉTAPE 1 : Entre le 1er et le 2ème clic (Ligne droite vers le bout)
+        if (mgr.points.length === 1) {
+            return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#00FFFF" stroke-dasharray="5,5" />`;
+        }
+        
+        // ÉTAPE 2 : Entre le 2ème et le 3ème clic (Arc élastique)
+        if (mgr.points.length === 2) {
+            const start = p1; // Premier clic
+            const end = { // Deuxième clic (le bout)
+                x: window.chart.timeScale().timeToCoordinate(mgr.points[1].time),
+                y: window.candleSeries.priceToCoordinate(mgr.points[1].price)
+            };
+            const control = p2; // Position actuelle de la souris (la courbure)
+            
+            return `<path d="M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}" fill="none" stroke="#00FFFF" stroke-dasharray="5,5" />`;
+        }
+        return '';
+    }
+},
 	'text': { 
 		clicks: 1, 
 		render: (ctx, p1) => { 

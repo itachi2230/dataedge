@@ -38,7 +38,7 @@
         if (!conf) return;
 
         this.points.push({ time, price });
-
+		this.series.applyOptions({});
         // Vérification du nombre de clics requis par la config
         if (this.points.length === conf.clicks) {
             this.finishDrawing();
@@ -241,6 +241,14 @@ mgr.drawings.forEach((dr, i) => {
 		for (let j = 0; j < pts.length - 1; j++) {
 			const d = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
 			if (d < 10) { isOverLine = true; break; }
+		}
+	}
+	else if (type === 'curve') {
+		// On teste la proximité avec la courbe (simplifié par distance aux segments p1-p2 et p2-p3)
+		const d1 = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y);
+		const d2 = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[1].x, pts[1].y, pts[2].x, pts[2].y);
+		if (d1 < 15 || d2 < 15) {
+			isOverLine = true;
 		}
 	}
 		
