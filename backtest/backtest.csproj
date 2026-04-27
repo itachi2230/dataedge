@@ -253,6 +253,9 @@
     <Content Include="resources\chart\lightweight-charts.js">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="resources\chart\replay.css">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="resources\chart\style.css">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

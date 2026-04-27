@@ -673,8 +673,8 @@ namespace backtest
             OverlayClose.Visibility = Visibility.Collapsed;
         }
         private void Button_Click_2(object sender, RoutedEventArgs e) { new addStrategieWindow().ShowDialog(); loadStrategies(); } // + Strat
-        private void ButtonEtude(object sender, RoutedEventArgs e) { ShowEtude(); } 
-
+        private void ButtonEtude(object sender, RoutedEventArgs e) { ShowEtude(); }
+        private void ButtonHome(object sender, RoutedEventArgs e) { ShowDashboard(); }
         private void CloseButton_Click(object sender, RoutedEventArgs e) { SaveNotes(); this.Close(); }
 
         private void MinimizeButton_Click(object sender, RoutedEventArgs e) => this.WindowState = WindowState.Minimized;

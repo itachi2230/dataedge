@@ -1,11 +1,34 @@
 ﻿class DrawingPlugin {
     constructor(manager, chart, series) {
-        this.manager = manager; this.chart = chart; this.series = series;
+        this.manager = manager;
+        this.chart = chart;
+        this.series = series;
+    }
+
+    // Fonction interne pour détecter la durée d'une bougie en secondes sur la TF actuelle
+    _getCurrentStep(timeScale) {
+        // On récupère les données visibles pour calculer l'écart entre deux bougies
+        const visibleRange = timeScale.getVisibleRange();
+        if (!visibleRange) return null;
+
+        // On essaie de trouver le pas (step) via la différence de temps
+        // Si la bibliothèque ne donne pas accès facilement à la TF, 
+        // le calcul de la différence entre deux points est la méthode infaillible.
+        const logicalRange = timeScale.getVisibleLogicalRange();
+        if (!logicalRange) return null;
+
+        const time1 = timeScale.coordinateToTime(timeScale.logicalToCoordinate(logicalRange.from));
+        const time2 = timeScale.coordinateToTime(timeScale.logicalToCoordinate(logicalRange.from + 1));
+        
+        if (time1 && time2) {
+            return Math.abs(time2 - time1);
+        }
+        return null;
     }
 
     paneViews() {
         return [{
-            renderer: () => ({	
+            renderer: () => ({
                 draw: (target) => {
                     const ctx = target._context;
                     if (!ctx || !this.manager.drawings.length) return;
@@ -13,6 +36,11 @@
                     target.useMediaCoordinateSpace((scope) => {
                         const canvasCtx = scope.context;
                         const { width, height } = scope.mediaSize;
+                        const timeScale = this.chart.timeScale();
+                        
+                        // Calcul du pas de la TF actuelle
+                        const step = this._getCurrentStep(timeScale);
+                        
                         canvasCtx.save();
 
                         this.manager.drawings.forEach((d, index) => {
@@ -20,64 +48,57 @@
                             if (!config) return;
 
                             const isSelected = (index === this.manager.selectedIdx);
-                            const coords = d.data.points.map(p => ({
-                                x: this.chart.timeScale().timeToCoordinate(p.time),
-                                y: this.series.priceToCoordinate(p.price),
-								text: p.text
-                            }));
-							const settings = d.data.settings || null;
-							if (d.data.type === 'text') {
-								const text = d.data.points[0].text || "Cliquez pour modifier";
-								canvasCtx.font = "14px Arial";
-								// On mesure et on stocke la largeur dans l'objet pour le manager
-								d.lastMeasuredWidth = canvasCtx.measureText(text).width;
-							}
-							if (this.manager.mode === 'path' && this.manager.points.length > 0) {
-								const tempPts = this.manager.points.map(p => ({
-									x: this.chart.timeScale().timeToCoordinate(p.time),
-									y: this.series.priceToCoordinate(p.price)
-								}));
 
-								canvasCtx.beginPath();
-								canvasCtx.lineCap = 'round';
-								canvasCtx.strokeStyle = '#00FFFF'; // Couleur de ton choix
-								ctx.setLineDash([5, 5]); // Optionnel : mettre en pointillé le tracé en cours
-    
-								canvasCtx.moveTo(tempPts[0].x, tempPts[0].y);
-								for (let i = 1; i < tempPts.length; i++) {
-									canvasCtx.lineTo(tempPts[i].x, tempPts[i].y);
-								}
-								canvasCtx.stroke();
-								ctx.setLineDash([]); // On remet en ligne pleine pour la suite
-							}
-							// Dans DrawingPlugin.draw(), après le bloc du 'path' :
-							if (this.manager.mode === 'curve' && this.manager.points.length === 2) {
-								const p1 = {
-									x: this.chart.timeScale().timeToCoordinate(this.manager.points[0].time),
-									y: this.series.priceToCoordinate(this.manager.points[0].price)
-								};
-								const p2 = {
-									x: this.chart.timeScale().timeToCoordinate(this.manager.points[1].time),
-									y: this.series.priceToCoordinate(this.manager.points[1].price)
-								};
+                            const coords = d.data.points.map(p => {
+                                // 1. TENTATIVE NORMALE
+                                let x = timeScale.timeToCoordinate(p.time);
 
-								canvasCtx.beginPath();
-								canvasCtx.setLineDash([5, 5]);
-								canvasCtx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
-								canvasCtx.moveTo(p1.x, p1.y);
-								canvasCtx.lineTo(p2.x, p2.y); // Affiche la corde de l'arc pendant qu'on ajuste la courbe
-								canvasCtx.stroke();
-								canvasCtx.setLineDash([]);
-							}
-                            if (coords[0].x === null) return;
+                                // 2. SNAP MATHÉMATIQUE SI ÉCHEC (Changement de TF)
+                                if (x === null && p.time && step) {
+                                    // On force le timestamp sur un multiple exact du début d'une bougie
+                                    const snappedTime = Math.floor(p.time / step) * step;
+                                    x = timeScale.timeToCoordinate(snappedTime);
 
-                            canvasCtx.strokeStyle =  '#00FFFF';
-                            canvasCtx.lineWidth =  2;
-                            canvasCtx.lineJoin = "round"; canvasCtx.lineCap = "round";
+                                    // 3. ULTIME RECOURS : INDEX LOGIQUE
+                                    if (x === null) {
+                                        const logical = timeScale.coordinateToLogical(p.time);
+                                        if (logical !== null) {
+                                            x = timeScale.logicalToCoordinate(Math.round(logical));
+                                        }
+                                    }
+                                }
+
+                                // 4. SÉCURITÉ ANTI-TRAIT HORIZONTAL (Bord gauche)
+                                // Si x est toujours null ou NaN, on le sort de l'écran visible
+                                if (x === null || isNaN(x)) {
+                                    x = -20000; 
+                                }
+
+                                const y = this.series.priceToCoordinate(p.price);
+                                return { x, y, text: p.text };
+                            });
+
+                            // PROTECTION : Si un des points cruciaux est invalide, on n'appelle pas le render
+                            // Cela évite que le moteur de rendu tente un lineTo(0, y)
+                            if (coords.some(c => c.x < -10000)) return;
+
+                            // Mesure du texte
+                            if (d.data.type === 'text') {
+                                canvasCtx.font = "14px Arial";
+                                d.lastMeasuredWidth = canvasCtx.measureText(d.data.points[0].text || "").width;
+                            }
+
+                            // --- RENDU ---
+                            canvasCtx.strokeStyle = '#00FFFF';
+                            canvasCtx.lineWidth = 2;
+                            canvasCtx.lineJoin = "round";
+                            canvasCtx.lineCap = "round";
+
+                            this._renderPreviews(canvasCtx, timeScale);
 
                             canvasCtx.beginPath();
-                            // On passe tous les points au render (utile pour le chemin)
-                            config.render(canvasCtx, ...coords, width, height,isSelected, d);
+                            // Appel au fichier de configuration (drawing_configs.js)
+                            config.render(canvasCtx, ...coords, width, height, isSelected, d);
                             
                             if (config.fill) {
                                 canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.1)';
@@ -85,11 +106,16 @@
                             }
                             canvasCtx.stroke();
 
+                            // --- ANCRES ---
                             if (isSelected) {
                                 coords.forEach(c => {
-                                    canvasCtx.fillStyle = "#00FFFF";
-									canvasCtx.beginPath();
-                                    canvasCtx.arc(c.x, c.y, 5, 0, Math.PI * 2); canvasCtx.fill();
+                                    if (c.x < 0) return;
+                                    canvasCtx.fillStyle = "#1e222d";
+                                    canvasCtx.strokeStyle = "#00FFFF";
+                                    canvasCtx.lineWidth = 2;
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(c.x, c.y, 5, 0, Math.PI * 2);
+                                    canvasCtx.fill();
                                     canvasCtx.stroke();
                                 });
                             }
@@ -99,5 +125,33 @@
                 }
             })
         }];
+    }
+
+    _renderPreviews(ctx, timeScale) {
+        if (!this.manager.mode || this.manager.points.length === 0) return;
+
+        const pts = this.manager.points.map(p => {
+            let x = timeScale.timeToCoordinate(p.time);
+            if (x === null) {
+                const log = timeScale.coordinateToLogical(p.time);
+                if (log !== null) x = timeScale.logicalToCoordinate(Math.round(log));
+            }
+            return { x, y: this.series.priceToCoordinate(p.price) };
+        });
+
+        if (pts[0].x === null || pts[0].x < -5000) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#00FFFF';
+        ctx.moveTo(pts[0].x, pts[0].y);
+        
+        pts.forEach((p, i) => {
+            if (i > 0 && p.x !== null && p.x > -10000) ctx.lineTo(p.x, p.y);
+        });
+        
+        ctx.stroke();
+        ctx.restore();
     }
 }

@@ -85,7 +85,17 @@ window.updateChartData = function(data, symbol = "Default") {
     window.currentSymbol = symbol;
     window.isProcessingData = true;
     
+    // --- MODIF REPLAY : On stocke les données brutes ---
+    window.replayState.allData = data; 
+    // --------------------------------------------------
+
     const timeline = getExtendedTimeline(data);
+    
+    // Si le replay est actif, on initialise l'index à la fin (ou au début selon ton choix)
+    if (window.replayState.isActive) {
+        window.replayState.currentIndex = data.length - 1;
+    }
+
     window.candleSeries.setData(timeline);
     
     window.chart.priceScale('right').applyOptions({ autoScale: true });
@@ -100,23 +110,21 @@ window.updateChartData = function(data, symbol = "Default") {
         });
     }
 
-    if(window.DrawingManager) window.DrawingManager.load(); // Corrigé : load() au lieu de loadDrawings()
-    
+    if(window.DrawingManager) window.DrawingManager.load(); 
     window.updateScaleButtonsUI();
 
     setTimeout(() => { 
         window.isProcessingData = false;
         window.cyberLog(`${symbol} centré.`);
     }, 200);
-	setTimeout(() => {
+
+    setTimeout(() => {
         const s = window.chart.priceScale('right');
         s.applyOptions({ autoScale: false });
-        
-        // On met à jour l'UI des boutons (ton bouton 'A' passera en gris/off)
         if (typeof window.updateScaleButtonsUI === 'function') {
             window.updateScaleButtonsUI();
         }
-        console.log("AutoScale released - Chart is now free-move.");
+        console.log("AutoScale released");
     }, 500);
 };
 
@@ -135,6 +143,158 @@ window.setupLazyLoading = function() {
         }
     });
 };
+//zone replay
+// --- ÉTAT DU REPLAY ---
+window.replayState = {
+    isActive: false,
+    isPlaying: false,
+    currentIndex: 0,
+    speed: 1, // Nombre de bougies par saut
+    allData: [] // Stockage complet des données reçues du C#
+};
+
+window.toggleReplayUI = function() {
+    let dashboard = document.getElementById('replay-dashboard');
+    const btn = document.getElementById('btn-replay-mode');
+    
+    if (dashboard) {
+        dashboard.remove();
+        btn.classList.remove('active');
+        window.replayState.isActive = false;
+        if(window.replayState.allData.length > 0) window.candleSeries.setData(window.replayState.allData);
+        return;
+    }
+
+    window.replayState.isActive = true;
+    btn.classList.add('active');
+    
+    // Structure horizontale ultra-compacte
+    const html = `
+        <div id="replay-dashboard" style="display: flex; align-items: center; padding: 4px 10px; gap: 8px;">
+            <div id="replay-header" style="cursor: move; display: flex; flex-direction: column; gap: 2px; padding-right: 8px; border-right: 1px solid #363c4e;">
+                <div style="width: 3px; height: 3px; background: #555; border-radius: 50%;"></div>
+                <div style="width: 3px; height: 3px; background: #555; border-radius: 50%;"></div>
+                <div style="width: 3px; height: 3px; background: #555; border-radius: 50%;"></div>
+            </div>
+
+            <div class="replay-group" style="display: flex; align-items: center; gap: 5px;">
+                <input type="date" id="replay-date-input" class="replay-input" style="width: 120px;">
+                <button class="icon-btn" onclick="jumpToReplayDate()">Go</button>
+            </div>
+
+            <div class="replay-divider" style="width: 1px; height: 20px; background: #363c4e;"></div>
+
+            <div class="replay-group" style="display: flex; align-items: center; gap: 5px;">
+                <button class="icon-btn" onclick="stepReplay(-1)">❮</button>
+                <button id="btn-play-pause" class="icon-btn" onclick="togglePlayReplay()">▶</button>
+                <button class="icon-btn" onclick="stepReplay(1)">❯</button>
+            </div>
+
+            <div class="replay-divider" style="width: 1px; height: 20px; background: #363c4e;"></div>
+
+            <select class="replay-speed" onchange="window.replayState.speed = parseInt(this.value)" style="background: #2a2e39; color: white; border: 1px solid #444; border-radius: 4px; font-size: 11px;">
+                <option value="1">1x</option>
+                <option value="5">5x</option>
+                <option value="10">10x</option>
+            </select>
+
+            <button class="icon-btn" onclick="toggleReplayUI()" style="color:#ff4d4d; margin-left: 5px;">✖</button>
+        </div>
+    `;
+    
+    document.getElementById('chart-container').insertAdjacentHTML('beforeend', html);
+    
+    // Activer le Drag & Drop
+    makeDraggable(document.getElementById('replay-dashboard'), document.getElementById('replay-header'));
+};
+
+// Fonction utilitaire pour le déplacement
+function makeDraggable(elmnt, handle) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    handle.onmousedown = dragMouseDown;
+
+    function dragMouseDown(e) {
+        e.preventDefault();
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+    }
+
+    function elementDrag(e) {
+        e.preventDefault();
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+        elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+        // On enlève le transform: translateX(-50%) pour éviter les conflits de position
+        elmnt.style.transform = "none";
+    }
+
+    function closeDragElement() {
+        document.onmouseup = null;
+        document.onmousemove = null;
+    }
+}
+
+// Fonctions de contrôle (Stubs pour l'instant)
+window.stepReplay = function(direction) {
+    const step = window.replayState.speed * direction;
+    window.replayState.currentIndex += step;
+    
+    // Sécurité index
+    if(window.replayState.currentIndex < 0) window.replayState.currentIndex = 0;
+    if(window.replayState.currentIndex >= window.replayState.allData.length) {
+        window.replayState.currentIndex = window.replayState.allData.length - 1;
+        window.replayState.isPlaying = false;
+    }
+
+    const partialData = window.replayState.allData.slice(0, window.replayState.currentIndex + 1);
+    window.candleSeries.setData(partialData);
+    
+    // C'est ici qu'on appellera plus tard le check des Setups (TP/SL)
+};
+window.jumpToReplayDate = function() {
+    const dateInput = document.getElementById('replay-date-input').value;
+    if (!dateInput || !window.replayState.allData.length) return;
+
+    // On cherche l'index de la bougie dont la date correspond au input
+    // Note: on compare les dates en format string YYYY-MM-DD
+    const targetDate = dateInput; 
+    const index = window.replayState.allData.findIndex(d => {
+        const dDate = typeof d.time === 'string' ? d.time : new Date(d.time * 1000).toISOString().split('T')[0];
+        return dDate >= targetDate;
+    });
+
+    if (index !== -1) {
+        window.replayState.currentIndex = index;
+        window.stepReplay(0); // Rafraîchir
+        window.cyberLog(`Replay jump: ${dateInput}`);
+    } else {
+        window.cyberLog("Date non trouvée", true);
+    }
+};
+window.togglePlayReplay = function() {
+    window.replayState.isPlaying = !window.replayState.isPlaying;
+    const btn = document.getElementById('btn-play-pause'); // Correction ID
+    if(btn) btn.innerText = window.replayState.isPlaying ? "⏸" : "▶";
+    
+    if(window.replayState.isPlaying) {
+        runReplayLoop();
+    }
+};
+
+function runReplayLoop() {
+    if(!window.replayState.isPlaying || !window.replayState.isActive) return;
+    
+    window.stepReplay(1);
+    
+    // Vitesse de la boucle (ex: 500ms)
+    setTimeout(runReplayLoop, 500); 
+}
+//zone replay
 
 function getExtendedTimeline(realData) {
     if (!realData.length) return [];

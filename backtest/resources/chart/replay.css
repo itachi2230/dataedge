@@ -1,0 +1,32 @@
+﻿/* Popup de contrôle du Replay */
+#replay-dashboard {
+    position: absolute;
+    top: 60px; 
+    left: 70px;
+    background: var(--panel-dark);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    z-index: 2000;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    user-select: none;
+    height: 34px; /* Hauteur fixe très basse */
+}
+
+.replay-input {
+    background: #131722;
+    border: 1px solid #444;
+    color: white;
+    font-size: 12px;
+    padding: 2px 5px;
+    border-radius: 4px;
+}
+
+.replay-controls { display: flex; gap: 8px; align-items: center; }
+
+
+.replay-speed {
+    background: #1e222d;
+    color: white;
+    border: 1px solid #444;
+    font-size: 11px;
+}

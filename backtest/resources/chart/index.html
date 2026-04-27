@@ -5,6 +5,7 @@
     <title>DataEdge Backtest</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="toolbar.css">
+	<link rel="stylesheet" href="replay.css">
 </head>
 <body>
    <div id="side-toolbar">
@@ -84,7 +85,13 @@
             </svg>
         </button>
     </div>
-
+	<div class="tool-group">
+		<button id="btn-replay-mode" class="icon-btn" onclick="toggleReplayUI()" title="Mode Replay">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+			</svg>
+		</button>
+	</div>
     <div class="tool-group">
         <div class="color-picker-wrapper">
             <input type="color" id="upColor" value="#00FFFF" onchange="updateColors()" title="Couleur Hausse">

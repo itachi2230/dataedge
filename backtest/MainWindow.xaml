@@ -104,6 +104,10 @@
                     </StackPanel.Style>
 
                     <StackPanel Margin="0,2">
+                        <Button Style="{StaticResource CircleNavButton}" Content="🏠" Click="ButtonHome" Margin="0"/>
+                        <TextBlock Text="Accueil" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,2">
                         <Button Style="{StaticResource CircleNavButton}" Content="📂" Click="ButtonEtude" Margin="0"/>
                         <TextBlock Text="ÉTUDES" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
