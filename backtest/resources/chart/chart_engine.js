@@ -85,37 +85,70 @@ window.updateChartData = function(data, symbol = "Default") {
     window.currentSymbol = symbol;
     window.isProcessingData = true;
     
-    // --- MODIF REPLAY : On stocke les données brutes ---
-    window.replayState.allData = data; 
-    // --------------------------------------------------
-
-    const timeline = getExtendedTimeline(data);
-    
-    // Si le replay est actif, on initialise l'index à la fin (ou au début selon ton choix)
-    if (window.replayState.isActive) {
-        window.replayState.currentIndex = data.length - 1;
+    // --- 1. SAUVEGARDE DU TEMPS ACTUEL (SYNC CHRONOLOGIQUE) ---
+    // Avant de remplacer les données, on note à quel moment précis on se trouve
+    let currentTime = null;
+    if (window.replayState.isActive && window.replayState.allData && window.replayState.allData.length > 0) {
+        const currentCandle = window.replayState.allData[window.replayState.currentIndex];
+        if (currentCandle) {
+            currentTime = currentCandle.time;
+        }
     }
 
-    window.candleSeries.setData(timeline);
-    
+    // --- 2. MISE À JOUR DU STOCKAGE ---
+    window.replayState.allData = data; 
+
+    if (window.replayState.isActive) {
+        // --- MODE BACKTEST (REPLAY) ---
+        
+        // On cherche l'index correspondant au timestamp sauvegardé dans le nouveau TF
+        if (currentTime) {
+            // On cherche la bougie la plus proche (égale ou juste après le temps sauvegardé)
+            const newIndex = data.findIndex(d => d.time >= currentTime);
+            window.replayState.currentIndex = (newIndex !== -1) ? newIndex : data.length - 1;
+        } else {
+            // Si pas de temps de référence, on va à la fin
+            window.replayState.currentIndex = data.length - 1;
+        }
+
+        // On n'affiche que l'histoire jusqu'à ce point synchronisé
+        const history = data.slice(0, window.replayState.currentIndex + 1);
+        window.candleSeries.setData(getExtendedTimeline(history));
+        
+        // On recale la vue sur la dernière bougie du slice
+        window.chart.timeScale().scrollToPosition(20, false);
+    } 
+    else {
+        // --- MODE NORMAL (VUE COMPLÈTE) ---
+        const timeline = getExtendedTimeline(data);
+        window.candleSeries.setData(timeline);
+        
+        if (data.length > 0) {
+            const lastIndex = timeline.length - 800; 
+            const firstVisibleIndex = lastIndex - 100; 
+            
+            window.chart.timeScale().setVisibleLogicalRange({
+                from: firstVisibleIndex,
+                to: lastIndex + 20, 
+            });
+        }
+    }
+
+    // --- 3. GESTION DES DESSINS ET UI ---
     window.chart.priceScale('right').applyOptions({ autoScale: true });
 
-    if (data.length > 0) {
-        const lastIndex = timeline.length - 800; 
-        const firstVisibleIndex = lastIndex - 100; 
-        
-        window.chart.timeScale().setVisibleLogicalRange({
-            from: firstVisibleIndex,
-            to: lastIndex + 20, 
-        });
+    if(window.DrawingManager) {
+        window.DrawingManager.load(); 
+    }
+    
+    if (typeof window.updateScaleButtonsUI === 'function') {
+        window.updateScaleButtonsUI();
     }
 
-    if(window.DrawingManager) window.DrawingManager.load(); 
-    window.updateScaleButtonsUI();
-
+    // --- 4. GESTION DES TIMEOUTS (VERROUS ET AUTO-SCALE) ---
     setTimeout(() => { 
         window.isProcessingData = false;
-        window.cyberLog(`${symbol} centré.`);
+        window.cyberLog(`${symbol} synchronisé.`);
     }, 200);
 
     setTimeout(() => {
@@ -125,12 +158,11 @@ window.updateChartData = function(data, symbol = "Default") {
             window.updateScaleButtonsUI();
         }
         console.log("AutoScale released");
-    }, 500);
+    }, 500);        
 };
-
 window.setupLazyLoading = function() {
     window.chart.timeScale().subscribeVisibleTimeRangeChange(async range => {
-        if (!range || window.isProcessingData) return;
+        if (!range || window.isProcessingData || window.replayState.isActive ) return;
         const data = window.candleSeries.data().filter(d => d.close !== undefined);
         if (data.length && range.from <= data[0].time) {
             window.isProcessingData = true;
@@ -256,25 +288,95 @@ window.stepReplay = function(direction) {
     
     // C'est ici qu'on appellera plus tard le check des Setups (TP/SL)
 };
-window.jumpToReplayDate = function() {
-    const dateInput = document.getElementById('replay-date-input').value;
-    if (!dateInput || !window.replayState.allData.length) return;
+// A mettre dans votre fichier JS
 
-    // On cherche l'index de la bougie dont la date correspond au input
-    // Note: on compare les dates en format string YYYY-MM-DD
-    const targetDate = dateInput; 
-    const index = window.replayState.allData.findIndex(d => {
+window.jumpToReplayDate = async function() {
+    const dateInput = document.getElementById('replay-date-input').value; // ex: "2022-05-15"
+    if (!dateInput) return;
+
+    const targetYear = parseInt(dateInput.split('-')[0]);
+
+    // --- 1. ON VERROUILLE TOUT ---
+    // Cela empêche le système de scroll (LazyLoading) de s'activer
+    window.isProcessingData = true; 
+
+    // On cherche si on a déjà les bougies en mémoire
+    let index = window.replayState.allData.findIndex(d => {
         const dDate = typeof d.time === 'string' ? d.time : new Date(d.time * 1000).toISOString().split('T')[0];
-        return dDate >= targetDate;
+        return dDate >= dateInput;
+    });
+	window.cyberLog(`index=` +index);
+    if (index === -1 || index===0) {
+        window.cyberLog(`Chargement de l'année ${targetYear}...`);
+        const bridge = window.chrome.webview.hostObjects.chartService;
+        if (bridge) {
+		window.cyberLog(`yes bridge`);
+            await bridge.LoadYearForBacktest(targetYear);
+            return; // On s'arrête là, le C# rappellera setupBacktestData
+        }
+		else{
+		window.cyberLog(`no bridge`);
+		}
+    }
+
+    // Si on a déjà les données, on applique le saut
+    applyJump(index, dateInput);
+};
+
+// Cette fonction reçoit les données du C#
+window.setupBacktestData = function(newData, year) {
+    // On remplace les données actuelles par l'année chargée
+    window.replayState.allData = newData;
+    window.cyberLog(`received new data processing jump`);
+    // On cherche l'index de la date choisie dans ces nouvelles données
+    const dateInput = document.getElementById('replay-date-input').value;
+    const newIndex = window.replayState.allData.findIndex(d => {
+        const dDate = typeof d.time === 'string' ? d.time : new Date(d.time * 1000).toISOString().split('T')[0];
+        return dDate >= dateInput;
     });
 
-    if (index !== -1) {
-        window.replayState.currentIndex = index;
-        window.stepReplay(0); // Rafraîchir
-        window.cyberLog(`Replay jump: ${dateInput}`);
-    } else {
-        window.cyberLog("Date non trouvée", true);
-    }
+    applyJump(newIndex !== -1 ? newIndex : 0, dateInput);
+};
+
+function applyJump(index, dateText) {
+    window.replayState.currentIndex = index;
+    
+    // On ne montre au graphique que le passé (jusqu'à la date du jump)
+    const history = window.replayState.allData.slice(0, index + 1);
+    window.candleSeries.setData(getExtendedTimeline(history));
+    
+    // On force le graphique à montrer la fin (la bougie du jump)
+    window.chart.timeScale().scrollToPosition(0, false);
+    
+    window.cyberLog(`Jump terminé : ${dateText}`);
+
+    // --- 2. ON DÉVERROUILLE ---
+    	
+    setTimeout(() => {
+        window.isProcessingData = false;const s = window.chart.priceScale('right');
+        s.applyOptions({ autoScale: true });
+    }, 700);
+	// On attend un peu que le graphique se stabilise avant d'autoriser à nouveau le scroll
+	setTimeout(() => {
+        const s = window.chart.priceScale('right');
+        s.applyOptions({ autoScale: false });
+        if (typeof window.updateScaleButtonsUI === 'function') {
+            window.updateScaleButtonsUI();
+        }
+        console.log("AutoScale released");
+    }, 200);
+};
+
+// Nouvelle fonction utilitaire pour fusionner intelligemment
+window.appendOrPrependData = function(newData, year) {
+    // On fusionne et on dédoublonne par 'time'
+    const combined = [...window.replayState.allData, ...newData];
+    const unique = Array.from(new Map(combined.map(item => [item.time, item])).values());
+    unique.sort((a, b) => a.time - b.time);
+    
+    window.replayState.allData = unique;
+    window.candleSeries.setData(getExtendedTimeline(unique));
+    window.cyberLog(`Année ${year} intégrée.`);
 };
 window.togglePlayReplay = function() {
     window.replayState.isPlaying = !window.replayState.isPlaying;

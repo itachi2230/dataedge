@@ -117,7 +117,37 @@ namespace backtest
                 await ChartBrowser.ExecuteScriptAsync(script);
             }
         }
+        // Dans Chart.xaml.cs
 
+        // Dans Chart.xaml.cs
+
+        public async Task LoadYearForBacktest(int year, bool sr=true)
+        {
+            if (_isLoadingMore) return;
+            _isLoadingMore = true;
+
+            try
+            {
+                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, year.ToString(), _ctsGlobal.Token);
+
+                if (result.success)
+                {
+                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
+                    if (candles != null)
+                    {
+                        _currentYear = year;
+                        string json = JsonConvert.SerializeObject(candles);
+                        // On utilise une fonction JS différente pour ne pas déclencher le centrage de 2026
+                        await SafeExecuteJs($"window.setupBacktestData({json}, {year});");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await SafeExecuteJs($"window.cyberLog('Erreur : {ex.Message}', true);");
+            }
+            finally { _isLoadingMore = false; }
+        }
         public async Task LoadBacktestData(CancellationToken ct)
         {
             // Sécurité : si le browser n'est pas encore initialisé, on quitte
@@ -129,7 +159,6 @@ namespace backtest
             try
             {
                 SetStatus("Chargement...", "#FFB900");
-                _currentYear = DateTime.Now.Year;
 
                 var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, _currentYear.ToString(), ct);
 
@@ -273,6 +302,7 @@ namespace backtest
         {
             if (sender is Button btn && btn.Tag != null)
             {
+                await SafeExecuteJs("window.isProcessingData = true;");
                 _ctsGlobal?.Cancel();
                 _ctsGlobal = new CancellationTokenSource();
 
@@ -286,6 +316,8 @@ namespace backtest
         {
             if (WatchlistItems.SelectedItem is WatchlistSymbol selected)
             {
+                _currentYear = DateTime.Now.Year;
+
                 _ctsGlobal?.Cancel();
                 _ctsGlobal = new CancellationTokenSource();
                 var token = _ctsGlobal.Token;

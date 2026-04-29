@@ -19,7 +19,14 @@ namespace backtest.services
         {
             // Logique de dessin
         }
-
+        public void LoadYearForBacktest(int year)
+        {
+            Application.Current.Dispatcher.Invoke(async () =>
+            {
+                // On passe 'true' si on veut vider le graphique avant le jump (plus propre pour le replay)
+                await _chartInstance.LoadYearForBacktest(year, true);
+            });
+        }
         public void loadPreviousYear()
         {
             System.Diagnostics.Debug.WriteLine("Appel JS reçu via WebView2 !");
