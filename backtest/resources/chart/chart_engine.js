@@ -85,88 +85,72 @@ window.updateChartData = function(data, symbol = "Default") {
     window.currentSymbol = symbol;
     window.isProcessingData = true;
     
-    // --- 1. SAUVEGARDE DU TEMPS ACTUEL (SYNC CHRONOLOGIQUE) ---
-    // Avant de remplacer les données, on note à quel moment précis on se trouve
     let currentTime = null;
     if (window.replayState.isActive && window.replayState.allData && window.replayState.allData.length > 0) {
         const currentCandle = window.replayState.allData[window.replayState.currentIndex];
-        if (currentCandle) {
-            currentTime = currentCandle.time;
-        }
+        if (currentCandle) currentTime = currentCandle.time;
     }
 
-    // --- 2. MISE À JOUR DU STOCKAGE ---
     window.replayState.allData = data; 
 
     if (window.replayState.isActive) {
-        // --- MODE BACKTEST (REPLAY) ---
-        
-        // On cherche l'index correspondant au timestamp sauvegardé dans le nouveau TF
+        // --- MODE BACKTEST ---
+		window.cyberLog(`MODE BACKTEST`);
         if (currentTime) {
-            // On cherche la bougie la plus proche (égale ou juste après le temps sauvegardé)
             const newIndex = data.findIndex(d => d.time >= currentTime);
             window.replayState.currentIndex = (newIndex !== -1) ? newIndex : data.length - 1;
         } else {
-            // Si pas de temps de référence, on va à la fin
             window.replayState.currentIndex = data.length - 1;
         }
 
-        // On n'affiche que l'histoire jusqu'à ce point synchronisé
+        // IMPORTANT : On applique le futur même sur le slice de l'historique
         const history = data.slice(0, window.replayState.currentIndex + 1);
         window.candleSeries.setData(getExtendedTimeline(history));
         
-        // On recale la vue sur la dernière bougie du slice
-        window.chart.timeScale().scrollToPosition(20, false);
+        window.chart.timeScale().scrollToPosition(0, false); // On laisse 15 bougies de marge à droite
     } 
-    else {
-        // --- MODE NORMAL (VUE COMPLÈTE) ---
-        const timeline = getExtendedTimeline(data);
-        window.candleSeries.setData(timeline);
-        
-        if (data.length > 0) {
-            const lastIndex = timeline.length - 800; 
-            const firstVisibleIndex = lastIndex - 100; 
-            
-            window.chart.timeScale().setVisibleLogicalRange({
-                from: firstVisibleIndex,
-                to: lastIndex + 20, 
-            });
-        }
-    }
-
-    // --- 3. GESTION DES DESSINS ET UI ---
-    window.chart.priceScale('right').applyOptions({ autoScale: true });
-
-    if(window.DrawingManager) {
-        window.DrawingManager.load(); 
-    }
+	   else {
+		window.cyberLog(`MODE NORMAL`);
+		// --- MODE NORMAL ---
+		const timeline = getExtendedTimeline(data);
+		window.candleSeries.setData(timeline);
     
-    if (typeof window.updateScaleButtonsUI === 'function') {
-        window.updateScaleButtonsUI();
-    }
+		if (data.length > 0) {
+			// Le nombre total de bougies réelles (sans le padding futur) 
+			// se situe à l'index (timeline.length - 2000)
+			const lastRealIndex = timeline.length - 2000;
 
-    // --- 4. GESTION DES TIMEOUTS (VERROUS ET AUTO-SCALE) ---
+			// On affiche par exemple les 150 dernières bougies réelles
+			// et on laisse 50 bougies de marge dans le futur pour respirer
+			window.chart.timeScale().setVisibleLogicalRange({
+				from: lastRealIndex - 150, 
+				to: lastRealIndex + 50,    
+			});
+		}
+	}
+
+    // ... Reste de la fonction (Drawings, AutoScale) ...
+    window.chart.priceScale('right').applyOptions({ autoScale: true });
+    if(window.DrawingManager) window.DrawingManager.load(); 
+    
     setTimeout(() => { 
         window.isProcessingData = false;
         window.cyberLog(`${symbol} synchronisé.`);
     }, 200);
 
     setTimeout(() => {
-        const s = window.chart.priceScale('right');
-        s.applyOptions({ autoScale: false });
-        if (typeof window.updateScaleButtonsUI === 'function') {
-            window.updateScaleButtonsUI();
-        }
-        console.log("AutoScale released");
+        window.chart.priceScale('right').applyOptions({ autoScale: false });
     }, 500);        
 };
-window.setupLazyLoading = function() {
+window.setupLazyLoading = function() {window.cyberLog(`LOZYLOADING1`) ;
     window.chart.timeScale().subscribeVisibleTimeRangeChange(async range => {
         if (!range || window.isProcessingData || window.replayState.isActive ) return;
+		window.cyberLog(`LOZYLOADING`);
         const data = window.candleSeries.data().filter(d => d.close !== undefined);
         if (data.length && range.from <= data[0].time) {
             window.isProcessingData = true;
             try {
+			window.cyberLog(`LOZYLOADING`);
                 const bridge = window.chrome.webview.hostObjects.chartService;
                 if (bridge) await bridge.loadPreviousYear();
             } catch (err) {
@@ -194,6 +178,10 @@ window.toggleReplayUI = function() {
         btn.classList.remove('active');
         window.replayState.isActive = false;
         if(window.replayState.allData.length > 0) window.candleSeries.setData(window.replayState.allData);
+		const bridge = window.chrome.webview.hostObjects.chartService;
+        if (bridge) {
+            bridge.ExitReplayMode(); 
+        }
         return;
     }
 
@@ -276,17 +264,22 @@ window.stepReplay = function(direction) {
     const step = window.replayState.speed * direction;
     window.replayState.currentIndex += step;
     
-    // Sécurité index
     if(window.replayState.currentIndex < 0) window.replayState.currentIndex = 0;
     if(window.replayState.currentIndex >= window.replayState.allData.length) {
         window.replayState.currentIndex = window.replayState.allData.length - 1;
         window.replayState.isPlaying = false;
+        const btn = document.getElementById('btn-play-pause');
+        if(btn) btn.innerText = "▶";
     }
 
+    // ON RE-GÉNÈRE LA TIMELINE À CHAQUE PAS POUR POUSSER LE FUTUR
     const partialData = window.replayState.allData.slice(0, window.replayState.currentIndex + 1);
-    window.candleSeries.setData(partialData);
+    const extendedData = getExtendedTimeline(partialData);
     
-    // C'est ici qu'on appellera plus tard le check des Setups (TP/SL)
+    window.candleSeries.setData(extendedData);
+    
+    // On garde le focus sur la bougie actuelle sans sauter brutalement
+    // window.chart.timeScale().scrollToPosition(0, false); 
 };
 // A mettre dans votre fichier JS
 
@@ -367,16 +360,26 @@ function applyJump(index, dateText) {
     }, 200);
 };
 
-// Nouvelle fonction utilitaire pour fusionner intelligemment
 window.appendOrPrependData = function(newData, year) {
-    // On fusionne et on dédoublonne par 'time'
+    // 1. On fusionne et on dédoublonne dans la mémoire (allData)
     const combined = [...window.replayState.allData, ...newData];
     const unique = Array.from(new Map(combined.map(item => [item.time, item])).values());
     unique.sort((a, b) => a.time - b.time);
     
     window.replayState.allData = unique;
-    window.candleSeries.setData(getExtendedTimeline(unique));
-    window.cyberLog(`Année ${year} intégrée.`);
+
+    // 2. IMPORTANT : Si on est en mode Replay, on ne met à jour le graphique 
+    // QUE jusqu'à l'index actuel. On ne veut pas voir l'année future d'un coup !
+    if (window.replayState.isActive) {
+        const history = window.replayState.allData.slice(0, window.replayState.currentIndex + 1);
+        window.candleSeries.setData(getExtendedTimeline(history));
+    } else {
+        // Mode normal : on peut tout afficher
+        window.candleSeries.setData(getExtendedTimeline(unique));
+    }
+    
+    window.isProcessingData = false; 
+    window.cyberLog(`Année ${year} prête (chargée en silence).`);
 };
 window.togglePlayReplay = function() {
     window.replayState.isPlaying = !window.replayState.isPlaying;
@@ -391,20 +394,55 @@ window.togglePlayReplay = function() {
 function runReplayLoop() {
     if(!window.replayState.isPlaying || !window.replayState.isActive) return;
     
+    // --- DETECTION DE FIN DE DONNÉES PROCHE ---
+    const threshold = 50; // On anticipe 50 bougies avant la fin
+    if (window.replayState.currentIndex >= window.replayState.allData.length - threshold && !window.isProcessingData) {
+        
+        // Calcul de l'année suivante à charger
+        const lastCandle = window.replayState.allData[window.replayState.allData.length - 1];
+        const lastDate = new Date(lastCandle.time * 1000);
+        const nextYear = lastDate.getFullYear() + 1;
+
+        window.cyberLog(`Anticipation : Chargement de l'année ${nextYear}...`);
+        window.isProcessingData = true; // Verrou pour ne pas lancer 10 appels
+
+        const bridge = window.chrome.webview.hostObjects.chartService;
+        if (bridge) {
+            // On appelle une méthode qui va utiliser appendOrPrependData
+            bridge.loadNextYear(); 
+        }
+    }
+
     window.stepReplay(1);
     
-    // Vitesse de la boucle (ex: 500ms)
+    // Vitesse de la boucle
     setTimeout(runReplayLoop, 500); 
 }
 //zone replay
 
 function getExtendedTimeline(realData) {
     if (!realData.length) return [];
+    
+    // On calcule l'intervalle moyen (ex: 3600s pour 1H)
     const interval = realData.length > 1 ? (realData[1].time - realData[0].time) : 3600;
+    
     let timeline = [];
-    for (let i = 150; i > 0; i--) timeline.push({ time: realData[0].time - (i * interval) });
+    
+    // Passé (Marge à gauche)
+    for (let i = 200; i > 0; i--) {
+        timeline.push({ time: realData[0].time - (i * interval) });
+    }
+    
+    // Données réelles
     timeline = [...timeline, ...realData];
-    for (let i = 1; i <= 800; i++) timeline.push({ time: realData[realData.length-1].time + (i * interval) });
+    
+    // Futur (Marge à droite "infinie")
+    // On génère 2000 bougies vides dans le futur pour permettre le dessin
+    const lastTime = realData[realData.length - 1].time;
+    for (let i = 1; i <= 2000; i++) {
+        timeline.push({ time: lastTime + (i * interval) });
+    }
+    
     return timeline;
 }
 
@@ -441,7 +479,6 @@ window.updateColors = function() {
     window.candleSeries.applyOptions({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down });
     window.cyberLog("Couleurs mises à jour.");
 };
-
 
 window.updateScaleButtonsUI = function() {
     const s = window.chart.priceScale('right');

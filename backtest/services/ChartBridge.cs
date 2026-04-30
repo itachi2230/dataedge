@@ -39,5 +39,22 @@ namespace backtest.services
                 }
             });
         }
+        public void ExitReplayMode()
+        {
+            // On appelle la méthode de sortie sur l'instance de Chart
+            _chartInstance.Dispatcher.Invoke(() => _chartInstance.ExitReplayAndGoToPresent());
+        }
+        public void loadNextYear()
+        {
+            System.Diagnostics.Debug.WriteLine("Appel JS reçu via WebView2 !");
+
+            Application.Current.Dispatcher.Invoke(async () =>
+            {
+                if (_chartInstance != null)
+                {
+                    await _chartInstance.LoadMoreData(false);
+                }
+            });
+        }
     }
 }

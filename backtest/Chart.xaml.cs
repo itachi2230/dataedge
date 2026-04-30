@@ -189,7 +189,7 @@ namespace backtest
             catch (OperationCanceledException) { }
             catch (Exception ex) { SetStatus("Erreur: " + ex.Message, "#FF4B4B"); }
         }
-        public async Task LoadMoreData()
+        public async Task LoadMoreData(bool previouYear=true)
         {
             if (_isLoadingMore || _endOfDataReached) return;
 
@@ -200,7 +200,8 @@ namespace backtest
 
             try
             {
-                int yearToLoad = _currentYear - 1;
+
+                int yearToLoad =previouYear? _currentYear - 1: _currentYear + 1;
                 SetStatus($"Historique {yearToLoad}...", "#FFB900");
 
                 var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, yearToLoad.ToString(), ct);
@@ -215,7 +216,11 @@ namespace backtest
                         ct.ThrowIfCancellationRequested();
                         _currentYear = yearToLoad;
                         string json = JsonConvert.SerializeObject(candles);
-                        await SafeExecuteJs($"prependChartData({json});");
+                        if (previouYear)
+                        {
+                            await SafeExecuteJs($"prependChartData({json});");
+                        }
+                        else { await SafeExecuteJs($"appendOrPrependData({json},{_currentYear});"); }
                         SetStatus(_currentSymbol + " " + _currentTF, "#00FF7F");
                         return;
                     }
@@ -234,7 +239,27 @@ namespace backtest
                 _isLoadingMore = false;
             }
         }
+        public async void ExitReplayAndGoToPresent()
+        {
+            try
+            {
+                // 1. On remet l'année sur l'année actuelle
+                _currentYear = DateTime.Now.Year;
 
+                // 2. On réinitialise les drapeaux de données
+                _endOfDataReached = false;
+
+                // 3. On recharge les données normales (ce qui appellera updateChartData en JS)
+                // Cette méthode devrait déjà exister dans ton code et charger le symbole actuel
+                await LoadBacktestData(_ctsGlobal.Token);
+
+                await SafeExecuteJs("window.cyberLog('Retour au temps réel...');");
+            }
+            catch (Exception ex)
+            {
+                await SafeExecuteJs($"window.cyberLog('Erreur sortie replay: {ex.Message}', true);");
+            }
+        }
         private List<CandleModel> ParseCsvToCandles(string filePath)
         {
             var candles = new List<CandleModel>();
