@@ -142,21 +142,22 @@ window.updateChartData = function(data, symbol = "Default") {
         window.chart.priceScale('right').applyOptions({ autoScale: false });
     }, 500);        
 };
-window.setupLazyLoading = function() {window.cyberLog(`LOZYLOADING1`) ;
+window.setupLazyLoading = function() {
     window.chart.timeScale().subscribeVisibleTimeRangeChange(async range => {
-        if (!range || window.isProcessingData || window.replayState.isActive ) return;
-		window.cyberLog(`LOZYLOADING`);
+        if (!range || window.isProcessingData || window.replayState.isActive) return;
+
         const data = window.candleSeries.data().filter(d => d.close !== undefined);
-        if (data.length && range.from <= data[0].time) {
+        if (!data.length) return;
+
+        const bridge = window.chrome.webview.hostObjects.chartService;
+        if (!bridge) return;
+
+        // BORD GAUCHE : On recule
+        if (range.from <= data[3].time) {
             window.isProcessingData = true;
-            try {
-			window.cyberLog(`LOZYLOADING`);
-                const bridge = window.chrome.webview.hostObjects.chartService;
-                if (bridge) await bridge.loadPreviousYear();
-            } catch (err) {
-                window.isProcessingData = false;
-            }
-        }
+            await bridge.loadPreviousYear(data[3].time);
+        } 
+        
     });
 };
 //zone replay
@@ -281,7 +282,6 @@ window.stepReplay = function(direction) {
     // On garde le focus sur la bougie actuelle sans sauter brutalement
     // window.chart.timeScale().scrollToPosition(0, false); 
 };
-// A mettre dans votre fichier JS
 
 window.jumpToReplayDate = async function() {
     const dateInput = document.getElementById('replay-date-input').value; // ex: "2022-05-15"
@@ -361,25 +361,33 @@ function applyJump(index, dateText) {
 };
 
 window.appendOrPrependData = function(newData, year) {
-    // 1. On fusionne et on dédoublonne dans la mémoire (allData)
+    // 1. Fusionner avec la mémoire globale (allData)
     const combined = [...window.replayState.allData, ...newData];
-    const unique = Array.from(new Map(combined.map(item => [item.time, item])).values());
-    unique.sort((a, b) => a.time - b.time);
     
-    window.replayState.allData = unique;
+    // 2. Nettoyage strict des doublons
+    const uniqueMap = new Map();
+    combined.forEach(item => {
+        uniqueMap.set(item.time, item);
+    });
+    
+    // 3. Tri
+    const sortedUnique = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
+    
+    // 4. Mise à jour de la mémoire centrale
+    window.replayState.allData = sortedUnique;
 
-    // 2. IMPORTANT : Si on est en mode Replay, on ne met à jour le graphique 
-    // QUE jusqu'à l'index actuel. On ne veut pas voir l'année future d'un coup !
+    // 5. Mise à jour du graphique selon le mode
     if (window.replayState.isActive) {
+        // En Replay, on ne montre que jusqu'à l'index actuel
         const history = window.replayState.allData.slice(0, window.replayState.currentIndex + 1);
         window.candleSeries.setData(getExtendedTimeline(history));
     } else {
-        // Mode normal : on peut tout afficher
-        window.candleSeries.setData(getExtendedTimeline(unique));
+        // En mode normal, on affiche tout le bloc nettoyé
+        window.candleSeries.setData(getExtendedTimeline(sortedUnique));
     }
     
     window.isProcessingData = false; 
-    window.cyberLog(`Année ${year} prête (chargée en silence).`);
+    window.cyberLog(`Année ${year} nettoyée et intégrée.`);
 };
 window.togglePlayReplay = function() {
     window.replayState.isPlaying = !window.replayState.isPlaying;
@@ -394,28 +402,32 @@ window.togglePlayReplay = function() {
 function runReplayLoop() {
     if(!window.replayState.isPlaying || !window.replayState.isActive) return;
     
-    // --- DETECTION DE FIN DE DONNÉES PROCHE ---
-    const threshold = 50; // On anticipe 50 bougies avant la fin
+    // --- DÉTECTION DE FIN DE DONNÉES PROCHE ---
+    // On garde un seuil (threshold) pour charger le bloc suivant avant d'atteindre le vide
+    const threshold = 50; 
+    
     if (window.replayState.currentIndex >= window.replayState.allData.length - threshold && !window.isProcessingData) {
         
-        // Calcul de l'année suivante à charger
+        // 1. Récupérer la toute dernière bougie disponible en mémoire
         const lastCandle = window.replayState.allData[window.replayState.allData.length - 1];
-        const lastDate = new Date(lastCandle.time * 1000);
-        const nextYear = lastDate.getFullYear() + 1;
+        
+        if (lastCandle) {
+            window.cyberLog(`Anticipation du bloc suivant...`);
+            window.isProcessingData = true; // Verrouillage pour éviter les appels multiples
 
-        window.cyberLog(`Anticipation : Chargement de l'année ${nextYear}...`);
-        window.isProcessingData = true; // Verrou pour ne pas lancer 10 appels
-
-        const bridge = window.chrome.webview.hostObjects.chartService;
-        if (bridge) {
-            // On appelle une méthode qui va utiliser appendOrPrependData
-            bridge.loadNextYear(); 
+            const bridge = window.chrome.webview.hostObjects.chartService;
+            if (bridge) {
+                // 2. On envoie le timestamp de la dernière bougie.
+                // Le C# recevra ce long et fera le switch (4H/D -> +10 ans, W/M -> +20 ans)
+                bridge.loadNextYear(lastCandle.time); 
+            }
         }
     }
 
+    // 3. Avancer d'un pas dans le replay
     window.stepReplay(1);
     
-    // Vitesse de la boucle
+    // 4. Vitesse de la boucle (500ms par bougie)
     setTimeout(runReplayLoop, 500); 
 }
 //zone replay
@@ -447,11 +459,27 @@ function getExtendedTimeline(realData) {
 }
 
 window.prependChartData = function(newData) {
-    const current = window.candleSeries.data().filter(d => d.close !== undefined);
-    const combined = [...newData, ...current].sort((a,b) => a.time - b.time);
-    window.candleSeries.setData(getExtendedTimeline(combined));
+    // 1. Récupérer les données actuelles sans les bougies de padding (futures/passées vides)
+    const currentData = window.candleSeries.data().filter(d => d.close !== undefined);
+    
+    // 2. Fusionner les anciennes et les nouvelles
+    const combined = [...newData, ...currentData];
+    
+    // 3. Déshoublonner par 'time' en utilisant une Map (clé unique = timestamp)
+    // On garde la version de newData en cas de conflit (souvent plus propre)
+    const uniqueMap = new Map();
+    combined.forEach(item => {
+        uniqueMap.set(item.time, item);
+    });
+    
+    // 4. Convertir en tableau et Trier chronologiquement (indispensable)
+    const finalData = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
+    
+    // 5. Appliquer avec la timeline étendue
+    window.candleSeries.setData(getExtendedTimeline(finalData));
+    
     window.isProcessingData = false;
-    window.cyberLog("Historique fusionné.");
+    window.cyberLog(`Historique fusionné : ${finalData.length} bougies au total.`);
 };
 
 window.toggleGrid = function() {

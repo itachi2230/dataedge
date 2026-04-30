@@ -121,32 +121,74 @@ namespace backtest
 
         // Dans Chart.xaml.cs
 
-        public async Task LoadYearForBacktest(int year, bool sr=true)
+        public async Task LoadYearForBacktest(int year, bool sr = true)
         {
             if (_isLoadingMore) return;
             _isLoadingMore = true;
 
             try
             {
-                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, year.ToString(), _ctsGlobal.Token);
+                string tf = _currentTF.ToLower();
+                string fileToRequest = year.ToString();
+
+                // Application des règles de partitionnement fixes
+                switch (tf)
+                {
+                    case "w":
+                    case "m":
+                        // Tout est dans le fichier 2026 (bloc de 20 ans)
+                        fileToRequest = "2026";
+                        break;
+
+                    case "4h":
+                    case "d":
+                        // Partitionnement 10 ans
+                        if (year >= 2006 && year <= 2016)
+                        {
+                            fileToRequest = "2016";
+                        }
+                        else if (year >= 2017 && year <= 2026)
+                        {
+                            fileToRequest = "2026";
+                        }
+                        break;
+
+                    default:
+                        // Pour le 1H et moins, on garde l'année précise (year)
+                        fileToRequest = year.ToString();
+                        break;
+                }
+
+                SetStatus($"JUMP : {year} (Fichier {fileToRequest})", "#FFB900");
+
+                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, fileToRequest, _ctsGlobal.Token);
 
                 if (result.success)
                 {
                     var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
                     if (candles != null)
                     {
-                        _currentYear = year;
+                        _currentYear = year; // On garde l'année cible en mémoire
                         string json = JsonConvert.SerializeObject(candles);
-                        // On utilise une fonction JS différente pour ne pas déclencher le centrage de 2026
+
+                        // On envoie le JSON et l'année cible au JS pour le positionnement
                         await SafeExecuteJs($"window.setupBacktestData({json}, {year});");
                     }
+                }
+                else
+                {
+                    await SafeExecuteJs($"window.cyberLog('Fichier {fileToRequest} introuvable sur le serveur', true);");
                 }
             }
             catch (Exception ex)
             {
-                await SafeExecuteJs($"window.cyberLog('Erreur : {ex.Message}', true);");
+                await SafeExecuteJs($"window.cyberLog('Erreur Jump: {ex.Message}', true);");
             }
-            finally { _isLoadingMore = false; }
+            finally
+            {
+                _isLoadingMore = false;
+                await SafeExecuteJs("window.isProcessingData = false;");
+            }
         }
         public async Task LoadBacktestData(CancellationToken ct)
         {
@@ -189,55 +231,80 @@ namespace backtest
             catch (OperationCanceledException) { }
             catch (Exception ex) { SetStatus("Erreur: " + ex.Message, "#FF4B4B"); }
         }
-        public async Task LoadMoreData(bool previouYear=true)
+        public async Task LoadMoreData(long referenceTimestamp, bool isPrevious = true)
         {
             if (_isLoadingMore || _endOfDataReached) return;
 
             if (_ctsGlobal == null) _ctsGlobal = new CancellationTokenSource();
-            var ct = _ctsGlobal.Token;
-
             _isLoadingMore = true;
 
             try
             {
+                DateTime refDate = DateTimeOffset.FromUnixTimeSeconds(referenceTimestamp).DateTime;
+                int targetYear;
+                string tf = _currentTF.ToLower();
 
-                int yearToLoad =previouYear? _currentYear - 1: _currentYear + 1;
-                SetStatus($"Historique {yearToLoad}...", "#FFB900");
+                // LOGIQUE DE SAUT PRÉCISE
+                if (isPrevious)
+                {
+                    // Saut en arrière : Toujours -1 an par rapport à la bougie visible
+                    // (Le serveur renverra le fichier contenant cette année spécifique)
+                    targetYear = refDate.Year ;
+                }
+                else
+                {
+                    // Saut en avant : On vise le nom du fichier suivant (Fin de bloc)
+                    switch (tf)
+                    {
+                        case "4h":
+                        case "d":
+                            targetYear = refDate.Year + 10;
+                            break;
+                        case "w":
+                        case "m":
+                            targetYear = refDate.Year + 20;
+                            break;
+                        default:
+                            targetYear = refDate.Year + 1;
+                            break;
+                    }
+                }
 
-                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, yearToLoad.ToString(), ct);
+                SetStatus($"RECHERCHE {targetYear}...", "#FFB900");
+
+                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, targetYear.ToString(), _ctsGlobal.Token);
 
                 if (result.success)
                 {
-                    ct.ThrowIfCancellationRequested();
-                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath), ct);
-
+                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
                     if (candles != null && candles.Count > 0)
                     {
-                        ct.ThrowIfCancellationRequested();
-                        _currentYear = yearToLoad;
+                        _currentYear = targetYear;
                         string json = JsonConvert.SerializeObject(candles);
-                        if (previouYear)
+
+                        if (isPrevious)
                         {
                             await SafeExecuteJs($"prependChartData({json});");
                         }
-                        else { await SafeExecuteJs($"appendOrPrependData({json},{_currentYear});"); }
-                        SetStatus(_currentSymbol + " " + _currentTF, "#00FF7F");
+                        else
+                        {
+                            await SafeExecuteJs($"appendOrPrependData({json}, {_currentYear});");
+                        }
+
+                        SetStatus($"{_currentSymbol} {tf.ToUpper()} ({targetYear})", "#00FF7F");
                         return;
                     }
                 }
 
-                _endOfDataReached = true;
-                SetStatus("FIN DES DONNÉES", "#FF4B4B");
+                // Si on arrive ici, aucune donnée n'a été trouvée
+                if (isPrevious) _endOfDataReached = true;
+                SetStatus(isPrevious ? "DÉBUT DE L'HISTORIQUE" : "FIN DES DONNÉES", "#FF4B4B");
             }
-            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                await SafeExecuteJs($"cyberLog('Erreur LoadMore: {ex.Message.Replace("'", "\\'")}');");
+                await SafeExecuteJs($"window.cyberLog('Erreur LoadMore: {ex.Message.Replace("'", "\\'")}');");
             }
-            finally
-            {
-                _isLoadingMore = false;
-            }
+            finally { _isLoadingMore = false; }
         }
         public async void ExitReplayAndGoToPresent()
         {
@@ -333,7 +400,7 @@ namespace backtest
 
                 _currentTF = btn.Tag.ToString().ToLower();
                 InitTimeframeButtons();
-                await LoadBacktestData(_ctsGlobal.Token);
+                await LoadYearForBacktest(_currentYear);
             }
         }
 
