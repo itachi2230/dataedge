@@ -10,6 +10,7 @@ using backtest.services;
 using Newtonsoft.Json;
 using System.Threading;
 using Microsoft.Web.WebView2.Core;
+using System.Windows.Media;
 
 namespace backtest
 {
@@ -22,6 +23,7 @@ namespace backtest
         private string _currentTF = "15m";
         private int _currentYear = DateTime.Now.Year;
         private bool _isLoadingMore = false;
+        private Strategie _strategie;
         private bool _endOfDataReached = false;
 
         private CancellationTokenSource _ctsGlobal;
@@ -38,8 +40,84 @@ namespace backtest
             LoadWatchlist();
             InitBrowser(); // On initialise le browser, c'est lui qui déclenchera la suite
             _ctsGlobal = new CancellationTokenSource();
+            TypeOrdreComboBox.ItemsSource = Enum.GetValues(typeof(TypeOrdre));
+            ResultComboBox.ItemsSource = Enum.GetValues(typeof(Resultat));
         }
+        public Chart(Strategie strategie) : this() // Appelle d'abord le constructeur par défaut
+        {
+            _strategie = strategie;
 
+            // Mise à jour du label de titre dans l'onglet
+            ActionTitle.Text = "STRATÉGIE :";
+            MainTitle.Text = _strategie.Nom.ToUpper();
+
+            ChargerChampsDynamiques();
+        }
+        private void ChargerChampsDynamiques()
+        {
+            DynamicFieldsPanel.Children.Clear();
+            if (_strategie == null) return;
+
+            List<string> structure = _strategie.GetStructure();
+
+            foreach (var header in structure)
+            {
+                TextBlock lbl = new TextBlock
+                {
+                    Text = header.ToUpper(),
+                    Foreground = Brushes.Gray,
+                    FontSize = 9,
+                    Margin = new Thickness(0, 10, 0, 2)
+                };
+
+                TextBox txt = new TextBox
+                {
+                    Name = $"Dynamic_{header}", // Optionnel, utile pour le debug
+                    Style = (Style)this.FindResource("ModernField"),
+                    Height = 28,
+                    Tag = header, // Très important pour récupérer la valeur plus tard
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+
+                DynamicFieldsPanel.Children.Add(lbl);
+                DynamicFieldsPanel.Children.Add(txt);
+            }
+        }
+        private void SaveTrade_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // On combine Date et Heure
+                DateTime entree = DateEntreePicker.SelectedDate.Value.Date + TimeEntreePicker.Value.Value.TimeOfDay;
+                DateTime sortie = DateSortiePicker.SelectedDate.Value.Date + TimeSortiePicker.Value.Value.TimeOfDay;
+
+                // Récupération des confluences dynamiques
+                var confluences = DynamicFieldsPanel.Children
+                                    .OfType<TextBox>()
+                                    .Select(tb => new ChampPersonnalise(tb.Tag.ToString(), tb.Text))
+                                    .ToList();
+
+                var nouveauTrade = new Trade(double.Parse(profitTxt.Text))
+                {
+                    Paire = PaireTextBox.Text,
+                    DateEntree = entree,
+                    DateSortie = sortie,
+                    TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem,
+                    Result = (Resultat)ResultComboBox.SelectedItem,
+                    RR = Convert.ToUInt32(RrTextBox.Text),
+                    ChampsPersonnalises = confluences,
+                    strategie = _strategie.Nom
+                };
+
+                _strategie.AddTrade(nouveauTrade);
+                MessageBox.Show("Trade enregistré dans la base de données !");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erreur de saisie : " + ex.Message);
+            }
+            MaintabControl.SelectedIndex = 0;
+        }
         private void LoadUserSettings()
         {
             _currentSymbol = !string.IsNullOrEmpty(Properties.Settings.Default.LastSymbol)
@@ -376,7 +454,41 @@ namespace backtest
             TxtStatus.Text = msg.ToUpper();
             TxtStatus.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(colorHex);
         }
+        // Dans Chart.xaml.cs
+        public void PopulateTradeForm(Trade trade)
+        {
+            // 1. Informations de base
+            PaireTextBox.Text = _currentSymbol;
+            RrTextBox.Text = trade.RR.ToString("F2", CultureInfo.InvariantCulture);
+            EntryPriceTxt.Text = trade.prixOpen;
+            ExitPriceTxt.Text = trade.prixClose;
 
+            // 2. Enums (Type et Résultat)
+            // Assurez-vous que vos ComboBox sont remplies avec les valeurs de l'Enum au démarrage
+            TypeOrdreComboBox.SelectedIndex = (int)trade.TypeOrdre;
+            ResultComboBox.SelectedIndex = (int)trade.Result;
+
+            // 3. Dates et Heures (Entrée)
+            if (trade.DateEntree != DateTime.MinValue)
+            {
+                DateEntreePicker.SelectedDate = trade.DateEntree.Date;
+                TimeEntreePicker.Value = trade.DateEntree;
+            }
+
+            // 4. Dates et Heures (Sortie)
+            if (trade.DateSortie != DateTime.MinValue)
+            {
+                DateSortiePicker.SelectedDate = trade.DateSortie.Date;
+                TimeSortiePicker.Value = trade.DateSortie;
+            }
+
+            // 5. Autre
+            profitTxt.Text = trade.Profit.ToString(CultureInfo.InvariantCulture);
+
+            // On change d'onglet automatiquement vers "TRADE" pour montrer le résultat
+            // Si votre TabControl s'appelle par exemple 'MainTabControl'
+            // MainTabControl.SelectedIndex = 1; 
+        }
         #region Events
 
         private async void Timeframe_Click(object sender, RoutedEventArgs e)

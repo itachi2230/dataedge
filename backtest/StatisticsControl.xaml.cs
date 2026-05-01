@@ -14,6 +14,7 @@ namespace backtest
     {
         Strategie strategie;
         StatisticsView stv;
+        backtesteur chart;
         public StatisticsControl()
         {
             InitializeComponent();
@@ -41,6 +42,7 @@ namespace backtest
             stv = new StatisticsView(strategie);
             ComplexStatsHost.Children.Clear();
             ComplexStatsHost.Children.Add(stv);
+            chart = new backtesteur(this.strategie);
         }
 
         public void LoadStatistics(Panel panel1, Panel panel2)
@@ -279,7 +281,8 @@ namespace backtest
         private async void OpenBacktest_Click(object sender, RoutedEventArgs e)
         {
             // Déclenche l'affichage de l'interface de replay dans la WebView
-            Chart chart = new Chart();
+            this.chart.ShowDialog();
+
         }
     }
 }

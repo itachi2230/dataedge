@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows;
 using System.Runtime.InteropServices; // <--- AJOUTÉ pour [ComVisible]
+using Newtonsoft.Json;
 
 namespace backtest.services
 {
@@ -49,6 +50,27 @@ namespace backtest.services
             // On appelle la méthode de sortie sur l'instance de Chart
             _chartInstance.Dispatcher.Invoke(() => _chartInstance.ExitReplayAndGoToPresent());
         }
-        
+        // Dans ChartBridge.cs
+        public void OnTradeSetupCompleted(string jsonTrade)
+        {
+            // On repasse sur le thread UI pour modifier les TextBox/ComboBox
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    var trade = JsonConvert.DeserializeObject<Trade>(jsonTrade);
+                    if (trade != null)
+                    {
+                        _chartInstance.MaintabControl.SelectedIndex = 1;
+                        _chartInstance.PopulateTradeForm(trade);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Loguer l'erreur si nécessaire
+                }
+            });
+        }
+
     }
 }

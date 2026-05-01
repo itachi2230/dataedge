@@ -98,9 +98,12 @@
         }
 
         // On ajoute le dessin avec les points finaux (soit 1, soit 3 pour les positions)
-        this.drawings.push({ 
-            data: { type: type, points: finalPoints } 
-        });
+		const newDrawing = { data: { type: type, points: finalPoints }, id: Date.now() };
+        this.drawings.push(newDrawing);
+		if (type === 'long_pos' || type === 'short_pos') {
+            this.lastActiveSetup = newDrawing;
+			window.cyberLog(`setup ajouter`);
+        }	
         
         this.save();
         const lastIdx = this.drawings.length - 1;

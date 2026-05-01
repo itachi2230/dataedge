@@ -426,9 +426,75 @@ function runReplayLoop() {
 
     // 3. Avancer d'un pas dans le replay
     window.stepReplay(1);
+	//verifier si le setup est cloture
+	const currentCandle = window.replayState.allData[window.replayState.currentIndex];
+    if (currentCandle) {
+        checkLastSetupStatus(currentCandle); // Appelle la fonction de collision
+    }
     
     // 4. Vitesse de la boucle (500ms par bougie)
     setTimeout(runReplayLoop, 500); 
+}
+
+// Fonction appelée dans votre boucle Replay (runReplayLoop)
+function checkLastSetupStatus(currentCandle) {
+    const dm = window.DrawingManager;
+    if (!dm.lastActiveSetup) return;
+
+    const setup = dm.lastActiveSetup.data;
+    const entry = setup.points[0].price;
+    const tp = setup.points[1].price;
+    const sl = setup.points[2].price;
+
+    let isClosed = false;
+    let result = 2; // Par défaut BreakEven ou autre (Enum Resultat)
+
+    // Détection de la collision
+    if (setup.type === 'long_pos') {
+        if (currentCandle.high >= tp) { isClosed = true; result = 0; } // Gagné
+        else if (currentCandle.low <= sl) { isClosed = true; result = 1; } // Perdu
+    } else {
+        if (currentCandle.low <= tp) { isClosed = true; result = 0; }
+        else if (currentCandle.high >= sl) { isClosed = true; result = 1; }
+    }
+
+    if (isClosed) {
+        sendTradeToCSharp(setup, currentCandle, result);
+		if (window.isReplayPlaying) { 
+			window.togglePlayReplay(); 
+		}
+        dm.lastActiveSetup = null; // On reset pour ne pas envoyer en boucle
+    }
+}
+
+function sendTradeToCSharp(setup, candle, result) {
+    const bridge = window.chrome.webview.hostObjects.chartService;
+    if (!bridge) return;
+
+    const entryPrice = setup.points[0].price;
+    const targetPrice = (result === 0) ? setup.points[1].price : setup.points[2].price;
+    
+    // Calcul du RR
+    const risk = Math.abs(entryPrice - setup.points[2].price);
+    const reward = Math.abs(entryPrice - setup.points[1].price);
+    const rr = risk !== 0 ? (reward / risk) : 0;
+
+    // Construction de l'objet correspondant à votre classe C#
+    const tradeObj = {
+        Paire: "Inconnue",
+        Result: result, // 0=Gagné, 1=Perdu (selon votre Enum Resultat)
+        DateEntree: new Date(setup.points[0].time * 1000).toISOString(),
+        DateSortie: new Date(candle.time * 1000).toISOString(),
+        RR: parseFloat(rr.toFixed(2)),
+        prixOpen: entryPrice.toString(),
+        prixClose: targetPrice.toString(),
+        description: `Trade clôturé automatiquement en backtest (${result === 0 ? 'TP' : 'SL'})`,
+        TypeOrdre: setup.type === 'long_pos' ? 0 : 1,
+        strategie: window.currentStrategy || "Default",
+        Profit: 0 // À calculer côté C# selon le risque par trade
+    };
+
+    bridge.OnTradeSetupCompleted(JSON.stringify(tradeObj));
 }
 //zone replay
 

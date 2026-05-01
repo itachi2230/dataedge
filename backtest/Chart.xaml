@@ -60,7 +60,7 @@
 
         <!-- Colonne Latérale avec Onglets -->
         <Border Grid.Row="1" Grid.Column="2" Background="#131722" BorderBrush="#2A2E39" BorderThickness="1,0,0,0">
-            <TabControl Background="Transparent" BorderThickness="0">
+            <TabControl Name="MaintabControl" Background="Transparent" BorderThickness="0">
                 <!-- Onglet Watchlist (Largeur compacte) -->
                 <TabItem Header="LIST"  >
                     <Grid Width="87">
@@ -81,70 +81,104 @@
                     </Grid>
                 </TabItem>
 
-                <!-- Onglet Ajout Trade (Largeur confortable pour le formulaire) -->
-                <TabItem Header="TRADE" >
+                <!-- Onglet Ajout Trade (Largeur optimisée pour le formulaire) -->
+                <TabItem Header="TRADE">
                     <Grid Width="250">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <!-- En-tête Titre -->
                             <RowDefinition Height="*"/>
+                            <!-- Formulaire Scrollable -->
                             <RowDefinition Height="Auto"/>
+                            <!-- Bouton Enregistrer -->
                         </Grid.RowDefinitions>
 
-                        <TextBlock Text="NOUVEAU TRADE" HorizontalAlignment="Center" Foreground="#2962FF" FontWeight="Bold" FontSize="11" Margin="10"/>
+                        <!-- Titre Dynamique (Affiche la stratégie active) -->
+                        <StackPanel Grid.Row="0" Margin="10,10,10,5">
+                            <TextBlock x:Name="ActionTitle" Text="AJOUTER" HorizontalAlignment="Center" FontSize="9" Foreground="#2962FF" FontWeight="Bold"/>
+                            <TextBlock x:Name="MainTitle" Text="NOUVEAU TRADE" HorizontalAlignment="Center" FontSize="13" FontWeight="Black" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                            <Separator Background="#252540" Margin="0,5,0,0"/>
+                        </StackPanel>
 
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="10,0,10,10">
+                            <StackPanel Margin="10,5,10,10">
+
+                                <!-- Paire -->
                                 <TextBlock Text="PAIRE" FontSize="9" Foreground="Gray"/>
                                 <TextBox x:Name="PaireTextBox" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,8"/>
 
+                                <!-- Type et Résultat -->
                                 <UniformGrid Columns="2" Margin="0,0,0,8">
                                     <StackPanel Margin="0,0,2,0">
                                         <TextBlock Text="TYPE" FontSize="9" Foreground="Gray"/>
-                                        <ComboBox x:Name="TypeOrdreComboBox" Height="28"/>
+                                        <ComboBox x:Name="TypeOrdreComboBox" Height="28" Margin="0,2,0,0"/>
                                     </StackPanel>
                                     <StackPanel Margin="2,0,0,0">
                                         <TextBlock Text="RÉSULTAT" FontSize="9" Foreground="Gray"/>
-                                        <ComboBox x:Name="ResultComboBox" Height="28"/>
+                                        <ComboBox x:Name="ResultComboBox" Height="28" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </UniformGrid>
 
-                                <!-- Nouveaux Champs de Prix -->
+                                <!-- Prix Entrée et Sortie -->
                                 <UniformGrid Columns="2" Margin="0,0,0,8">
                                     <StackPanel Margin="0,0,2,0">
                                         <TextBlock Text="PRIX ENTRÉE" FontSize="9" Foreground="Gray"/>
-                                        <TextBox x:Name="EntryPriceTxt" Style="{StaticResource ModernField}" Height="28"/>
+                                        <TextBox x:Name="EntryPriceTxt" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,0"/>
                                     </StackPanel>
                                     <StackPanel Margin="2,0,0,0">
                                         <TextBlock Text="PRIX SORTIE" FontSize="9" Foreground="Gray"/>
-                                        <TextBox x:Name="ExitPriceTxt" Style="{StaticResource ModernField}" Height="28"/>
+                                        <TextBox x:Name="ExitPriceTxt" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </UniformGrid>
 
-                                <!-- Section ENTRÉE -->
-                                <TextBlock Text="ENTRÉE" FontSize="9" Foreground="Gray" Margin="0,5,0,2"/>
-                                <UniformGrid Columns="2">
+                                <!-- Section ENTRÉE (Date + Heure) -->
+                                <TextBlock Text="ENTRÉE" FontSize="9" Foreground="#2962FF" FontWeight="Bold" Margin="0,5,0,2"/>
+                                <UniformGrid Columns="2" Margin="0,0,0,8">
                                     <DatePicker x:Name="DateEntreePicker" Margin="0,0,2,0"/>
-                                    <xctk:TimePicker x:Name="TimeEntreePicker" Format="Custom" FormatString="HH:mm" Margin="2,0,0,0"/>
+                                    <xctk:TimePicker x:Name="TimeEntreePicker" Format="Custom" FormatString="HH:mm" 
+                                     Background="#121220" Foreground="White" BorderBrush="#252540" Margin="2,0,0,0"/>
                                 </UniformGrid>
 
-                                <!-- Section SORTIE -->
-                                <TextBlock Text="SORTIE" FontSize="9" Foreground="Gray" Margin="0,8,0,2"/>
-                                <UniformGrid Columns="2">
+                                <!-- Section SORTIE (Date + Heure) -->
+                                <TextBlock Text="SORTIE" FontSize="9" Foreground="#FF2962" FontWeight="Bold" Margin="0,8,0,2"/>
+                                <UniformGrid Columns="2" Margin="0,0,0,8">
                                     <DatePicker x:Name="DateSortiePicker" Margin="0,0,2,0"/>
-                                    <xctk:TimePicker x:Name="TimeSortiePicker" Format="Custom" FormatString="HH:mm" Margin="2,0,0,0"/>
+                                    <xctk:TimePicker x:Name="TimeSortiePicker" Format="Custom" FormatString="HH:mm" 
+                                     Background="#121220" Foreground="White" BorderBrush="#252540" Margin="2,0,0,0"/>
                                 </UniformGrid>
-                                <TextBlock Text="RISK REWARD" FontSize="9" Foreground="Gray"/>
-                                <TextBox x:Name="RrTextBox" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,8"/>
 
-                                <TextBlock Text="PROFIT / PERTE" FontSize="9" Foreground="Gray"/>
-                                <TextBox x:Name="profitTxt" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,8"/>
+                                <!-- RR et Profit -->
+                                <UniformGrid Columns="2" Margin="0,0,0,8">
+                                    <StackPanel Margin="0,0,2,0">
+                                        <TextBlock Text="RISK REWARD" FontSize="9" Foreground="Gray"/>
+                                        <TextBox x:Name="RrTextBox" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="2,0,0,0">
+                                        <TextBlock Text="PROFIT / PERTE" FontSize="9" Foreground="Gray"/>
+                                        <TextBox x:Name="profitTxt" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </UniformGrid>
 
-                                <TextBlock Text="CONFLUENCES" FontSize="10" Foreground="DeepPink" FontWeight="Bold" Margin="0,5"/>
+                                <!-- Zone Dynamique pour les Stratégies -->
+                                <TextBlock Text="CONFLUENCES" FontSize="10" Foreground="DeepPink" FontWeight="Bold" Margin="0,10,0,5"/>
                                 <StackPanel x:Name="DynamicFieldsPanel"/>
+
+                                <!-- Notes -->
+                                <TextBlock Text="NOTES" FontSize="9" Foreground="Gray" Margin="0,8,0,2"/>
+                                <TextBox x:Name="descriptionTextbox" Height="50" Style="{StaticResource ModernField}" 
+                         TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10"/>
                             </StackPanel>
                         </ScrollViewer>
 
-                        <Button Grid.Row="2" Content="ENREGISTRER" Background="#2962FF" Foreground="White" Height="32" Margin="10,5"/>
+                        <!-- Bouton d'action -->
+                        <Button Grid.Row="2" Content="ENREGISTRER LE TRADE" Click="SaveTrade_Click"
+                Background="#2962FF" Foreground="White" Height="35" FontWeight="Bold" Margin="10,5">
+                            <Button.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="4"/>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
                     </Grid>
                 </TabItem>
             </TabControl>

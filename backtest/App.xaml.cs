@@ -32,21 +32,21 @@ namespace backtest
         private async void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             e.Handled = true; // Empêche le crash brutal
-            await HandleFatalError(e.Exception, "Interface Utilisateur (UI)");
+           // await HandleFatalError(e.Exception, "Interface Utilisateur (UI)");
         }
 
         private async void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
             {
-                await HandleFatalError(ex, "Domaine Applicatif (Critique)");
+               // await HandleFatalError(ex, "Domaine Applicatif (Critique)");
             }
         }
 
         private async void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
         {
-            e.SetObserved(); // Empêche la fermeture
-            await HandleFatalError(e.Exception, "Tâche Asynchrone (Task)");
+            // e.SetObserved(); // Empêche la fermeture
+           // await HandleFatalError(e.Exception, "Tâche Asynchrone (Task)");
         }
 
         /// <summary>

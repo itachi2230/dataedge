@@ -10,7 +10,7 @@ using System.Windows.Data;
 
 namespace backtest
 {
-    public enum Resultat { SL, TP, TR, BE, PARTIAL }
+    public enum Resultat { TP, SL, TR, BE, PARTIAL }
     public enum TypeOrdre { BUY, SELL }
 
     // --- STRUCTURE DU FICHIER JSON ---
@@ -36,7 +36,7 @@ namespace backtest
 
         public string Nom { get; set; }
         public string description { get; set; }
-
+        
         public string filePath => Path.Combine(dataFolder, $"{Nom}.json");
 
         public Strategie(string nom, string description = "", bool temp = false)
@@ -390,6 +390,8 @@ namespace backtest
         public DateTime DateEntree { get; set; }
         public DateTime DateSortie { get; set; }
         public float RR { get; set; }
+        public string prixOpen { get; set; }
+        public string prixClose { get; set; }
         public string description { get; set; }
         public TypeOrdre TypeOrdre { get; set; }
         public string ImageLtf { get; set; }
@@ -398,7 +400,7 @@ namespace backtest
         public double Profit { get; set; }
         public string strategie { get; set; }
         public Trade() { }
-        public Trade(double profit = 0) { Profit = profit; }
+        public Trade(double profit = 0, string prixOpen="0",string prixClose="0") { Profit = profit;this.prixOpen = prixOpen;this.prixClose = prixClose; }
     }
 
     public class ChampPersonnalise

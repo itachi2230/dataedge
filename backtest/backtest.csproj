@@ -191,6 +191,9 @@
     <Compile Include="AjoutTrade.xaml.cs">
       <DependentUpon>AjoutTrade.xaml</DependentUpon>
     </Compile>
+    <Compile Include="backtesteur.xaml.cs">
+      <DependentUpon>backtesteur.xaml</DependentUpon>
+    </Compile>
     <Compile Include="CalculStatistics.cs" />
     <Compile Include="Chart.xaml.cs">
       <DependentUpon>Chart.xaml</DependentUpon>
@@ -278,6 +281,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="AjoutTrade.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="backtesteur.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
