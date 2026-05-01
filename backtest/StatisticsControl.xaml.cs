@@ -85,7 +85,6 @@ namespace backtest
             // REMPLACEMENT DEMANDÉ : Pire Jour
             UpdateStatCard(panel2, 3, "PIRE JOUR", worstDayStr, Colors.Salmon);
         }
-
        
         private double GetSafeDouble(object value)
         {
@@ -276,6 +275,11 @@ namespace backtest
                 case DayOfWeek.Friday: return "Vendredi";
                 default: return day.ToString();
             }
+        }
+        private async void OpenBacktest_Click(object sender, RoutedEventArgs e)
+        {
+            // Déclenche l'affichage de l'interface de replay dans la WebView
+            Chart chart = new Chart();
         }
     }
 }

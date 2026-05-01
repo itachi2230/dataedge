@@ -128,36 +128,8 @@ namespace backtest
 
             try
             {
-                string tf = _currentTF.ToLower();
-                string fileToRequest = year.ToString();
-
-                // Application des règles de partitionnement fixes
-                switch (tf)
-                {
-                    case "w":
-                    case "m":
-                        // Tout est dans le fichier 2026 (bloc de 20 ans)
-                        fileToRequest = "2026";
-                        break;
-
-                    case "4h":
-                    case "d":
-                        // Partitionnement 10 ans
-                        if (year >= 2006 && year <= 2016)
-                        {
-                            fileToRequest = "2016";
-                        }
-                        else if (year >= 2017 && year <= 2026)
-                        {
-                            fileToRequest = "2026";
-                        }
-                        break;
-
-                    default:
-                        // Pour le 1H et moins, on garde l'année précise (year)
-                        fileToRequest = year.ToString();
-                        break;
-                }
+                // On appelle notre nouvelle fonction
+                string fileToRequest = GetFileToRequest(year, _currentTF);
 
                 SetStatus($"JUMP : {year} (Fichier {fileToRequest})", "#FFB900");
 
@@ -168,10 +140,10 @@ namespace backtest
                     var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
                     if (candles != null)
                     {
-                        _currentYear = year; // On garde l'année cible en mémoire
+                        _currentYear = year;
                         string json = JsonConvert.SerializeObject(candles);
 
-                        // On envoie le JSON et l'année cible au JS pour le positionnement
+                        // Envoi au JS
                         await SafeExecuteJs($"window.setupBacktestData({json}, {year});");
                     }
                 }
@@ -192,7 +164,6 @@ namespace backtest
         }
         public async Task LoadBacktestData(CancellationToken ct)
         {
-            // Sécurité : si le browser n'est pas encore initialisé, on quitte
             if (ChartBrowser?.CoreWebView2 == null) return;
 
             _endOfDataReached = false;
@@ -202,7 +173,10 @@ namespace backtest
             {
                 SetStatus("Chargement...", "#FFB900");
 
-                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, _currentYear.ToString(), ct);
+                // Utilisation de la fonction pour déterminer le fichier (bloc) correct
+                string fileToRequest = GetFileToRequest(_currentYear, _currentTF);
+
+                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, fileToRequest, ct);
 
                 if (result.success)
                 {
@@ -214,12 +188,11 @@ namespace backtest
                         ct.ThrowIfCancellationRequested();
                         string json = JsonConvert.SerializeObject(candles);
 
-                        // On s'assure d'être sur le thread UI pour le JS
                         await Dispatcher.InvokeAsync(async () => {
                             await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}');");
                         });
 
-                        SetStatus(_currentSymbol + " OK", "#00FF7F");
+                        SetStatus($"{_currentSymbol} OK ({fileToRequest})", "#00FF7F");
                         SaveUserSettings();
                         return;
                     }
@@ -237,49 +210,36 @@ namespace backtest
 
             if (_ctsGlobal == null) _ctsGlobal = new CancellationTokenSource();
             _isLoadingMore = true;
-
+            ;
             try
             {
                 DateTime refDate = DateTimeOffset.FromUnixTimeSeconds(referenceTimestamp).DateTime;
-                int targetYear;
+                _currentYear = refDate.Year;
+                string targetYear;
                 string tf = _currentTF.ToLower();
 
-                // LOGIQUE DE SAUT PRÉCISE
                 if (isPrevious)
                 {
-                    // Saut en arrière : Toujours -1 an par rapport à la bougie visible
-                    // (Le serveur renverra le fichier contenant cette année spécifique)
-                    targetYear = refDate.Year ;
+                    // En arrière : On prend l'année de la première bougie
+                    // (La fonction GetFileToRequest gérera si on est déjà dans le bon bloc ou s'il faut reculer)
+                    targetYear = refDate.Year.ToString();
                 }
                 else
                 {
-                    // Saut en avant : On vise le nom du fichier suivant (Fin de bloc)
-                    switch (tf)
-                    {
-                        case "4h":
-                        case "d":
-                            targetYear = refDate.Year + 10;
-                            break;
-                        case "w":
-                        case "m":
-                            targetYear = refDate.Year + 20;
-                            break;
-                        default:
-                            targetYear = refDate.Year + 1;
-                            break;
-                    }
+                    targetYear= GetFileToRequest(refDate.Year, _currentTF);
                 }
 
                 SetStatus($"RECHERCHE {targetYear}...", "#FFB900");
 
-                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, targetYear.ToString(), _ctsGlobal.Token);
+                var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, targetYear, _ctsGlobal.Token);
 
                 if (result.success)
                 {
                     var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
                     if (candles != null && candles.Count > 0)
                     {
-                        _currentYear = targetYear;
+                        // On met à jour l'année courante avec l'année réelle demandée
+                       
                         string json = JsonConvert.SerializeObject(candles);
 
                         if (isPrevious)
@@ -296,7 +256,6 @@ namespace backtest
                     }
                 }
 
-                // Si on arrive ici, aucune donnée n'a été trouvée
                 if (isPrevious) _endOfDataReached = true;
                 SetStatus(isPrevious ? "DÉBUT DE L'HISTORIQUE" : "FIN DES DONNÉES", "#FF4B4B");
             }
@@ -305,6 +264,35 @@ namespace backtest
                 await SafeExecuteJs($"window.cyberLog('Erreur LoadMore: {ex.Message.Replace("'", "\\'")}');");
             }
             finally { _isLoadingMore = false; }
+        }
+        private string GetFileToRequest(int year, string timeframe)
+        {
+            string tf = timeframe.ToLower();
+
+            switch (tf)
+            {
+                case "w":
+                case "m":
+                    // Tout est regroupé dans le fichier 2026 pour Hebdo/Mensuel
+                    return "2026";
+
+                case "4h":
+                case "d":
+                    // Partitionnement par blocs de 10 ans
+                    if (year >= 2006 && year <= 2016)
+                    {
+                        return "2016";
+                    }
+                    else if (year >= 2017 && year <= 2026)
+                    {
+                        return "2026";
+                    }
+                    return year.ToString();
+
+                default:
+                    // Pour 1H et moins, on utilise l'année précise
+                    return year.ToString();
+            }
         }
         public async void ExitReplayAndGoToPresent()
         {
@@ -327,6 +315,7 @@ namespace backtest
                 await SafeExecuteJs($"window.cyberLog('Erreur sortie replay: {ex.Message}', true);");
             }
         }
+
         private List<CandleModel> ParseCsvToCandles(string filePath)
         {
             var candles = new List<CandleModel>();
@@ -400,7 +389,7 @@ namespace backtest
 
                 _currentTF = btn.Tag.ToString().ToLower();
                 InitTimeframeButtons();
-                await LoadYearForBacktest(_currentYear);
+                await LoadBacktestData(_ctsGlobal.Token);
             }
         }
 

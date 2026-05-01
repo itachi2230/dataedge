@@ -10,13 +10,23 @@
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
             <Button Style="{StaticResource CircleNavButton}" Content="" 
-                        FontFamily="Segoe MDL2 Assets" Click="BackToDashboard_Click" 
-                        ToolTip="Retour au Dashboard"/>
+            FontFamily="Segoe MDL2 Assets" Click="BackToDashboard_Click" 
+            ToolTip="Retour au Dashboard"/>
 
             <Button Style="{StaticResource CircleNavButton}" Content="" 
-                        FontFamily="Segoe MDL2 Assets" Margin="10,0" ToolTip="Capture d'écran"/>
+            FontFamily="Segoe MDL2 Assets" Margin="10,0" ToolTip="Capture d'écran"/>
+
             <Button Style="{StaticResource CircleNavButton}" Content="" 
-                        FontFamily="Segoe MDL2 Assets" ToolTip="Partager"/>
+            FontFamily="Segoe MDL2 Assets" ToolTip="Partager"/>
+
+            <!-- Bouton Backtest avec icône de Chart (Analytics) -->
+            <Button x:Name="BtnBacktest"
+            Style="{StaticResource CircleNavButton}" 
+            Content="" 
+            FontFamily="Segoe MDL2 Assets" 
+            Margin="10,0,0,0"
+            Click="OpenBacktest_Click" 
+            ToolTip="Mode Replay / Backtest"/>
         </StackPanel>
         <ScrollViewer VerticalScrollBarVisibility="Visible" Margin="0,0,0,-0.2" Grid.Row="2">
             <Grid Margin="5">

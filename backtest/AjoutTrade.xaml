@@ -13,21 +13,7 @@
             <DoubleAnimation Storyboard.TargetName="GlowEffect" Storyboard.TargetProperty="Opacity" From="0.3" To="1" Duration="0:0:1" AutoReverse="True" RepeatBehavior="Forever"/>
         </Storyboard>
 
-        <Style x:Key="ModernField" TargetType="TextBox">
-            <Setter Property="Background" Value="#121220"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#252540"/>
-            <Setter Property="Padding" Value="8,5"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="4">
-                            <ScrollViewer x:Name="PART_ContentHost" />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        
     </Window.Resources>
 
     <Window.Triggers>
