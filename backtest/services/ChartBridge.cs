@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Runtime.InteropServices; // <--- AJOUTÉ pour [ComVisible]
 using Newtonsoft.Json;
+using System.IO;
 
 namespace backtest.services
 {
@@ -10,7 +11,7 @@ namespace backtest.services
     public class ChartBridge
     {
         private readonly Chart _chartInstance;
-
+        string _cacheFolder = TradeVisualizerControl._cacheFolder;
         public ChartBridge(Chart instance)
         {
             _chartInstance = instance;
@@ -71,6 +72,37 @@ namespace backtest.services
                 }
             });
         }
+        public void SaveChartScreenshot(string type, string base64Data)
+        {
+            try
+            {
+                // Nettoyage de la chaîne Base64 (on retire "data:image/png;base64,")
+                string base64 = base64Data.Split(',')[1];
+                byte[] imageBytes = Convert.FromBase64String(base64);
 
+                // Génération du nom de fichier : 202605031024_HTF.png
+                string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+                string fileName = $"{timestamp}_{type.ToUpper()}.png";
+                string fullPath = Path.Combine(_cacheFolder, fileName);
+
+                // Création du dossier si manquant
+                if (!Directory.Exists(_cacheFolder)) Directory.CreateDirectory(_cacheFolder);
+
+                // Enregistrement physique
+                File.WriteAllBytes(fullPath, imageBytes);
+
+                // Notification à l'UI WPF (via un événement ou une action)
+                // Ici, on met à jour le chemin dans l'objet Trade en cours
+                Application.Current.Dispatcher.Invoke(() => {
+                    _chartInstance.UpdateCurrentTradeImagePath(type, fileName);
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erreur capture : " + ex.Message);
+            }
+        }
+
+       
     }
 }

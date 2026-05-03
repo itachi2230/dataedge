@@ -158,7 +158,8 @@
                                         <TextBox x:Name="profitTxt" Style="{StaticResource ModernField}" Height="28" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </UniformGrid>
-
+                                
+                                
                                 <!-- Zone Dynamique pour les Stratégies -->
                                 <TextBlock Text="CONFLUENCES" FontSize="10" Foreground="DeepPink" FontWeight="Bold" Margin="0,10,0,5"/>
                                 <StackPanel x:Name="DynamicFieldsPanel"/>
@@ -167,6 +168,43 @@
                                 <TextBlock Text="NOTES" FontSize="9" Foreground="Gray" Margin="0,8,0,2"/>
                                 <TextBox x:Name="descriptionTextbox" Height="50" Style="{StaticResource ModernField}" 
                          TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10"/>
+                                <!-- Section Captures d'écran -->
+                                <TextBlock Text="CAPTURES D'ÉCRAN" FontSize="9" Foreground="Gray" Margin="0,5,0,2"/>
+                                <UniformGrid Columns="2" Margin="0,0,0,10">
+                                    <Button x:Name="BtnCaptureHtf" 
+            Click="BtnCaptureHtf_Click"
+            Height="32" 
+            Margin="0,0,2,0"
+            Background="#1E1E30" 
+            Foreground="White" 
+            BorderBrush="#3D3D5C"
+            Cursor="Hand">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📸" Margin="0,0,5,0"/>
+                                            <TextBlock Text="Capture HTF" VerticalAlignment="Center" FontSize="11"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="BtnCaptureLtf" 
+            Click="BtnCaptureLtf_Click"
+            Height="32" 
+            Margin="2,0,0,0"
+            Background="#1E1E30" 
+            Foreground="White" 
+            BorderBrush="#3D3D5C"
+            Cursor="Hand">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📸" Margin="0,0,5,0"/>
+                                            <TextBlock Text="Capture LTF" VerticalAlignment="Center" FontSize="11"/>
+                                        </StackPanel>
+                                    </Button>
+                                </UniformGrid>
+
+                                <!-- Indicateurs de succès (Optionnel) -->
+                                <UniformGrid Columns="2" Margin="0,-5,0,10">
+                                    <TextBlock x:Name="StatusHtf" Text="Aucune image" FontSize="8" HorizontalAlignment="Center" Foreground="DimGray"/>
+                                    <TextBlock x:Name="StatusLtf" Text="Aucune image" FontSize="8" HorizontalAlignment="Center" Foreground="DimGray"/>
+                                </UniformGrid>
                             </StackPanel>
                         </ScrollViewer>
 

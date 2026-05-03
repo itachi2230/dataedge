@@ -20,6 +20,8 @@ namespace backtest
         private readonly Dataservice _dataService;
 
         private string _currentSymbol = "EURUSD";
+        private string _imageHtf = "";
+        private string _imageLtf = "";
         private string _currentTF = "15m";
         private int _currentYear = DateTime.Now.Year;
         private bool _isLoadingMore = false;
@@ -101,22 +103,61 @@ namespace backtest
                 {
                     Paire = PaireTextBox.Text,
                     DateEntree = entree,
+                    prixOpen = Convert.ToDouble(EntryPriceTxt.Text),
+                    prixClose = Convert.ToDouble(ExitPriceTxt.Text),
                     DateSortie = sortie,
                     TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem,
                     Result = (Resultat)ResultComboBox.SelectedItem,
-                    RR = Convert.ToUInt32(RrTextBox.Text),
+                    RR = utils.ParseFloat(RrTextBox.Text),
                     ChampsPersonnalises = confluences,
-                    strategie = _strategie.Nom
+                    ImageHtf = _imageHtf,
+                    ImageLtf = _imageLtf,
+                    strategie = _strategie.Nom,
+                    description = descriptionTextbox.Text
                 };
 
                 _strategie.AddTrade(nouveauTrade);
                 MessageBox.Show("Trade enregistré dans la base de données !");
+                ResetTradeForm();
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Erreur de saisie : " + ex.Message);
             }
             MaintabControl.SelectedIndex = 0;
+        }
+        private void ResetTradeForm()
+        {
+            // Réinitialisation des textes et valeurs numériques
+            PaireTextBox.Text = string.Empty;
+            EntryPriceTxt.Text = "0";
+            ExitPriceTxt.Text = "0";
+            RrTextBox.Text = "0";
+            profitTxt.Text = "0";
+            descriptionTextbox.Text = string.Empty;
+
+            // Réinitialisation des sélections
+            TypeOrdreComboBox.SelectedIndex = -1;
+            ResultComboBox.SelectedIndex = -1;
+
+            // Réinitialisation des Dates (on remet à "Maintenant")
+            DateEntreePicker.SelectedDate = null;
+            TimeEntreePicker.Value = null;
+            DateSortiePicker.SelectedDate = null;
+            TimeSortiePicker.Value = null;
+
+            // Nettoyage des confluences dynamiques
+            foreach (var tb in DynamicFieldsPanel.Children.OfType<TextBox>())
+            {
+                tb.Text = string.Empty;
+            }
+
+            // Réinitialisation des variables d'images et des labels de statut
+            _imageHtf = string.Empty;
+            _imageLtf = string.Empty;
+
+            if (StatusHtf != null) { StatusHtf.Text = "Aucune image"; StatusHtf.Foreground = System.Windows.Media.Brushes.DimGray; }
+            if (StatusLtf != null) { StatusLtf.Text = "Aucune image"; StatusLtf.Foreground = System.Windows.Media.Brushes.DimGray; }
         }
         private void LoadUserSettings()
         {
@@ -460,8 +501,8 @@ namespace backtest
             // 1. Informations de base
             PaireTextBox.Text = _currentSymbol;
             RrTextBox.Text = trade.RR.ToString("F2", CultureInfo.InvariantCulture);
-            EntryPriceTxt.Text = trade.prixOpen;
-            ExitPriceTxt.Text = trade.prixClose;
+            EntryPriceTxt.Text = trade.prixOpen.ToString();
+            ExitPriceTxt.Text = trade.prixClose.ToString();
 
             // 2. Enums (Type et Résultat)
             // Assurez-vous que vos ComboBox sont remplies avec les valeurs de l'Enum au démarrage
@@ -489,6 +530,17 @@ namespace backtest
             // Si votre TabControl s'appelle par exemple 'MainTabControl'
             // MainTabControl.SelectedIndex = 1; 
         }
+        public void UpdateCurrentTradeImagePath(string type, string fileName)
+        {
+            // Supposons que tu as une référence au trade en cours d'édition
+            if (type.ToUpper() == "HTF")
+                _imageHtf = fileName;
+            else
+                _imageLtf = fileName;
+
+            // Optionnel : rafraîchir l'affichage du TradeVisualizer
+        }
+
         #region Events
 
         private async void Timeframe_Click(object sender, RoutedEventArgs e)
@@ -504,7 +556,20 @@ namespace backtest
                 await LoadBacktestData(_ctsGlobal.Token);
             }
         }
+        private async void BtnCaptureHtf_Click(object sender, RoutedEventArgs e)
+        {
+            // On appelle la fonction JS définie plus haut
+            await SafeExecuteJs("captureChart('HTF')");
+            StatusHtf.Text = "✅ Capturé";
+            StatusHtf.Foreground = System.Windows.Media.Brushes.LightGreen;
+        }
 
+        private async void BtnCaptureLtf_Click(object sender, RoutedEventArgs e)
+        {
+            await SafeExecuteJs("captureChart('LTF')");
+            StatusLtf.Text = "✅ Capturé";
+            StatusLtf.Foreground = System.Windows.Media.Brushes.LightGreen;
+        }
         private async void Watchlist_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (WatchlistItems.SelectedItem is WatchlistSymbol selected)

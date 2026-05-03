@@ -278,10 +278,19 @@ namespace backtest
                 default: return day.ToString();
             }
         }
+        private void refresh()
+        {
+            LoadTradesDataGrid();
+            stv = new StatisticsView(strategie);
+            ComplexStatsHost.Children.Clear();
+            ComplexStatsHost.Children.Add(stv);
+        }
         private async void OpenBacktest_Click(object sender, RoutedEventArgs e)
         {
             // Déclenche l'affichage de l'interface de replay dans la WebView
+            chart = new backtesteur(this.strategie);
             this.chart.ShowDialog();
+            refresh();
 
         }
     }

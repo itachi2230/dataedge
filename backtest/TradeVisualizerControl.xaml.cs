@@ -10,7 +10,7 @@ namespace backtest
     public partial class TradeVisualizerControl : UserControl
     {
         // Dossier de cache à côté de l'exécutable
-        private readonly string _cacheFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cacheimage");
+        public static readonly string _cacheFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cacheimage");
 
         public TradeVisualizerControl()
         {

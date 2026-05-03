@@ -460,9 +460,10 @@ function checkLastSetupStatus(currentCandle) {
 
     if (isClosed) {
         sendTradeToCSharp(setup, currentCandle, result);
-		if (window.isReplayPlaying) { 
-			window.togglePlayReplay(); 
-		}
+		if (window.replayState.isPlaying) { 
+            window.cyberLog("Trade clôturé. Mise en pause du replay pour enregistrement.");
+            window.togglePlayReplay(); // Cette fonction gère déjà le changement d'icône ▶/⏸
+        }
         dm.lastActiveSetup = null; // On reset pour ne pas envoyer en boucle
     }
 }
@@ -481,7 +482,7 @@ function sendTradeToCSharp(setup, candle, result) {
 
     // Construction de l'objet correspondant à votre classe C#
     const tradeObj = {
-        Paire: "Inconnue",
+        Paire: window.currentSymbol || "Inconnue",
         Result: result, // 0=Gagné, 1=Perdu (selon votre Enum Resultat)
         DateEntree: new Date(setup.points[0].time * 1000).toISOString(),
         DateSortie: new Date(candle.time * 1000).toISOString(),
@@ -496,6 +497,23 @@ function sendTradeToCSharp(setup, candle, result) {
 
     bridge.OnTradeSetupCompleted(JSON.stringify(tradeObj));
 }
+//capture decran
+window.captureChart = function(type) {
+    if (!window.chart) return;
+
+    // takeScreenshot() renvoie un canvas HTML
+    const canvas = window.chart.takeScreenshot();
+    
+    // Conversion en Base64 (image/png)
+    const dataURL = canvas.toDataURL("image/png");
+    
+    // Envoi au C# via le bridge WebView2
+    const bridge = window.chrome.webview.hostObjects.chartService;
+    if (bridge) {
+        // On envoie le type (HTF ou LTF) et les données de l'image
+        bridge.SaveChartScreenshot(type, dataURL);
+    }
+};
 //zone replay
 
 function getExtendedTimeline(realData) {

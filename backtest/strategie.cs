@@ -390,8 +390,8 @@ namespace backtest
         public DateTime DateEntree { get; set; }
         public DateTime DateSortie { get; set; }
         public float RR { get; set; }
-        public string prixOpen { get; set; }
-        public string prixClose { get; set; }
+        public double prixOpen { get; set; }
+        public double prixClose { get; set; }
         public string description { get; set; }
         public TypeOrdre TypeOrdre { get; set; }
         public string ImageLtf { get; set; }
@@ -400,7 +400,7 @@ namespace backtest
         public double Profit { get; set; }
         public string strategie { get; set; }
         public Trade() { }
-        public Trade(double profit = 0, string prixOpen="0",string prixClose="0") { Profit = profit;this.prixOpen = prixOpen;this.prixClose = prixClose; }
+        public Trade(double profit = 0, double prixOpen=0,double prixClose=0) { Profit = profit;this.prixOpen = prixOpen;this.prixClose = prixClose; }
     }
 
     public class ChampPersonnalise
@@ -657,7 +657,14 @@ namespace backtest
                 double.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out double res);
                 return res;
             }
-        
+        public static float ParseFloat(string val)
+        {
+            if (string.IsNullOrEmpty(val)) return 0;
+            val = val.Replace(",", ".");
+            float.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out float res);
+            return res;
+        }
+
 
     }
 
