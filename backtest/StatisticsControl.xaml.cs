@@ -42,7 +42,6 @@ namespace backtest
             stv = new StatisticsView(strategie);
             ComplexStatsHost.Children.Clear();
             ComplexStatsHost.Children.Add(stv);
-            chart = new backtesteur(this.strategie);
         }
 
         public void LoadStatistics(Panel panel1, Panel panel2)

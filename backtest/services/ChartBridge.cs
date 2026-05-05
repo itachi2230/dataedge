@@ -37,8 +37,7 @@ namespace backtest.services
                     await _chartInstance.LoadMoreData(firstVisibleTimestamp, true);
             });
         }
-
-        public void loadNextYear(long lastVisibleTimestamp)
+       public void loadNextYear(long lastVisibleTimestamp)
         {
             Application.Current.Dispatcher.Invoke(async () =>
             {

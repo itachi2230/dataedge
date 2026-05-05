@@ -15,7 +15,25 @@ const PriceScaleMode = {
     Percentage: 2,
     IndexedTo100: 3,
 };
+// Clé unique pour ton projet DataEdge
+const CACHE_KEY = "dataedge_user_prefs";
 
+window.savePrefs = function() {
+    const prefs = {
+        dark: window.isDarkMode,
+        grid: window.isGridVisible
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(prefs));
+};
+
+window.loadPrefs = function() {
+    const saved = localStorage.getItem(CACHE_KEY);
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        window.isDarkMode = parsed.dark;
+        window.isGridVisible = parsed.grid;
+    }
+};
 window.cyberLog = function(msg, isError = false) {
     const el = document.getElementById('debug-console');
     if(!el) return;
@@ -26,16 +44,17 @@ window.cyberLog = function(msg, isError = false) {
 
 window.initChart = function() {
     if (window.chart) return;
+	window.loadPrefs();
     const container = document.getElementById('chart-container');
-
+	const t = window.isDarkMode ? themes.dark : themes.light;
     window.chart = LightweightCharts.createChart(container, {
         layout: { 
-            background: { type: 'solid', color: themes.dark.bg }, 
-            textColor: themes.dark.text 
+            background: { type: 'solid', color: t.bg }, 
+            textColor: t.text
         },
         grid: { 
-            vertLines: { color: themes.dark.grid, visible: window.isGridVisible }, 
-            horzLines: { color: themes.dark.grid, visible: window.isGridVisible } 
+            vertLines: { color: t.grid, visible: window.isGridVisible }, 
+            horzLines: { color: t.grid, visible: window.isGridVisible } 
         },
        crosshair: {
             // Mode Normal = le curseur ne colle pas aux bougies
@@ -66,9 +85,9 @@ window.initChart = function() {
     });
 
     window.candleSeries = window.chart.addCandlestickSeries({
-        upColor: themes.dark.up, downColor: themes.dark.down,
-        borderUpColor: themes.dark.up, borderDownColor: themes.dark.down,
-        wickUpColor: themes.dark.up, wickDownColor: themes.dark.down
+        upColor:t.up, downColor: t.down,
+        borderUpColor: t.up, borderDownColor: t.down,
+        wickUpColor: t.up, wickDownColor: t.down
     });
 
     window.DrawingManager.init(window.chart, window.candleSeries);
@@ -160,6 +179,7 @@ window.setupLazyLoading = function() {
         
     });
 };
+
 //zone replay
 // --- ÉTAT DU REPLAY ---
 window.replayState = {
@@ -571,6 +591,7 @@ window.toggleGrid = function() {
     window.chart.applyOptions({
         grid: { vertLines: { visible: window.isGridVisible }, horzLines: { visible: window.isGridVisible } }
     });
+	window.savePrefs();
 };
 
 window.toggleTheme = function() {
@@ -584,6 +605,7 @@ window.toggleTheme = function() {
         upColor: t.up, downColor: t.down, wickUpColor: t.up, wickDownColor: t.down,
         borderUpColor: t.up, borderDownColor: t.down
     });
+	window.savePrefs();
 };
 window.updateColors = function() {
     const up = document.getElementById('upColor').value;

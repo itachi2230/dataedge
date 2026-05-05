@@ -3,10 +3,62 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:backtest"
         mc:Ignorable="d"
-        Title="backtesteur" Height="450" Width="800" Icon="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico" WindowState="Maximized">
-    <Grid Name="receveur">
-        
-    </Grid>
+        Title="DataEdge Terminal" Height="700" Width="1100" 
+        Icon="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico"
+        WindowState="Maximized"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent">
+
+    <!-- On garde le WindowChrome pour le redimensionnement natif -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" 
+                      CornerRadius="0" 
+                      GlassFrameThickness="0" 
+                      ResizeBorderThickness="6" />
+    </WindowChrome.WindowChrome>
+
+    <!-- Utilisation de BgDark et CyanNeon de ton App.xaml -->
+    <Border BorderBrush="{StaticResource CyanNeon}" BorderThickness="1" Background="{StaticResource BgDark}">
+        <Grid >
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <!-- Barre de titre -->
+                <RowDefinition Height="*"/>
+                <!-- Contenu -->
+            </Grid.RowDefinitions>
+
+            <!-- Header avec le look Cyber/Neon -->
+            <Grid Grid.Row="0" Background="#131722">
+                <!-- Couleur sombre typique tradingView -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
+                    <Image Source="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico" Width="18" Height="18" Margin="0,0,10,0"/>
+                    <TextBlock Text="DATAEDGE | BACKTEST TERMINAL" 
+                               Foreground="{StaticResource CyanNeon}" 
+                               FontWeight="Bold" 
+                               FontSize="11" 
+                               VerticalAlignment="Center" 
+                               Effect="{StaticResource NeonGlowBlue}"/>
+                    <!-- Effet de lueur de ton App.xaml -->
+                </StackPanel>
+
+                <!-- Boutons de contrôle utilisant tes styles -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" WindowChrome.IsHitTestVisibleInChrome="True" Margin="0,0,5,0">
+
+                    <!-- Utilisation de ton style CircleNavButton pour réduire/agrandir[cite: 5] -->
+                    <Button Content="−" Click="MinimizeClick" Style="{StaticResource CircleNavButton}" Width="30" Height="30" Margin="5,0"/>
+                    <Button Content="▢" Click="MaximizeClick" Style="{StaticResource CircleNavButton}" Width="30" Height="30" Margin="5,0"/>
+
+                    <!-- Bouton Fermer personnalisé (inspiré de ton style CyberButton)[cite: 5] -->
+                    <Button Content="✕" Click="CloseClick" BorderBrush="OrangeRed" Foreground="OrangeRed" Style="{StaticResource CyberButton}" Width="40" Height="30" Margin="5,0"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Espace Graphique Principal -->
+            <Grid Grid.Row="1" Margin="2" Name="receveur">
+                <!-- C'est ici que ton WebView2 ou Grid de graphiques s'insérera -->
+            </Grid>
+        </Grid>
+    </Border>
 </Window>
