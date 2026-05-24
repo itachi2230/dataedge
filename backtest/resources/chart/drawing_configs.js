@@ -33,7 +33,7 @@
         const reward = Math.abs(entry.y - target.y);
         const rr = risk !== 0 ? (reward / risk).toFixed(2) : "0.00";
 
-        // Dessin du badge RR (Fond noir semi-transparent)
+        // Dessin du badge RR 
         const badgeW = 70;
         const badgeH = 20;
         const badgeX = entry.x + (width / 2) - (badgeW / 2);
@@ -105,7 +105,6 @@
         // p2 = Courbure (cliqué en 3ème, mais utilisé comme point de contrôle)
         // p3 = Fin (cliqué en 2ème)
         
-        // Note: Si ton DrawingManager envoie les points dans l'ordre chronologique:
         // pts[0] = clic 1, pts[1] = clic 2, pts[2] = clic 3
         ctx.quadraticCurveTo(p3.x, p3.y, p2.x, p2.y); 
         ctx.stroke();
@@ -197,7 +196,6 @@
         ctx.lineTo(last.x - headLen * Math.cos(angle + Math.PI/6), last.y - headLen * Math.sin(angle + Math.PI/6));
         ctx.stroke();
     },
-    // La preview suivra maintenant le dernier point grâce au changement dans updatePreview
     preview: (p1, p2) => `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#00FFFF" stroke-dasharray="5,5" />`
 },
     'arrow': { clicks: 2, render: (ctx, p1, p2) => {

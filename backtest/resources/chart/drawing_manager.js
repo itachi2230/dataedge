@@ -1,7 +1,7 @@
 ﻿window.DrawingManager = {
     mode: null,
     drawings: [],
-    points: [], // Stocke les points temporaires (multi-clics)
+    points: [], 
     selectedIdx: null,
     dragState: null,
     series: null,
@@ -102,7 +102,6 @@
         this.drawings.push(newDrawing);
 		if (type === 'long_pos' || type === 'short_pos') {
             this.lastActiveSetup = newDrawing;
-			window.cyberLog(`setup ajouter`);
         }	
         
         this.save();
@@ -222,7 +221,6 @@ editFibo(index) {
 		if (newValue !== "") {
 			// On enregistre dans le point SOURCE (celui qui est sauvegardé en JSON)
 			this.drawings[index].data.points[0].text = newValue;
-			window.cyberLog(`Texte enregistré dans la source : ${newValue}`);
 		}
     
 		if (input.parentNode) input.remove();
@@ -272,18 +270,15 @@ window.syncDrawingWithChart = function() {
     window.chart.subscribeClick(param => {
         // 1. Debugging de base
         if (!param || !param.point) {
-            window.cyberLog("Clic hors zone graphique.");
             mgr.selectedIdx = null;
             mgr.series.applyOptions({});
             return;
         }
 			
         const price = window.candleSeries.coordinateToPrice(param.point.y);
-        window.cyberLog(`Clic détecté - Mode: ${mgr.mode || 'Sélection'} | Prix: ${price.toFixed(2)}`);
 
         // 2. Si on est en train de déplacer/redimensionner, on ne fait rien
         if (mgr.dragState) {
-            window.cyberLog("relache mode");
             mgr.selectedIdx = null;
             mgr.series.applyOptions({});
             return;
@@ -291,12 +286,9 @@ window.syncDrawingWithChart = function() {
 
         if (mgr.mode) {
             // MODE DESSIN
-            window.cyberLog(`Ajout point pour l'outil: ${mgr.mode}`);
             mgr.addPoint(param.time, price);
         } else {
             // MODE SÉLECTION
-            // Dans window.chart.subscribeClick(param => { ... })
-// Remplace la logique de détection 'found' par celle-ci :
 
 let found = null;
 mgr.drawings.forEach((dr, i) => {
@@ -420,9 +412,7 @@ mgr.drawings.forEach((dr, i) => {
 });
 
             if (found!== null) {
-                window.cyberLog(`Dessin trouvé à l'index: ${found}`);
             } else {
-                window.cyberLog("Aucun dessin touché. Désélection.");
             }
 
             // Mise à jour de la sélection	
@@ -451,14 +441,12 @@ mgr.drawings.forEach((dr, i) => {
         const y = e.clientY - rect.top;
         const dr = mgr.drawings[mgr.selectedIdx];
 
-        window.cyberLog(`Tentative de modification sur l'index: ${mgr.selectedIdx}`);
 
         // Détection resize
         dr.data.points.forEach((p, i) => {
             const px = window.chart.timeScale().timeToCoordinate(p.time);
             const py = window.candleSeries.priceToCoordinate(p.price);
             if (window.DrawingUtils.isOverPoint(x, y, px, py)) {
-                window.cyberLog(`Resize activé sur point index: ${i}`);
 
                 mgr.dragState = { 
                 type: 'resize', 
@@ -470,7 +458,6 @@ mgr.drawings.forEach((dr, i) => {
 
         // Sinon move
         if (!mgr.dragState) {
-            window.cyberLog("Déplacement de l'objet entier activé.");
             mgr.dragState = { type: 'move', lastX: x, lastY: y };
         }
         
@@ -544,7 +531,6 @@ mgr.drawings.forEach((dr, i) => {
 
     window.addEventListener('mouseup', () => {
         if (mgr.dragState) {
-            window.cyberLog("Modification terminée. Sauvegarde.");
             mgr.dragState = null; 
             mgr.save();
             window.chart.applyOptions({ handleScroll: true, handleScale: true });
@@ -554,7 +540,6 @@ mgr.drawings.forEach((dr, i) => {
    container.addEventListener('dblclick', () => { 
 		if (mgr.selectedIdx !== null) {
 			const dr = mgr.drawings[mgr.selectedIdx];
-			window.cyberLog(`dbclick`);
 			
 		} else if (mgr.mode === 'path' || mgr.mode === 'polyline') {
 			mgr.finishDrawing(); 
@@ -563,11 +548,9 @@ mgr.drawings.forEach((dr, i) => {
 
     window.addEventListener('keydown', e => { 
         if (e.key === 'Delete' && mgr.selectedIdx !== null) {
-            window.cyberLog(`Suppression du dessin index: ${mgr.selectedIdx}`);
             mgr.deleteSelected();
         }
         if (e.key === 'Escape') {
-            window.cyberLog("Touche Echap: Réinitialisation complète.");
             mgr.setMode(null);
             mgr.selectedIdx = null;
             mgr.series.applyOptions({});

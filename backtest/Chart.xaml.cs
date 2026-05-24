@@ -74,7 +74,6 @@ namespace backtest
 
                 TextBox txt = new TextBox
                 {
-                    Name = $"Dynamic_{header}", // Optionnel, utile pour le debug
                     Style = (Style)this.FindResource("ModernField"),
                     Height = 28,
                     Tag = header, // Très important pour récupérer la valeur plus tard
@@ -194,6 +193,7 @@ namespace backtest
                 new TimeframeItem { Name = "1m", Value = "1m" },
                 new TimeframeItem { Name = "5m", Value = "5m" },
                 new TimeframeItem { Name = "15m", Value = "15m" },
+                new TimeframeItem { Name = "30m", Value = "30m" },
                 new TimeframeItem { Name = "1h", Value = "1h" },
                 new TimeframeItem { Name = "4h", Value = "4h" },
                 new TimeframeItem { Name = "D", Value = "d" }
@@ -237,14 +237,11 @@ namespace backtest
             }
         }
         // Dans Chart.xaml.cs
-
-        // Dans Chart.xaml.cs
-
         public async Task LoadYearForBacktest(int year, bool sr = true)
         {
             if (_isLoadingMore) return;
             _isLoadingMore = true;
-
+            await ToggleLoader(true, "");
             try
             {
                 // On appelle notre nouvelle fonction
@@ -279,6 +276,7 @@ namespace backtest
             {
                 _isLoadingMore = false;
                 await SafeExecuteJs("window.isProcessingData = false;");
+                await ToggleLoader(false);
             }
         }
         public async Task LoadBacktestData(CancellationToken ct)
@@ -287,11 +285,9 @@ namespace backtest
 
             _endOfDataReached = false;
             _isLoadingMore = false;
-
+            await ToggleLoader(true, $"Chargement de {_currentSymbol} ({_currentTF})...");
             try
             {
-                SetStatus("Chargement...", "#FFB900");
-
                 // Utilisation de la fonction pour déterminer le fichier (bloc) correct
                 string fileToRequest = GetFileToRequest(_currentYear, _currentTF);
 
@@ -322,6 +318,11 @@ namespace backtest
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { SetStatus("Erreur: " + ex.Message, "#FF4B4B"); }
+            finally
+            {
+                //e bloc finally s'exécute QUOI QU'IL ARRIVE (Succès, Annulation, ou Erreur)
+                await ToggleLoader(false);
+            }
         }
         public async Task LoadMoreData(long referenceTimestamp, bool isPrevious = true)
         {
@@ -330,6 +331,7 @@ namespace backtest
             if (_ctsGlobal == null) _ctsGlobal = new CancellationTokenSource();
             _isLoadingMore = true;
             ;
+            await ToggleLoader(true, "");
             try
             {
                 DateTime refDate = DateTimeOffset.FromUnixTimeSeconds(referenceTimestamp).DateTime;
@@ -340,12 +342,26 @@ namespace backtest
                 if (isPrevious)
                 {
                     // En arrière : On prend l'année de la première bougie
-                    // (La fonction GetFileToRequest gérera si on est déjà dans le bon bloc ou s'il faut reculer)
-                    targetYear = refDate.Year.ToString();
+                    switch (tf)
+                    {
+                        case "1m":
+                        case "5m":
+                        case "15m":
+                        case "30m":
+                        case "1h":
+                            targetYear = GetFileToRequest(refDate.Year-1, _currentTF);
+                            break;
+                        default:
+                            targetYear = GetFileToRequest(refDate.Year, _currentTF);
+                            break;
+
+                    }
+                    
                 }
                 else
                 {
-                    targetYear= GetFileToRequest(refDate.Year, _currentTF);
+                   
+                    targetYear = GetFileToRequest(refDate.Year+1, _currentTF);
                 }
 
                 SetStatus($"RECHERCHE {targetYear}...", "#FFB900");
@@ -382,7 +398,7 @@ namespace backtest
             {
                 await SafeExecuteJs($"window.cyberLog('Erreur LoadMore: {ex.Message.Replace("'", "\\'")}');");
             }
-            finally { _isLoadingMore = false; }
+            finally { _isLoadingMore = false; await ToggleLoader(false); }
         }
         private string GetFileToRequest(int year, string timeframe)
         {
@@ -413,6 +429,22 @@ namespace backtest
                     return year.ToString();
             }
         }
+        private async Task ToggleLoader(bool show, string message = "")
+        {
+            if (ChartBrowser?.CoreWebView2 != null)
+            {
+                if (show)
+                {
+                    // Échappe la chaîne pour éviter tout bug JS avec des apostrophes
+                    string safeMsg = message.Replace("'", "\\'");
+                    await ChartBrowser.ExecuteScriptAsync($"window.showLoader('{safeMsg}');");
+                }
+                else
+                {
+                    await ChartBrowser.ExecuteScriptAsync("window.hideLoader();");
+                }
+            }
+        }
         public async void ExitReplayAndGoToPresent()
         {
             try
@@ -424,7 +456,6 @@ namespace backtest
                 _endOfDataReached = false;
 
                 // 3. On recharge les données normales (ce qui appellera updateChartData en JS)
-                // Cette méthode devrait déjà exister dans ton code et charger le symbole actuel
                 await LoadBacktestData(_ctsGlobal.Token);
 
                 await SafeExecuteJs("window.cyberLog('Retour au temps réel...');");
@@ -434,7 +465,6 @@ namespace backtest
                 await SafeExecuteJs($"window.cyberLog('Erreur sortie replay: {ex.Message}', true);");
             }
         }
-
         private List<CandleModel> ParseCsvToCandles(string filePath)
         {
             var candles = new List<CandleModel>();
@@ -477,14 +507,11 @@ namespace backtest
                 if (ChartBrowser?.CoreWebView2 != null)
                 {
                     string errorMsg = $"Erreur Parsing ligne {lineCount}: {ex.Message}";
-                    // On échappe bien les quotes pour éviter de casser le script JS
                     string safeError = errorMsg.Replace("'", "\\'").Replace("\r", "").Replace("\n", "");
-                    ChartBrowser.ExecuteScriptAsync($"cyberLog('{safeError}', true);");
                 }
             }
             return candles;
         }
-
         private void SetStatus(string msg, string colorHex)
         {
             if (!Dispatcher.CheckAccess())
@@ -495,7 +522,6 @@ namespace backtest
             TxtStatus.Text = msg.ToUpper();
             TxtStatus.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(colorHex);
         }
-        // Dans Chart.xaml.cs
         public void PopulateTradeForm(Trade trade)
         {
             // 1. Informations de base
@@ -505,7 +531,6 @@ namespace backtest
             ExitPriceTxt.Text = trade.prixClose.ToString();
 
             // 2. Enums (Type et Résultat)
-            // Assurez-vous que vos ComboBox sont remplies avec les valeurs de l'Enum au démarrage
             TypeOrdreComboBox.SelectedIndex = (int)trade.TypeOrdre;
             ResultComboBox.SelectedIndex = (int)trade.Result;
 
@@ -526,19 +551,14 @@ namespace backtest
             // 5. Autre
             profitTxt.Text = trade.Profit.ToString(CultureInfo.InvariantCulture);
 
-            // On change d'onglet automatiquement vers "TRADE" pour montrer le résultat
-            // Si votre TabControl s'appelle par exemple 'MainTabControl'
-            // MainTabControl.SelectedIndex = 1; 
         }
         public void UpdateCurrentTradeImagePath(string type, string fileName)
         {
-            // Supposons que tu as une référence au trade en cours d'édition
             if (type.ToUpper() == "HTF")
                 _imageHtf = fileName;
             else
                 _imageLtf = fileName;
 
-            // Optionnel : rafraîchir l'affichage du TradeVisualizer
         }
 
         #region Events
@@ -568,7 +588,7 @@ namespace backtest
         {
             await SafeExecuteJs("captureChart('LTF')");
             StatusLtf.Text = "✅ Capturé";
-            StatusLtf.Foreground = System.Windows.Media.Brushes.LightGreen;
+            StatusLtf.Foreground = Brushes.LightGreen;
         }
         private async void Watchlist_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -585,7 +605,6 @@ namespace backtest
                     _currentSymbol = selected.Symbol;
                     TxtCurrentSymbol.Text = _currentSymbol;
 
-                    await SafeExecuteJs($"window.cyberLog('Changement vers {_currentSymbol}...');");
                     await LoadBacktestData(token);
                 }
                 catch (OperationCanceledException) { }

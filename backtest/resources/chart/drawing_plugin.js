@@ -5,15 +5,11 @@
         this.series = series;
     }
 
-    // Fonction interne pour détecter la durée d'une bougie en secondes sur la TF actuelle
     _getCurrentStep(timeScale) {
-        // On récupère les données visibles pour calculer l'écart entre deux bougies
         const visibleRange = timeScale.getVisibleRange();
         if (!visibleRange) return null;
 
-        // On essaie de trouver le pas (step) via la différence de temps
-        // Si la bibliothèque ne donne pas accès facilement à la TF, 
-        // le calcul de la différence entre deux points est la méthode infaillible.
+     
         const logicalRange = timeScale.getVisibleLogicalRange();
         if (!logicalRange) return null;
 

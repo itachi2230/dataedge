@@ -50,7 +50,6 @@
 
 /* Correction de la taille des SVG */
 .side-btn svg {
-    /* Attention : 100px est trop grand pour un bouton de 40px */
     /* 24px est la taille standard pour ces icônes */
     width: 24px;
     height: 24px;

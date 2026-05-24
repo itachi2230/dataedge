@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Windows;
-using System.Runtime.InteropServices; // <--- AJOUTÉ pour [ComVisible]
+using System.Runtime.InteropServices; 
 using Newtonsoft.Json;
 using System.IO;
 
 namespace backtest.services
 {
-    // Indispensable pour WebView2 : cela permet au JS de voir cette classe
     [ComVisible(true)]
     public class ChartBridge
     {

@@ -178,3 +178,56 @@ button.active {
     color: white !important;
     border-color: var(--tv-blue) !important;
 }
+
+/* --- OVERLAY DE CHARGEMENT CYBER --- */
+#cyber-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(19, 23, 34, 0.85); /* Fond sombre transparent */
+    backdrop-filter: blur(4px);         /* Effet de flou arrière-plan arrière */
+    z-index: 99999;                    /* Passe au-dessus de TOUT */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+/* Classe active déclenchée en JS */
+#cyber-loader.active {
+    opacity: 1;
+    pointer-events: auto; /* Bloque les clics de l'utilisateur sur le graphique */
+}
+
+.spinner-container {
+    text-align: center;
+}
+
+/* Spinner d'animation néon */
+.neon-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(0, 255, 255, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--accent); /* Ton cyan #00FFFF */
+    box-shadow: 0 0 10px var(--accent);
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px auto;
+}
+
+#loader-message {
+    color: var(--accent);
+    font-family: 'Consolas', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px var(--accent);
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

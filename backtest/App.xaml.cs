@@ -20,13 +20,13 @@ namespace backtest
             base.OnStartup(e);
 
             // 1. Thread UI
-            // this.DispatcherUnhandledException += Current_DispatcherUnhandledException;
+             this.DispatcherUnhandledException += Current_DispatcherUnhandledException;
 
             // 2. Threads en arrière-plan
-            //AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
             // 3. Tasks (TPL)
-            //TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
         }
 
         private async void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
@@ -39,14 +39,14 @@ namespace backtest
         {
             if (e.ExceptionObject is Exception ex)
             {
-               // await HandleFatalError(ex, "Domaine Applicatif (Critique)");
+                await HandleFatalError(ex, "Domaine Applicatif (Critique)");
             }
         }
 
         private async void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
         {
-            // e.SetObserved(); // Empêche la fermeture
-           // await HandleFatalError(e.Exception, "Tâche Asynchrone (Task)");
+             e.SetObserved(); // Empêche la fermeture
+            await HandleFatalError(e.Exception, "Tâche Asynchrone (Task)");
         }
 
         /// <summary>

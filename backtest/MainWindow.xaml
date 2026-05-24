@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:backtest"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Title="Performance Dashboard" Height="750" Width="1350"
+        Title="Performance Dashboard" Height="650" Width="1150"
         Background="Transparent" WindowStartupLocation="CenterScreen"
         
         AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip" WindowState="Maximized">

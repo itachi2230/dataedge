@@ -17,8 +17,10 @@ namespace backtest.services
         private const string ROUTE_FETCH_DATA = "api/public/data/fetch";
         private const string ROUTE_LIST_PAIRS = "api/public/data/pairs";
 
+        private const string WATCHLIST_CACHE_FILE = "watchlist_cache.json";
         private readonly HttpClient _httpClient;
         private readonly string _localDataFolder;
+        private readonly string _cacheFilePath;
 
         public Dataservice(string baseUrl)
         {
@@ -26,10 +28,11 @@ namespace backtest.services
             _httpClient = new HttpClient
             {
                 BaseAddress = new Uri(finalBaseUrl),
-                Timeout = TimeSpan.FromSeconds(10)
+                Timeout = TimeSpan.FromSeconds(18)
             };
 
             _localDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "chart", "historical");
+            _cacheFilePath = Path.Combine(_localDataFolder, WATCHLIST_CACHE_FILE);
 
             if (!Directory.Exists(_localDataFolder))
                 Directory.CreateDirectory(_localDataFolder);
@@ -51,24 +54,64 @@ namespace backtest.services
                     string json = await response.Content.ReadAsStringAsync();
                     // Désérialisation du format Symfony : [{symbol: "EURUSD", created_at: "..."}]
                     var remotePairs = JsonConvert.DeserializeObject<List<RemotePairDTO>>(json);
-
+                    await SaveWatchlistLocallyAsync(json);
                     return remotePairs.Select(p => new WatchlistSymbol
                     {
                         Symbol = p.Symbol,
                         Price = "---", // Le prix sera mis à jour par le flux live plus tard
                         Change = "0.00%"
                     }).ToList();
+                    
                 }
+               
+
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[Watchlist] Erreur serveur: {ex.Message}");
             }
-
+            var cachedWatchlist = await GetLocalWatchlistAsync();
+            if (cachedWatchlist != null && cachedWatchlist.Any())
+            {
+                return cachedWatchlist;
+            }
             // Fallback : Si le serveur est injoignable, on retourne une liste par défaut
             return GetDefaultWatchlist();
         }
+        private async Task SaveWatchlistLocallyAsync(string json)
+        {
+            try
+            {
+                 File.WriteAllText(_cacheFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Watchlist] Impossible de sauvegarder le cache : {ex.Message}");
+            }
+        }
+        private async Task<List<WatchlistSymbol>> GetLocalWatchlistAsync()
+        {
+            try
+            {
+                if (File.Exists(_cacheFilePath))
+                {
+                    string json = File.ReadAllText(_cacheFilePath);
+                    var localPairs = JsonConvert.DeserializeObject<List<RemotePairDTO>>(json);
 
+                    return localPairs.Select(p => new WatchlistSymbol
+                    {
+                        Symbol = p.Symbol,
+                        Price = "---",
+                        Change = "0.00% (offline)"
+                    }).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Watchlist] Erreur lecture cache : {ex.Message}");
+            }
+            return null;
+        }
         public List<WatchlistSymbol> GetDefaultWatchlist()
         {
             return new List<WatchlistSymbol>

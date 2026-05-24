@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Windows.Data;
 
 namespace backtest
@@ -403,12 +404,49 @@ namespace backtest
         public Trade(double profit = 0, double prixOpen=0,double prixClose=0) { Profit = profit;this.prixOpen = prixOpen;this.prixClose = prixClose; }
     }
 
-    public class ChampPersonnalise
+public class ChampPersonnalise
     {
-        public string Nom { get; set; }
+        private string _nom;
+
+        public string Nom
+        {
+            get => _nom;
+            set => _nom = NettoyerNom(value);
+        }
+
         public object Valeur { get; set; }
+
         public ChampPersonnalise() { }
-        public ChampPersonnalise(string nom, object valeur = null) { Nom = nom?.ToUpper(); Valeur = valeur; }
+
+        public ChampPersonnalise(string nom, object valeur = null)
+        {
+            Nom = NettoyerNom(nom); // Le setter va automatiquement appeler NettoyerNom
+            Valeur = valeur;
+        }
+
+        /// <summary>
+        /// Nettoie la chaîne pour qu'elle soit compatible avec un nom de contrôle (TextBox, etc.)
+        /// </summary>
+        private string NettoyerNom(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "Champ_SansNom";
+
+            // 1. Remplacer les espaces (un ou plusieurs) par un seul underscore
+            string resultat = Regex.Replace(input, @"\s+", "_");
+
+            // 2. Supprimer tout ce qui n'est pas une lettre, un chiffre ou un underscore
+            // (Supprime @, #, $, %, etc.)
+            resultat = Regex.Replace(resultat, @"[^a-zA-Z0-9_]", "");
+
+            // 3. Optionnel : S'assurer que ça ne commence pas par un chiffre 
+            // (un nom de contrôle ne peut pas commencer par un chiffre en WinForms/WPF)
+            if (char.IsDigit(resultat[0]))
+            {
+                resultat = "_" + resultat;
+            }
+
+            return resultat.ToUpper();
+        }
     }
 
     public class PerformanceStat
