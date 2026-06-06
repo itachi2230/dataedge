@@ -187,6 +187,7 @@ namespace backtest.services
             return File.Exists(Path.Combine(_localDataFolder, fileName));
         }
 
+
         private string MapTimeframeToServer(string tf)
         {
             string input = tf.ToLower().Replace(" ", "").Trim();

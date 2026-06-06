@@ -216,6 +216,7 @@
     <Compile Include="InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="NetworkUtils.cs" />
     <Compile Include="newvisu.xaml.cs">
       <DependentUpon>newvisu.xaml</DependentUpon>
     </Compile>

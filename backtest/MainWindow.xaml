@@ -248,7 +248,7 @@
                         </Border>
                     </Popup>
                 </Grid>
-                
+
                 <Grid HorizontalAlignment="Right" Margin="0,0,220,0">
                     <Button x:Name="BtnNotifications" 
             Style="{StaticResource CircleNavButton}" 
@@ -299,14 +299,14 @@
                         </Border>
                     </Popup>
                 </Grid>
-                
+
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button Content="—" Click="MinimizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
                     <Button x:Name="MaximizeBtn" Content="▢" Click="MaximizeButton_Click" Background="Transparent" Foreground="White" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
                     <Button Content="✕" Click="CloseButton_Click" Background="Transparent" Foreground="#E74C3C" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
                 </StackPanel>
             </Grid>
-            
+
             <ContentControl x:Name="MainViewContainer" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0">
                 <Grid x:Name="DashboardView">
                     <Grid.RowDefinitions>
@@ -316,14 +316,14 @@
 
                     <Grid Grid.Row="0" Margin="10,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="263*"/>
-                            <ColumnDefinition Width="263*"/>
-                            <ColumnDefinition Width="430*"/>
-                            <ColumnDefinition Width="114*"/>
-                            <ColumnDefinition Width="233*"/>
+                            <ColumnDefinition Width="189*"/>
+                            <ColumnDefinition Width="189*"/>
+                            <ColumnDefinition Width="309*"/>
+                            <ColumnDefinition Width="112*"/>
+                            <ColumnDefinition Width="304*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="0" Margin="8,15,5.2,0">
+                        <Border Style="{StaticResource CardStyle}" Grid.Column="0" Margin="8,15,5,0">
                             <UniformGrid Columns="2">
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="BUY" Foreground="Gray" HorizontalAlignment="Center" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
@@ -344,7 +344,7 @@
                             </UniformGrid>
                         </Border>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="1" Margin="10.8,15,4.4,0">
+                        <Border Style="{StaticResource CardStyle}" Grid.Column="1" Margin="11,15,4,0">
                             <UniformGrid Columns="2" VerticalAlignment="Center">
                                 <StackPanel>
                                     <TextBlock Text="BEST" Foreground="Gray" FontSize="14" HorizontalAlignment="Center"/>
@@ -357,45 +357,88 @@
                             </UniformGrid>
                         </Border>
 
-                        <Grid Grid.Column="2" Margin="14.6,0,3.8,-0.2">
+                        <Grid Grid.Column="2" Margin="15,0,4,0">
                             <DockPanel>
                                 <Grid DockPanel.Dock="Top" Margin="5,0,5,0">
-                                    <TextBlock Text="STRATÉGIES" 
-                       Foreground="Gray" 
-                       FontSize="12" 
-                       FontWeight="Bold" 
-                       VerticalAlignment="Center"/>
-
-                                    <Button HorizontalAlignment="Right" 
-                    Width="30" Height="30"
-                    Content="+" 
-                    FontSize="18"
-                    FontWeight="Bold"
-                    Style="{StaticResource CircleNavButton}" 
-                    Click="AddStrategy_Click"
-                    ToolTip="Ajouter une nouvelle stratégie" Background="#FF478DF0"/>
+                                    <TextBlock Text="STRATÉGIES" Foreground="Gray" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <Button HorizontalAlignment="Right" Width="30" Height="30" Content="+" FontSize="18" FontWeight="Bold" Style="{StaticResource CircleNavButton}" Click="AddStrategy_Click" ToolTip="Ajouter une nouvelle stratégie" Background="#FF478DF0"/>
                                 </Grid>
-
-                                <ScrollViewer HorizontalScrollBarVisibility="Disabled" 
-                      VerticalScrollBarVisibility="Auto">
-                                    <StackPanel x:Name="perfStrat" 
-                        Orientation="Vertical" 
-                        VerticalAlignment="Top" 
-                        Margin="0,0,0,0"/>
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="perfStrat" Orientation="Vertical" VerticalAlignment="Top" Margin="0,0,0,0"/>
                                 </ScrollViewer>
                             </DockPanel>
                         </Grid>
 
-                        <Grid Grid.Column="4" Margin="0.8,0,0,-0.2">
-                            <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="2" Width="120" Height="120" Opacity="0.9">
+                        <Border Style="{StaticResource CardStyle}" Grid.Column="4" Margin="10,0,5,0" Padding="10,8">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="SENTIMENT" Foreground="Gray" FontSize="12" FontWeight="Bold" Margin="5,0,0,0"/>
+
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,5">
+
+                                    <StackPanel Orientation="Vertical" Margin="0,0,18,0" VerticalAlignment="Bottom">
+                                        <TextBlock Text="GLOBAL" Foreground="Gray" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                        <Button Background="Transparent" MouseEnter="Button_MouseEnter" BorderBrush="Transparent" Click="FearGreed_Click" Cursor="Hand">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <ContentPresenter/>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                            <Grid Width="120" Height="82">
+                                                <Path Stroke="#2A3546" StrokeThickness="11" StrokeStartLineCap="Flat" StrokeEndLineCap="Flat" Data="M 10,75 A 50,50 0 0 1 110,75"/>
+                                                <Path x:Name="CenterArc" Fill="#33FF6A02" Stroke="#FF6A02" StrokeThickness="1.5" Data="M 32.5,75 A 27.5,27.5 0 0 1 87.5,75"/>
+                                                <Line x:Name="GaugeNeedle" X1="60" Y1="75" X2="60" Y2="28" Stroke="#999999" StrokeThickness="2.5">
+                                                    <Line.RenderTransform>
+                                                        <RotateTransform x:Name="NeedleRotation" Angle="-45" CenterX="60" CenterY="75"/>
+                                                    </Line.RenderTransform>
+                                                </Line>
+                                                <Ellipse Fill="#1A2432" Width="8" Height="8" Margin="0,0,0,10" VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
+                                                <StackPanel VerticalAlignment="Bottom" Margin="0,0,0,2" HorizontalAlignment="Center">
+                                                    <TextBlock x:Name="fearGreedValeur" Text=".." Foreground="White" FontSize="14" FontWeight="Black" HorizontalAlignment="Center"/>
+                                                    <TextBlock x:Name="fearGreedLabel" Text="Peur" Foreground="#FF6A02" FontSize="8" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Vertical" VerticalAlignment="Bottom">
+                                        <TextBlock Text="CRYPTO" Foreground="Gray" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                        <Button Background="Transparent" BorderBrush="Transparent" Click="FearGreed_Click" Cursor="Hand">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <ContentPresenter/>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                            <Grid Width="95" Height="65">
+                                                <Path Stroke="#2A3546" StrokeThickness="8" StrokeStartLineCap="Flat" StrokeEndLineCap="Flat" Data="M 10,55 A 37.5,37.5 0 0 1 85,55"/>
+                                                <Path x:Name="CenterArcCrypto" Fill="#33FF6A02" Stroke="#FF6A02" StrokeThickness="1" Data="M 27.5,55 A 20,20 0 0 1 67.5,55"/>
+                                                <Line x:Name="GaugeNeedleCrypto" X1="47.5" Y1="55" X2="47.5" Y2="22" Stroke="#999999" StrokeThickness="1.8">
+                                                    <Line.RenderTransform>
+                                                        <RotateTransform x:Name="NeedleRotationCrypto" Angle="-45" CenterX="47.5" CenterY="55"/>
+                                                    </Line.RenderTransform>
+                                                </Line>
+                                                <Ellipse Fill="#1A2432" Width="6" Height="6" Margin="0,0,0,6" VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
+                                                <StackPanel VerticalAlignment="Bottom" Margin="0,0,0,1" HorizontalAlignment="Center">
+                                                    <TextBlock x:Name="cryptoFGValeur" Text=".." Foreground="White" FontSize="11" FontWeight="Black" HorizontalAlignment="Center"/>
+                                                    <TextBlock x:Name="cryptoFGLabel" Text="Peur" Foreground="#FF6A02" FontSize="7" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
+
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Grid Grid.Column="3" VerticalAlignment="Center" Height="120" Margin="10,12,10,13">
+                            <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="1.5" Width="90" Height="90" Opacity="0.7">
                                 <Ellipse.Effect>
-                                    <BlurEffect Radius="15"/>
+                                    <BlurEffect Radius="8"/>
                                 </Ellipse.Effect>
                             </Ellipse>
-                            <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="3" Width="120" Height="120" StrokeDashArray="10,5" Opacity="0.9"/>
+                            <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="2" Width="90" Height="90" StrokeDashArray="6,4" Opacity="0.8"/>
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock x:Name="nbreText" Text="0" Foreground="White" FontSize="35" FontWeight="Black" HorizontalAlignment="Center"/>
-                                <TextBlock Text="TRADES" Foreground="{StaticResource AccentBlue}" FontSize="8" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="nbreText" Text="0" Foreground="White" FontSize="22" FontWeight="Black" HorizontalAlignment="Center"/>
+                                <TextBlock Text="TRADES" Foreground="{StaticResource AccentBlue}" FontSize="7" FontWeight="Bold" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Grid>
                     </Grid>
@@ -527,6 +570,182 @@
         Margin="100,100,100,0" 
         Panel.ZIndex="200">
                     <wv2:WebView2 x:Name="InvestingCalendarBrowser"/>
+                </Border>
+            </Grid>
+            <!-- POPUP DÉTAILLÉ DU SENTIMENT DES MARCHÉS -->
+            <Grid x:Name="OverlaySentiment" 
+      Grid.RowSpan="3" 
+      Background="#B20A111A" Visibility="Collapsed" 
+      Panel.ZIndex="201"
+      MouseDown="OverlaySentiment_Close_Click">
+
+            <Border x:Name="PopupCard"
+            Style="{StaticResource CardStyle}" 
+            Width="650" Height="480"
+            HorizontalAlignment="Center" VerticalAlignment="Center"
+            Padding="20"
+            MouseDown="PopupContent_MouseDown">
+
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="PopupTransform"/>
+                    </Border.RenderTransform>
+                    <!-- Empêche la fermeture quand on clique dedans -->
+
+                    <DockPanel>
+                        <!-- En-tête du Popup -->
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,15" Background="Transparent" Cursor="SizeAll" 
+                  MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,7V13H16.5V11.5H12.5V7H11Z" 
+                          Fill="{StaticResource AccentBlue}" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="ANALYSE DÉTAILLÉE DU SENTIMENT" Foreground="White" FontSize="16" FontWeight="Black" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Bouton Fermer -->
+                            <Button Content="✕" HorizontalAlignment="Right" Foreground="Gray" Background="Transparent" BorderBrush="Transparent" FontSize="16" FontWeight="Bold" Cursor="Hand" Click="OverlaySentiment_Close_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <ContentPresenter/>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+
+                        <Separator DockPanel.Dock="Top" Background="#1A2432" Margin="0,0,0,15"/>
+
+                        <!-- Sélecteur d'onglets (US Market / Crypto) -->
+                        <TabControl Background="Transparent" BorderThickness="0">
+                            
+
+                            <!-- ONGLET 1 : US MARKET -->
+                            <TabItem Header="US MARKET ">
+                                <Grid Margin="0,15,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Résumé de l'indice actuel -->
+                                    <Border Background="#0D131A" CornerRadius="6" Padding="15" Margin="0,0,0,15">
+                                        <UniformGrid Columns="3">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="INDICE ACTUEL" Foreground="Gray" FontSize="10"/>
+                                                <TextBlock x:Name="popUsValue" Text="--" Foreground="White" FontSize="26" FontWeight="Black" HorizontalAlignment="Center"/>
+                                                <TextBlock x:Name="popUsLabel" Text="--" Foreground="{StaticResource AccentBlue}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="MÉTRIQUE CLÉ" Foreground="Gray" FontSize="10" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="S&amp;P 500 Momentum" Foreground="LightGray" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="MIS À JOUR" Foreground="Gray" FontSize="10" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Aujoud'hui" Foreground="LightGray" FontSize="12" Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </UniformGrid>
+                                    </Border>
+
+                                    <!-- Historique / Composantes -->
+                                    <StackPanel Grid.Row="1" >
+                                        <TextBlock Text="HISTORIQUE DE L'INDICE US" Foreground="Gray" FontSize="11" FontWeight="Bold" Margin="0,0,0,5"/>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Hier : " Foreground="LightGray"/>
+                                            <TextBlock x:Name="popUsHier" Grid.Column="1" Text="-- / Neutre" Foreground="White" FontWeight="Bold"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="progressUsHier" Height="4" Background="#101721" BorderThickness="0"/>
+
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="La semaine dernière : " Foreground="LightGray"/>
+                                            <TextBlock x:Name="popUsSemaine" Grid.Column="1" Text="-- / Peur" Foreground="White" FontWeight="Bold"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="progressUsSemaine" Height="4" Background="#101721" BorderThickness="0"/>
+
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Le mois dernier : " Foreground="LightGray"/>
+                                            <TextBlock x:Name="popUsMois" Grid.Column="1" Text="-- / Cupidité" Foreground="White" FontWeight="Bold"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="progressUsMois" Height="4" Background="#101721" BorderThickness="0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </TabItem>
+
+                            <!-- ONGLET 2 : CRYPTO -->
+                            <TabItem Header="CRYPTO">
+                                <Grid Margin="0,15,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Résumé Crypto -->
+                                    <Border Background="#0D131A" CornerRadius="6" Padding="15" Margin="0,0,0,15">
+                                        <UniformGrid Columns="3">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="INDICE ACTUEL" Foreground="Gray" FontSize="10"/>
+                                                <TextBlock x:Name="popCryptoValue" Text="--" Foreground="White" FontSize="26" FontWeight="Black" HorizontalAlignment="Center"/>
+                                                <TextBlock x:Name="popCryptoLabel" Text="--" Foreground="{StaticResource AccentBlue}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="DOMINANCE CLÉ" Foreground="Gray" FontSize="10" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Bitcoin / Volatilité" Foreground="LightGray" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="SOURCE" Foreground="Gray" FontSize="10" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Social + Volatilité" Foreground="LightGray" FontSize="12" Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </UniformGrid>
+                                    </Border>
+
+                                    <!-- Historique Crypto -->
+                                    <StackPanel Grid.Row="1" >
+                                        <TextBlock Text="HISTORIQUE DE L'INDICE CRYPTO" Foreground="Gray" FontSize="11" FontWeight="Bold" Margin="0,0,0,5"/>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Hier : " Foreground="LightGray"/>
+                                            <TextBlock x:Name="popCryptoHier" Grid.Column="1" Text="--" Foreground="White" FontWeight="Bold"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="progressCryptoHier" Height="4" Background="#101721" BorderThickness="0"/>
+
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="La semaine dernière : " Foreground="LightGray"/>
+                                            <TextBlock x:Name="popCryptoSemaine" Grid.Column="1" Text="--" Foreground="White" FontWeight="Bold"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="progressCryptoSemaine" Height="4" Background="#101721" BorderThickness="0"/>
+
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Le mois dernier : " Foreground="LightGray"/>
+                                            <TextBlock x:Name="popCryptoMois" Grid.Column="1" Text="--" Foreground="White" FontWeight="Bold"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="progressCryptoMois" Height="4" Background="#101721" BorderThickness="0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </TabItem>
+                        </TabControl>
+                    </DockPanel>
                 </Border>
             </Grid>
         </Grid>

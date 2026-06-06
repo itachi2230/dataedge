@@ -25,6 +25,8 @@ namespace backtest
         private readonly string notesFolderPath = Path.Combine(Environment.CurrentDirectory, "Notes");
         private ObservableCollection<Trade> Journal;
         SettingsView settingsView;
+        private Point _startPoint;
+        private bool _isDragging = false;
         Chart chart ;
         private FxCloudService _cloudService = new FxCloudService();
         private readonly string _sessionFilePath;
@@ -95,10 +97,55 @@ namespace backtest
             journalMenu.Items.Add(deleteTrade);
             TradesDataGri.ContextMenu = journalMenu;
             PerformSystemHandshake();
+            UpdateAllSentimentIndices();
         }
 
         #region CHARGEMENT DES STRATÉGIES ET JOURNAL ET NOTIFS
 
+        // Événement au clic sur le graphique Fear & Greed
+       
+        private async Task UpdateAllSentimentIndices()
+        {
+            // --- 1. MISE À JOUR MARCHÉ US (CNN) ---
+            int usIndex = await NetworkUtils.GetFearAndGreedIndexAsync();
+            fearGreedValeur.Text = usIndex == -1 ? "??" : usIndex.ToString();
+
+            Color usColor = GetSentimentColorAndLabel(usIndex, out string usLabel);
+            fearGreedLabel.Text = usLabel;
+            fearGreedLabel.Foreground = new SolidColorBrush(usColor);
+            CenterArc.Stroke = new SolidColorBrush(usColor);
+            CenterArc.Fill = new SolidColorBrush(Color.FromArgb(40, usColor.R, usColor.G, usColor.B));
+
+            if (usIndex != -1)
+            {
+                NeedleRotation.Angle = (usIndex * 1.8) - 90;
+            }
+
+            // --- 2. MISE À JOUR MARCHÉ CRYPTO (Même logique et design) ---
+            int cryptoIndex = await NetworkUtils.GetCryptoFearAndGreedIndexAsync();
+            cryptoFGValeur.Text = cryptoIndex == -1 ? "??" : cryptoIndex.ToString();
+
+            Color cryptoColor = GetSentimentColorAndLabel(cryptoIndex, out string cryptoLabel);
+            cryptoFGLabel.Text = cryptoLabel;
+            cryptoFGLabel.Foreground = new SolidColorBrush(cryptoColor);
+            CenterArcCrypto.Stroke = new SolidColorBrush(cryptoColor);
+            CenterArcCrypto.Fill = new SolidColorBrush(Color.FromArgb(40, cryptoColor.R, cryptoColor.G, cryptoColor.B));
+
+            if (cryptoIndex != -1)
+            {
+                NeedleRotationCrypto.Angle = (cryptoIndex * 1.8) - 90;
+            }
+        }
+        // Fonction utilitaire partagée pour la traduction française et les couleurs
+        private Color GetSentimentColorAndLabel(int value, out string label)
+        {
+            if (value == -1) { label = "..."; return Color.FromRgb(100, 110, 120); }
+            if (value <= 25) { label = "Peur Extrême"; return Color.FromRgb(242, 54, 69); }
+            if (value <= 45) { label = "Peur"; return Color.FromRgb(255, 106, 2); }
+            if (value <= 55) { label = "Neutre"; return Color.FromRgb(220, 220, 220); }
+            if (value <= 75) { label = "Cupidité"; return Color.FromRgb(112, 168, 0); }
+            label = "Cupidité Extr."; return Color.FromRgb(0, 150, 0);
+        }
         private async void PerformSystemHandshake()
         {
             string currentVersion = "1.0.0";
@@ -751,8 +798,157 @@ namespace backtest
             //await ShowNotification("Comming soon !!", false, false, 0.5);
             ShowChart();
         }
+
         #endregion
 
+        private async void FearGreed_Click(object sender, RoutedEventArgs e)
+        {
+            // Ouvre l'overlay
+            OverlaySentiment.Visibility = Visibility.Visible;
+            await FetchDetailedSentimentData();
+        }
+        private async Task FetchDetailedSentimentData()
+        {
+            try
+            {
+                // 1. APPEL ET AFFICHAGE US MARKET (DYNAMIQUE ET PROPRE)
+                SentimentDetail usData = await NetworkUtils.GetDetailedUsSentimentAsync();
+
+                popUsValue.Text = usData.CurrentValue == -1 ? "??" : usData.CurrentValue.ToString();
+                GetSentimentColorAndLabel(usData.CurrentValue, out string usLabel);
+                popUsLabel.Text = usLabel.ToUpper();
+                popUsLabel.Foreground = new SolidColorBrush(GetSentimentColor(usData.CurrentValue));
+
+                // Historique US
+                UpdatePopupHistoryRow(usData.YesterdayValue, popUsHier, progressUsHier);
+                UpdatePopupHistoryRow(usData.LastWeekValue, popUsSemaine, progressUsSemaine);
+                UpdatePopupHistoryRow(usData.LastMonthValue, popUsMois, progressUsMois);
+
+
+                // 2. APPEL ET AFFICHAGE CRYPTO MARKET (DYNAMIQUE ET PROPRE)
+                SentimentDetail cryptoData = await NetworkUtils.GetDetailedCryptoSentimentAsync();
+
+                popCryptoValue.Text = cryptoData.CurrentValue == -1 ? "??" : cryptoData.CurrentValue.ToString();
+                GetSentimentColorAndLabel(cryptoData.CurrentValue, out string cryptoLabel);
+                popCryptoLabel.Text = cryptoLabel.ToUpper();
+                popCryptoLabel.Foreground = new SolidColorBrush(GetSentimentColor(cryptoData.CurrentValue));
+
+                // Historique Crypto
+                UpdatePopupHistoryRow(cryptoData.YesterdayValue, popCryptoHier, progressCryptoHier);
+                UpdatePopupHistoryRow(cryptoData.LastWeekValue, popCryptoSemaine, progressCryptoSemaine);
+                UpdatePopupHistoryRow(cryptoData.LastMonthValue, popCryptoMois, progressCryptoMois);
+            }
+            catch
+            {
+                // Gestion silencieuse des erreurs réseau
+            }
+        }
+
+        // Méthode utilitaire pour rafraîchir élégamment une ligne d'historique (Texte + ProgressBar)
+        private void UpdatePopupHistoryRow(int value, TextBlock textControl, ProgressBar progressControl)
+        {
+            if (value == -1)
+            {
+                textControl.Text = "--";
+                progressControl.Value = 0;
+                return;
+            }
+
+            GetSentimentColorAndLabel(value, out string label);
+            textControl.Text = $"{value} / {label}";
+            progressControl.Value = value;
+            progressControl.Foreground = new SolidColorBrush(GetSentimentColor(value));
+        }
+        // Traducteur rapide pour l'API alternative.me
+       
+
+        // Retourne uniquement la couleur
+        private Color GetSentimentColor(int value)
+        {
+            if (value <= 25) return Color.FromRgb(242, 54, 69);
+            if (value <= 45) return Color.FromRgb(255, 106, 2);
+            if (value <= 55) return Color.FromRgb(220, 220, 220);
+            if (value <= 75) return Color.FromRgb(112, 168, 0);
+            return Color.FromRgb(0, 150, 0);
+        }
+
+        private void Button_MouseEnter(object sender, MouseEventArgs e)
+        {
+            UpdateAllSentimentIndices();
+        }
+        private void PopupContent_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+        }
+        // Ferme le popup si on clique à côté ou sur la croix
+        private void OverlaySentiment_Close_Click(object sender, RoutedEventArgs e)
+        {
+            OverlaySentiment.Visibility = Visibility.Collapsed;
+            PopupTransform.X = 0;
+            PopupTransform.Y = 0;
+        }
+        private void OverlaySentiment_Close_Click(object sender, MouseButtonEventArgs e)
+        {
+            OverlaySentiment.Visibility = Visibility.Collapsed;
+            PopupTransform.X = 0;
+            PopupTransform.Y = 0;
+        }
+
+        // Quand l'utilisateur clique sur l'en-tête du popup
+        private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var element = sender as FrameworkElement;
+            if (element == null) return;
+
+            _isDragging = true;
+            _startPoint = e.GetPosition(this); // Position relative à la fenêtre principale
+
+            // On capture la souris pour continuer à suivre le mouvement même si l'utilisateur sort de l'en-tête en allant trop vite
+            element.CaptureMouse();
+
+            // On s'abonne temporairement aux mouvements et au relâchement
+            element.MouseMove += Header_MouseMove;
+            element.MouseLeftButtonUp += Header_MouseLeftButtonUp;
+        }
+
+        // Pendant que l'utilisateur déplace la souris
+        private void Header_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isDragging) return;
+
+            Point currentPoint = e.GetPosition(this);
+
+            // Calcul de l'écart (Delta)
+            double deltaX = currentPoint.X - _startPoint.X;
+            double deltaY = currentPoint.Y - _startPoint.Y;
+
+            // Application du décalage sur la transformation du Border
+            PopupTransform.X += deltaX;
+            PopupTransform.Y += deltaY;
+
+            // On redéfinit le point de départ pour le prochain pixel de mouvement
+            _startPoint = currentPoint;
+        }
+
+        // Quand l'utilisateur relâche le clic
+        private void Header_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            var element = sender as FrameworkElement;
+            if (element == null) return;
+
+            _isDragging = false;
+            element.ReleaseMouseCapture(); // Relâche le contrôle de la souris
+
+            // On se désabonne pour libérer les ressources
+            element.MouseMove -= Header_MouseMove;
+            element.MouseLeftButtonUp -= Header_MouseLeftButtonUp;
+        }
+
+        // Sécurité : Évite que cliquer sur la croix "✕" ne tente de déplacer le volet
+        private void Button_MouseLeftButtonDown_Handled(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+        }
 
     }
 

@@ -13,8 +13,8 @@
             </LinearGradientBrush>
         </Border.BorderBrush>
         <WrapPanel Orientation="Horizontal" Height="21" Margin="0,0,0.333,0"  >
-            <TextBlock x:Name="controlLabel" Margin="8,0,3,0" FontWeight="Bold" Foreground="#FFCDCDCD" Text="nom de la strategie" FontSize="16" Width="241"  />
-            <TextBlock x:Name="controlBar" Margin="8,0,3,0" FontWeight="Bold" Foreground="#FF3AF909" Text="+500%" FontSize="16" Width="235"  />
+            <TextBlock x:Name="controlLabel" Margin="8,0,3,0" FontWeight="Bold" Foreground="#FFCDCDCD" Text="nom de la strategie" FontSize="14" Width="241"  />
+            <TextBlock x:Name="controlBar" Margin="8,0,3,0" FontWeight="Bold" Foreground="#FF3AF909" Text="+500%" FontSize="14" Width="235"  />
         </WrapPanel>
     </Border>
 </UserControl>
