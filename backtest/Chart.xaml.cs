@@ -116,7 +116,6 @@ namespace backtest
                 };
 
                 _strategie.AddTrade(nouveauTrade);
-                MessageBox.Show("Trade enregistré dans la base de données !");
                 ResetTradeForm();
             }
             catch (Exception ex)
@@ -124,6 +123,10 @@ namespace backtest
                 MessageBox.Show("Erreur de saisie : " + ex.Message);
             }
             MaintabControl.SelectedIndex = 0;
+        }
+        private void trash_Click(object sender, RoutedEventArgs e)
+        {
+            ResetTradeForm(); MaintabControl.SelectedIndex = 0;
         }
         private void ResetTradeForm()
         {
@@ -247,7 +250,7 @@ namespace backtest
                 // On appelle notre nouvelle fonction
                 string fileToRequest = GetFileToRequest(year, _currentTF);
 
-                SetStatus($"JUMP : {year} (Fichier {fileToRequest})", "#FFB900");
+                SetStatus($"JUMP : {year} (pack {fileToRequest})", "#FFB900");
 
                 var result = await _dataService.GetMarketDataAsync(_currentSymbol, _currentTF, fileToRequest, _ctsGlobal.Token);
 

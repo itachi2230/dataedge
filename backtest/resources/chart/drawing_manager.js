@@ -235,13 +235,21 @@ editFibo(index) {
     };
 },
     deleteSelected() {
-        if (this.selectedIdx !== null) {
-            this.drawings.splice(this.selectedIdx, 1);
-            this.selectedIdx = null;
-            this.save();
-            this.series.applyOptions({});
+    if (this.selectedIdx !== null) {
+        const drawingToDelete = this.drawings[this.selectedIdx];
+
+        // On vérifie si un setup actif est en mémoire et si c'est celui qu'on supprime
+        if (this.lastActiveSetup && this.lastActiveSetup.id === drawingToDelete.id) {
+            this.lastActiveSetup = null;
         }
-    },
+
+        // Logique existante de suppression
+        this.drawings.splice(this.selectedIdx, 1);
+        this.selectedIdx = null;
+        this.save();
+        this.series.applyOptions({});
+    }
+},
 
     clearAllDrawings() {
         if (confirm("Supprimer tous les dessins ?")) {
@@ -537,14 +545,45 @@ mgr.drawings.forEach((dr, i) => {
         }
     });
 
-   container.addEventListener('dblclick', () => { 
-		if (mgr.selectedIdx !== null) {
-			const dr = mgr.drawings[mgr.selectedIdx];
-			
-		} else if (mgr.mode === 'path' || mgr.mode === 'polyline') {
-			mgr.finishDrawing(); 
-		}
-	});
+   container.addEventListener('dblclick', (e) => { 
+        // 1. Si un dessin est sélectionné (Logique existante)
+        if (mgr.selectedIdx !== null) {
+            const dr = mgr.drawings[mgr.selectedIdx];
+        } 
+        // 2. Si on est en train de tracer un chemin/polyline, on termine le dessin
+        else if (mgr.mode === 'path' || mgr.mode === 'polyline') {
+            mgr.finishDrawing(); 
+        } 
+        // 3 STYLE TRADINGVIEW : Uniquement si le mode REPLAY est actif
+        else if (window.replayState && window.replayState.isActive) {
+            if (window.chart && window.candleSeries) {
+                const rect = container.getBoundingClientRect();
+                const localX = e.clientX - rect.left;
+                
+                const timeScale = window.chart.timeScale();
+                const clickedTime = timeScale.coordinateToTime(localX);
+
+                if (clickedTime) {
+                    // On cherche l'index de la bougie correspondante dans le cache global allData
+                    const targetIdx = window.replayState.allData.findIndex(d => d.time >= clickedTime);
+
+                    if (targetIdx !== -1) {
+                        // Comme sur TradingView, si le replay défile en mode "Play", on le met en pause
+                        if (window.replayState.isPlaying) {
+                            window.togglePlayReplay();
+                        }
+
+                        // Conversion du timestamp au format string attendu par applyJump (YYYY-MM-DD)
+                        const dDate = typeof clickedTime === 'string' 
+                            ? clickedTime 
+                            : new Date(clickedTime * 1000).toISOString().split('T')[0];
+                        // applyJump se charge de couper le tableau, appliquer getExtendedTimeline et recalibrer l'autoScale
+                        applyJump(targetIdx, dDate);
+                    }
+                }
+            }
+        }
+    });
 
     window.addEventListener('keydown', e => { 
         if (e.key === 'Delete' && mgr.selectedIdx !== null) {
