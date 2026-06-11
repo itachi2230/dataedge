@@ -17,7 +17,7 @@
                       ResizeBorderThickness="6" />
     </WindowChrome.WindowChrome>
 
-    <Border BorderBrush="{StaticResource CyanNeon}" BorderThickness="1" Background="{StaticResource BgDark}">
+    <Border  CornerRadius="7" BorderThickness="1" Background="{StaticResource BgDark}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
@@ -25,7 +25,7 @@
                 <RowDefinition Height="10"/>
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0" Background="#131722">
+            <Grid Grid.Row="0" >
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
                     <Image Source="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico" Width="18" Height="18" Margin="0,0,10,0"/>
                     <TextBlock Text="DATAEDGE | BACKTEST TERMINAL" 

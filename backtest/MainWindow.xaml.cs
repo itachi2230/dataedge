@@ -893,7 +893,13 @@ namespace backtest
             PopupTransform.X = 0;
             PopupTransform.Y = 0;
         }
-
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            // Limite la fenêtre à la WorkArea pour ne pas cacher la taskbar
+            this.MaxWidth = SystemParameters.WorkArea.Width;
+            this.MaxHeight = SystemParameters.WorkArea.Height;
+        }
         // Quand l'utilisateur clique sur l'en-tête du popup
         private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {

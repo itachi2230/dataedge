@@ -5,7 +5,6 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Performance Dashboard" Height="650" Width="1150"
         Background="Transparent" WindowStartupLocation="CenterScreen"
-        
         AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResizeWithGrip" WindowState="Maximized">
 
     <Window.Resources>
@@ -18,7 +17,7 @@
         </Storyboard>
     </Window.Resources>
 
-    <Border Background="{StaticResource BgDark}" CornerRadius="20" BorderBrush="#222" BorderThickness="1">
+    <Border Background="{StaticResource BgDark}" CornerRadius="7" BorderBrush="#222" BorderThickness="1">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>

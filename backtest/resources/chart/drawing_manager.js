@@ -54,22 +54,31 @@
         if (type === 'long_pos' || type === 'short_pos') {
             const p = this.points[0];
             const timeScale = this.chart.timeScale();
-            
-            // On calcule un décalage horizontal (largeur) de 20 bougies environ
-            const currentX = timeScale.timeToCoordinate(p.time);
-            const futureTime = timeScale.coordinateToTime(currentX + 150); 
 
-            // On calcule un décalage vertical par défaut (ex: 1% du prix actuel)
-            const priceOffset = p.price * 0.01; 
+            // ── LARGEUR : 20% des bougies visibles ──────────────────────────
+            const logicalRange = timeScale.getVisibleLogicalRange();
+            const visibleBars = logicalRange ? (logicalRange.to - logicalRange.from) : 100;
+            const currentX = timeScale.timeToCoordinate(p.time);
+            const containerWidth = document.getElementById('chart-container').clientWidth;
+            const pxPerBar = containerWidth / visibleBars;
+            const widthPx = Math.round(visibleBars * 0.20) * pxPerBar; // 20% de la vue
+            const futureTime = timeScale.coordinateToTime(currentX + widthPx);
+
+            // ── HAUTEUR : 12% de la plage de prix visible ───────────────────
+            const containerHeight = document.getElementById('chart-container').clientHeight;
+            const priceTop    = this.series.coordinateToPrice(0);
+            const priceBottom = this.series.coordinateToPrice(containerHeight);
+            const visiblePriceRange = Math.abs(priceTop - priceBottom);
+            const priceOffset = visiblePriceRange * 0.06; // TP et SL à 6% chacun (12% total)
 
             if (type === 'long_pos') {
                 finalPoints = [
-                    { time: p.time, price: p.price },            // 0: Entrée (Milieu Gauche)
-                    { time: futureTime, price: p.price + priceOffset }, // 1: TP (Haut Droite)
-                    { time: futureTime, price: p.price - priceOffset }  // 2: SL (Bas Droite)
+                    { time: p.time, price: p.price },
+                    { time: futureTime, price: p.price + priceOffset }, // TP
+                    { time: futureTime, price: p.price - priceOffset }  // SL
                 ];
             }
-			
+
 		else if (type === 'fibo') {
 			// 1. On prépare les données par défaut
 			const fiboData = {
@@ -88,11 +97,11 @@
 			// 3. On ouvre l'éditeur visuel (non-bloquant)
 			const lastIdx = this.drawings.length - 1;
 			setTimeout(() => this.editFibo(lastIdx), 100);
-		}else {
-                finalPoints = [	
-                    { time: p.time, price: p.price },            // 0: Entrée
-                    { time: futureTime, price: p.price - priceOffset }, // 1: TP (Bas Droite)
-                    { time: futureTime, price: p.price + priceOffset }  // 2: SL (Haut Droite)
+		} else {
+                finalPoints = [
+                    { time: p.time, price: p.price },
+                    { time: futureTime, price: p.price - priceOffset }, // TP (bas pour short)
+                    { time: futureTime, price: p.price + priceOffset }  // SL (haut pour short)
                 ];
             }
         }
@@ -593,6 +602,14 @@ mgr.drawings.forEach((dr, i) => {
             mgr.setMode(null);
             mgr.selectedIdx = null;
             mgr.series.applyOptions({});
+        }
+        // ESPACE : pause/play en mode replay (uniquement si aucun input n'est focusé)
+        if (e.key === ' ' && window.replayState && window.replayState.isActive) {
+            const tag = document.activeElement?.tagName;
+            if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+                e.preventDefault();
+                window.togglePlayReplay();
+            }
         }
     });
 };

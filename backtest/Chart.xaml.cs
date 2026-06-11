@@ -128,6 +128,7 @@ namespace backtest
         {
             ResetTradeForm(); MaintabControl.SelectedIndex = 0;
         }
+        
         private void ResetTradeForm()
         {
             // Réinitialisation des textes et valeurs numériques

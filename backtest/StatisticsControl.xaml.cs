@@ -288,7 +288,7 @@ namespace backtest
         {
             // Déclenche l'affichage de l'interface de replay dans la WebView
             chart = new backtesteur(this.strategie);
-            this.chart.ShowDialog();
+            this.chart.Show();
             refresh();
 
         }

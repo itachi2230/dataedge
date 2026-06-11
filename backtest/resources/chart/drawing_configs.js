@@ -42,7 +42,7 @@
         //ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
         //ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
         
-        ctx.fillStyle = "#FFFFFF";
+        ctx.fillStyle = "#999999";
         ctx.font = "bold 12px Arial";
         ctx.textAlign = "center";
         ctx.fillText(`R/R: ${rr}`, entry.x + width+30, badgeY + 10);

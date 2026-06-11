@@ -26,6 +26,13 @@ namespace backtest
             this.st = st;
             receveur.Children.Add(new Chart(st));
         }
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            // Limite la fenêtre à la WorkArea pour ne pas cacher la taskbar
+            this.MaxWidth = SystemParameters.WorkArea.Width;
+            this.MaxHeight = SystemParameters.WorkArea.Height;
+        }
         private void MinimizeClick(object sender, RoutedEventArgs e)
         {
             this.WindowState = WindowState.Minimized;
