@@ -451,7 +451,24 @@ window.captureChart = function(type) {
 
 function getExtendedTimeline(realData) {
     if (!realData.length) return [];
-    const interval = realData.length > 1 ? (realData[1].time - realData[0].time) : 3600;
+
+    // Calcul de l'intervalle médian sur les 20 premières bougies
+    // pour éviter les faux gaps liés aux weekends sur les premières paires
+    let interval = 3600;
+    if (realData.length > 1) {
+        const sampleSize = Math.min(20, realData.length - 1);
+        const deltas = [];
+        for (let i = 0; i < sampleSize; i++) {
+            const delta = realData[i + 1].time - realData[i].time;
+            if (delta > 0) deltas.push(delta);
+        }
+        if (deltas.length > 0) {
+            deltas.sort((a, b) => a - b);
+            // Médiane = le plus petit delta fréquent (élimine les gaps weekend/férié)
+            interval = deltas[Math.floor(deltas.length * 0.25)]; // 1er quartile
+        }
+    }
+
     let timeline = [];
     
     for (let i = 200; i > 0; i--) {

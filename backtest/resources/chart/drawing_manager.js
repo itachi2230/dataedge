@@ -58,7 +58,7 @@
             // ── LARGEUR : 20% des bougies visibles ──────────────────────────
             const logicalRange = timeScale.getVisibleLogicalRange();
             const visibleBars = logicalRange ? (logicalRange.to - logicalRange.from) : 100;
-            const currentX = timeScale.timeToCoordinate(p.time);
+            const currentX = resolveX(p.time) ?? timeScale.logicalToCoordinate(logicalRange ? logicalRange.from : 0);
             const containerWidth = document.getElementById('chart-container').clientWidth;
             const pxPerBar = containerWidth / visibleBars;
             const widthPx = Math.round(visibleBars * 0.20) * pxPerBar; // 20% de la vue
@@ -284,6 +284,32 @@ window.syncDrawingWithChart = function() {
     const mgr = window.DrawingManager;
     const container = document.getElementById('chart-container');
 
+    // ── Résolution robuste timestamp → coordonnée X ─────────────────
+    // Utilisée partout dans ce fichier (sélection, mousedown, mousemove)
+    function resolveX(time) {
+        if (!time) return null;
+        const timeScale = window.chart.timeScale();
+        let x = timeScale.timeToCoordinate(time);
+        if (x !== null && !isNaN(x)) return x;
+
+        const logRange = timeScale.getVisibleLogicalRange();
+        if (logRange) {
+            for (let k = 0; k < 10; k++) {
+                const t  = timeScale.coordinateToTime(timeScale.logicalToCoordinate(Math.ceil(logRange.from) + k));
+                const t2 = timeScale.coordinateToTime(timeScale.logicalToCoordinate(Math.ceil(logRange.from) + k + 1));
+                if (t && t2 && t !== t2) {
+                    const step = Math.abs(t2 - t);
+                    for (const off of [0, 1, -1, 2, -2, 3, -3]) {
+                        x = timeScale.timeToCoordinate(Math.round(time / step) * step + off * step);
+                        if (x !== null && !isNaN(x)) return x;
+                    }
+                    break;
+                }
+            }
+        }
+        return null;
+    }
+
     window.chart.subscribeClick(param => {
         // 1. Debugging de base
         if (!param || !param.point) {
@@ -308,120 +334,139 @@ window.syncDrawingWithChart = function() {
             // MODE SÉLECTION
 
 let found = null;
+const mouseX = param.point.x;
+const mouseY = param.point.y;
+const timeScale = window.chart.timeScale();
+
+// ── Calcule un seuil adaptatif selon la taille du dessin ───────────
+const MIN_HIT = 12;
+const BASE_HIT = 10;
+const adaptiveThreshold = (pts) => {
+    const validPts = pts.filter(p => p.x !== null && p.y !== null);
+    if (validPts.length < 2) return MIN_HIT;
+    const xExtent = Math.max(...validPts.map(p => p.x)) - Math.min(...validPts.map(p => p.x));
+    const yExtent = Math.max(...validPts.map(p => p.y)) - Math.min(...validPts.map(p => p.y));
+    const size = Math.max(xExtent, yExtent);
+    if (size < 2 * MIN_HIT) return Math.max(MIN_HIT, MIN_HIT * 2 - size * 0.5);
+    return BASE_HIT;
+};
+
 mgr.drawings.forEach((dr, i) => {
     const pts = dr.data.points.map(p => ({
-        x: window.chart.timeScale().timeToCoordinate(p.time),
+        x: resolveX(p.time),
         y: window.candleSeries.priceToCoordinate(p.price)
     }));
 
-    const mouseX = param.point.x;
-    const mouseY = param.point.y;
+    // Si aucun point n'est résolvable, on skip ce dessin
+    if (pts.every(p => p.x === null)) return;
 
-    // 1. Détection sur les points d'ancrage (pour tous les objets)
-    const isOverAnyPoint = pts.some(pt => window.DrawingUtils.isOverPoint(mouseX, mouseY, pt.x, pt.y, 15)); // Rayon plus large (15px)
-    // 2. Détection spécifique au texte (boîte de collision autour du texte)
+    const type = dr.data.type;
+    const thr = adaptiveThreshold(pts); // seuil adaptatif
+
+    // ── 1. Points d'ancrage ─────────────────────────────────────────
+    const anchorRadius = Math.max(MIN_HIT, thr + 3);
+    const isOverAnyPoint = pts.some(pt =>
+        pt.x !== null && window.DrawingUtils.isOverPoint(mouseX, mouseY, pt.x, pt.y, anchorRadius)
+    );
+
+    // ── 2. Détection par type ───────────────────────────────────────
     let isOverText = false;
-	const type = dr.data.type;
-    if (type === 'text') {
-        const textWidth = dr.lastMeasuredWidth || 100; // Estimation de la largeur du texte
-        const textHeight = 20;
-       isOverText = (mouseX >= pts[0].x - 5 && mouseX <= pts[0].x + textWidth + 5 &&
-                  mouseY >= pts[0].y - textHeight && mouseY <= pts[0].y + 5);
-    }
-	
-	else if (type === 'horz_line' || type === 'horz_ray') {
-		// Si la souris est à la même hauteur (Y) que la ligne (marge de 10px)
-		const isAtCorrectHeight = Math.abs(mouseY - pts[0].y) < 10;
-    
-		if (type === 'horz_line' && isAtCorrectHeight) {
-			found = i;
-		} else if (type === 'horz_ray' && isAtCorrectHeight && mouseX >= pts[0].x - 5) {
-			// Pour le rayon, il faut aussi être à droite du point d'origine
-			found = i;
-		}
-	} 
-
-	else if (type === 'vert_line') {
-		// Si la souris est à la même position horizontale (X) que la ligne
-		if (Math.abs(mouseX - pts[0].x) < 10) {
-			found = i;
-		}
-	}
-	else{}
-
-    // 3. Détection sur les segments (Trendlines, Rectangles, etc.)
     let isOverLine = false;
-	   if (pts.length >= 2) {
-		if (dr.data.type === 'rectangle') {
-			// Définition des 4 coins à partir des 2 points diagonaux
-			const xMin = Math.min(pts[0].x, pts[1].x);
-			const xMax = Math.max(pts[0].x, pts[1].x);
-			const yMin = Math.min(pts[0].y, pts[1].y);
-			const yMax = Math.max(pts[0].y, pts[1].y);
 
-			// On vérifie la proximité avec l'un des 4 bords
-			const dTop = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMax, yMin);
-			const dBottom = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMax, xMax, yMax);
-			const dLeft = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMin, yMax);
-			const dRight = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMax, yMin, xMax, yMax);
+    if (type === 'text') {
+        const textWidth = dr.lastMeasuredWidth || 100;
+        const textHeight = 20;
+        if (pts[0].x !== null) {
+            isOverText = (mouseX >= pts[0].x - 5 && mouseX <= pts[0].x + textWidth + 5 &&
+                          mouseY >= pts[0].y - textHeight && mouseY <= pts[0].y + 5);
+        }
+    }
 
-			if (Math.min(dTop, dBottom, dLeft, dRight) < 10) {
-				isOverLine = true;
-			}
-        
-			// Optionnel : Sélection par l'intérieur du rectangle
-			if (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax) {
-				isOverLine = true;
-			}
-			}
-		else if (dr.data.type === 'long_pos' || dr.data.type === 'short_pos') {
-				const entry = pts[0];
-				const target = pts[1];
-				const stop = pts[2];
+    else if (type === 'horz_line') {
+        if (pts[0].y !== null && Math.abs(mouseY - pts[0].y) < thr) found = i;
+    }
 
-				// Calcul des limites du rectangle total
-				const xMin = entry.x;
-				const xMax = target.x; // Rappel: TP et SL ont le même X (time)
-    
-				// On trouve le point le plus haut et le plus bas pour couvrir tout le setup
-				const yMin = Math.min(entry.y, target.y, stop.y);
-				const yMax = Math.max(entry.y, target.y, stop.y);
+    else if (type === 'horz_ray') {
+        if (pts[0].x !== null && pts[0].y !== null &&
+            Math.abs(mouseY - pts[0].y) < thr && mouseX >= pts[0].x - 5) found = i;
+    }
 
-				// Vérification : est-ce que la souris est à l'intérieur de cette zone ?
-				if (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax) {
-					isOverLine = true; 
-				}
-			}
-		else if (type === 'fibo') {
-			// On permet la sélection si on clique entre le niveau 0 et le niveau 1
-			const yMin = Math.min(pts[0].y, pts[1].y);
-			const yMax = Math.max(pts[0].y, pts[1].y);
-    
-			// Si on clique dans la zone verticale couverte par la fibo
-			if (mouseY >= yMin && mouseY <= yMax) {
-				isOverLine = true;
-			}
-		}
-		else if (dr.data.type === 'path') {
-		for (let j = 0; j < pts.length - 1; j++) {
-			const d = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
-			if (d < 10) { isOverLine = true; break; }
-		}
-	}
-	else if (type === 'curve') {
-		// On teste la proximité avec la courbe (simplifié par distance aux segments p1-p2 et p2-p3)
-		const d1 = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y);
-		const d2 = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[1].x, pts[1].y, pts[2].x, pts[2].y);
-		if (d1 < 15 || d2 < 15) {
-			isOverLine = true;
-		}
-	}
-		
-		else {
-			// Détection standard pour les lignes simples (trendline, etc.)
-			isOverLine = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y) < 10;
-		}
-	}
+    else if (type === 'vert_line') {
+        if (pts[0].x !== null && Math.abs(mouseX - pts[0].x) < thr) found = i;
+    }
+
+    else if (pts.length >= 2) {
+        const validPts = pts.filter(p => p.x !== null);
+
+        if (type === 'rectangle') {
+            const xs = validPts.map(p => p.x), ys = validPts.map(p => p.y);
+            const xMin = Math.min(...xs), xMax = Math.max(...xs);
+            const yMin = Math.min(...ys), yMax = Math.max(...ys);
+
+            const dTop    = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMax, yMin);
+            const dBottom = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMax, xMax, yMax);
+            const dLeft   = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMin, yMax);
+            const dRight  = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMax, yMin, xMax, yMax);
+
+            // Bords OU intérieur
+            if (Math.min(dTop, dBottom, dLeft, dRight) < thr ||
+                (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax)) {
+                isOverLine = true;
+            }
+        }
+
+        else if (type === 'long_pos' || type === 'short_pos') {
+            if (pts[0].x !== null && pts[1].x !== null && pts[2].x !== null) {
+                const xMin = Math.min(pts[0].x, pts[1].x, pts[2].x);
+                const xMax = Math.max(pts[0].x, pts[1].x, pts[2].x);
+                const yMin = Math.min(pts[0].y, pts[1].y, pts[2].y);
+                const yMax = Math.max(pts[0].y, pts[1].y, pts[2].y);
+
+                // Zone élargie du seuil adaptatif si le setup est très petit
+                if (mouseX >= xMin - thr && mouseX <= xMax + thr &&
+                    mouseY >= yMin - thr && mouseY <= yMax + thr) {
+                    isOverLine = true;
+                }
+            }
+        }
+
+        else if (type === 'fibo') {
+            const ys = validPts.map(p => p.y);
+            const yMin = Math.min(...ys), yMax = Math.max(...ys);
+            // Zone verticale de la fibo + tolérance adaptative
+            if (mouseY >= yMin - thr && mouseY <= yMax + thr) {
+                isOverLine = true;
+            }
+        }
+
+        else if (type === 'path') {
+            for (let j = 0; j < pts.length - 1; j++) {
+                if (pts[j].x === null || pts[j+1].x === null) continue;
+                const d = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
+                if (d < thr) { isOverLine = true; break; }
+            }
+        }
+
+        else if (type === 'curve' && pts.length >= 3) {
+            const validAll = pts.filter(p => p.x !== null);
+            if (validAll.length >= 2) {
+                const d1 = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x ?? pts[1].x, pts[0].y, pts[1].x, pts[1].y);
+                const d2 = pts[2] && pts[2].x !== null
+                    ? window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[1].x, pts[1].y, pts[2].x, pts[2].y)
+                    : Infinity;
+                if (d1 < thr || d2 < thr) isOverLine = true;
+            }
+        }
+
+        else {
+            // Trendline, arrow, et tout le reste : segment p0→p1
+            if (pts[0].x !== null && pts[1].x !== null) {
+                isOverLine = window.DrawingUtils.getDistanceToSegment(
+                    mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y
+                ) < thr;
+            }
+        }
+    }
 
     if (isOverAnyPoint || isOverText || isOverLine) {
         found = i;
@@ -458,18 +503,16 @@ mgr.drawings.forEach((dr, i) => {
         const y = e.clientY - rect.top;
         const dr = mgr.drawings[mgr.selectedIdx];
 
-
-        // Détection resize
+        // Détection resize sur les ancres (resolveX partagé)
         dr.data.points.forEach((p, i) => {
-            const px = window.chart.timeScale().timeToCoordinate(p.time);
+            const px = resolveX(p.time);
             const py = window.candleSeries.priceToCoordinate(p.price);
-            if (window.DrawingUtils.isOverPoint(x, y, px, py)) {
-
+            if (px !== null && window.DrawingUtils.isOverPoint(x, y, px, py, 12)) {
                 mgr.dragState = { 
-                type: 'resize', 
-                index: i, 
-                currentText: p.text // <--- SAUVEGARDE DU TEXTE ICI
-            };
+                    type: 'resize', 
+                    index: i, 
+                    currentText: p.text
+                };
             }
         });
 
@@ -487,10 +530,10 @@ mgr.drawings.forEach((dr, i) => {
 
         if (mgr.mode && mgr.points.length > 0) {
             const p1 = { 
-                x: window.chart.timeScale().timeToCoordinate(mgr.points[0].time), 
+                x: resolveX(mgr.points[0].time), 
                 y: window.candleSeries.priceToCoordinate(mgr.points[0].price) 
             };
-            window.DrawingUtils.updatePreview(mgr.mode, p1, { x, y });
+            if (p1.x !== null) window.DrawingUtils.updatePreview(mgr.mode, p1, { x, y });
         }
 
         if (!mgr.dragState || mgr.selectedIdx === null) return;
@@ -532,14 +575,18 @@ mgr.drawings.forEach((dr, i) => {
             const dy = y - mgr.dragState.lastY;
             
             dr.data.points = dr.data.points.map(p => {
-                const nx = timeScale.timeToCoordinate(p.time) + dx;
+                const rawX = resolveX(p.time);
+                if (rawX === null) return p; // Point non résolvable → on le laisse intact
+                const nx = rawX + dx;
                 const ny = window.candleSeries.priceToCoordinate(p.price) + dy;
+                const newTime = timeScale.coordinateToTime(nx);
+                if (!newTime) return p; // Coordonnée hors plage → on protège
                 return { 
-                time: timeScale.coordinateToTime(nx), 
-                price: window.candleSeries.coordinateToPrice(ny),
-                text: p.text // <--- PROTECTION ICI
-            };
-                    });
+                    time: newTime, 
+                    price: window.candleSeries.coordinateToPrice(ny),
+                    text: p.text
+                };
+            });
             mgr.dragState.lastX = x; 
             mgr.dragState.lastY = y;
         }
