@@ -336,141 +336,122 @@ window.syncDrawingWithChart = function() {
 let found = null;
 const mouseX = param.point.x;
 const mouseY = param.point.y;
-const timeScale = window.chart.timeScale();
 
-// ── Calcule un seuil adaptatif selon la taille du dessin ───────────
-const MIN_HIT = 12;
-const BASE_HIT = 10;
+// ── Seuil adaptatif selon la taille pixel du dessin ────────────────
+// Garantit MIN_HIT px cliquables même quand le dessin est minuscule en HTF
+const MIN_HIT = 14;
 const adaptiveThreshold = (pts) => {
-    const validPts = pts.filter(p => p.x !== null && p.y !== null);
-    if (validPts.length < 2) return MIN_HIT;
-    const xExtent = Math.max(...validPts.map(p => p.x)) - Math.min(...validPts.map(p => p.x));
-    const yExtent = Math.max(...validPts.map(p => p.y)) - Math.min(...validPts.map(p => p.y));
-    const size = Math.max(xExtent, yExtent);
-    if (size < 2 * MIN_HIT) return Math.max(MIN_HIT, MIN_HIT * 2 - size * 0.5);
-    return BASE_HIT;
+    const valid = pts.filter(p => p.x !== null && p.y !== null);
+    if (valid.length < 2) return MIN_HIT;
+    const w = Math.max(...valid.map(p => p.x)) - Math.min(...valid.map(p => p.x));
+    const h = Math.max(...valid.map(p => p.y)) - Math.min(...valid.map(p => p.y));
+    const size = Math.max(w, h);
+    return size < MIN_HIT * 2 ? MIN_HIT : 10;
 };
 
 mgr.drawings.forEach((dr, i) => {
-    const pts = dr.data.points.map(p => ({
-        x: resolveX(p.time),
-        y: window.candleSeries.priceToCoordinate(p.price)
-    }));
-
-    // Si aucun point n'est résolvable, on skip ce dessin
-    if (pts.every(p => p.x === null)) return;
-
     const type = dr.data.type;
-    const thr = adaptiveThreshold(pts); // seuil adaptatif
 
-    // ── 1. Points d'ancrage ─────────────────────────────────────────
-    const anchorRadius = Math.max(MIN_HIT, thr + 3);
+    // ── SOURCE DE VÉRITÉ : coordonnées pixel du dernier rendu ──────
+    // Le plugin les met à jour à chaque frame → toujours justes quelle
+    // que soit la TF, même si resolveX échoue.
+    // Fallback sur resolveX si le cache n'existe pas encore.
+    let pts;
+    if (dr._cachedCoords && dr._cachedCoords.length > 0) {
+        pts = dr._cachedCoords; // coordonnées pixel exactes du rendu
+    } else {
+        pts = dr.data.points.map(p => ({
+            x: resolveX(p.time),
+            y: window.candleSeries.priceToCoordinate(p.price)
+        }));
+    }
+
+    // Skip si vraiment aucun point résolvable
+    if (!pts || pts.every(p => p.x === null)) return;
+
+    const thr = adaptiveThreshold(pts);
+    const anchorR = Math.max(MIN_HIT, thr + 4);
+
+    // ── 1. Ancres ──────────────────────────────────────────────────
     const isOverAnyPoint = pts.some(pt =>
-        pt.x !== null && window.DrawingUtils.isOverPoint(mouseX, mouseY, pt.x, pt.y, anchorRadius)
+        pt.x !== null && window.DrawingUtils.isOverPoint(mouseX, mouseY, pt.x, pt.y, anchorR)
     );
 
-    // ── 2. Détection par type ───────────────────────────────────────
+    // ── 2. Détection par type ──────────────────────────────────────
     let isOverText = false;
     let isOverLine = false;
 
     if (type === 'text') {
-        const textWidth = dr.lastMeasuredWidth || 100;
-        const textHeight = 20;
+        const tw = dr.lastMeasuredWidth || 100;
         if (pts[0].x !== null) {
-            isOverText = (mouseX >= pts[0].x - 5 && mouseX <= pts[0].x + textWidth + 5 &&
-                          mouseY >= pts[0].y - textHeight && mouseY <= pts[0].y + 5);
+            isOverText = mouseX >= pts[0].x - 5 && mouseX <= pts[0].x + tw + 5 &&
+                         mouseY >= pts[0].y - 20  && mouseY <= pts[0].y + 5;
         }
     }
-
     else if (type === 'horz_line') {
-        if (pts[0].y !== null && Math.abs(mouseY - pts[0].y) < thr) found = i;
+        if (Math.abs(mouseY - pts[0].y) < thr) found = i;
     }
-
     else if (type === 'horz_ray') {
-        if (pts[0].x !== null && pts[0].y !== null &&
-            Math.abs(mouseY - pts[0].y) < thr && mouseX >= pts[0].x - 5) found = i;
+        if (pts[0].x !== null && Math.abs(mouseY - pts[0].y) < thr && mouseX >= pts[0].x - 5) found = i;
     }
-
     else if (type === 'vert_line') {
         if (pts[0].x !== null && Math.abs(mouseX - pts[0].x) < thr) found = i;
     }
-
     else if (pts.length >= 2) {
-        const validPts = pts.filter(p => p.x !== null);
+        const valid = pts.filter(p => p.x !== null);
 
         if (type === 'rectangle') {
-            const xs = validPts.map(p => p.x), ys = validPts.map(p => p.y);
+            const xs = valid.map(p => p.x), ys = valid.map(p => p.y);
             const xMin = Math.min(...xs), xMax = Math.max(...xs);
             const yMin = Math.min(...ys), yMax = Math.max(...ys);
-
-            const dTop    = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMax, yMin);
-            const dBottom = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMax, xMax, yMax);
-            const dLeft   = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMin, yMax);
-            const dRight  = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMax, yMin, xMax, yMax);
-
-            // Bords OU intérieur
-            if (Math.min(dTop, dBottom, dLeft, dRight) < thr ||
-                (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax)) {
+            const dEdge = Math.min(
+                window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMax, yMin),
+                window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMax, xMax, yMax),
+                window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMin, yMin, xMin, yMax),
+                window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, xMax, yMin, xMax, yMax)
+            );
+            if (dEdge < thr || (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax))
                 isOverLine = true;
-            }
         }
-
         else if (type === 'long_pos' || type === 'short_pos') {
-            if (pts[0].x !== null && pts[1].x !== null && pts[2].x !== null) {
-                const xMin = Math.min(pts[0].x, pts[1].x, pts[2].x);
-                const xMax = Math.max(pts[0].x, pts[1].x, pts[2].x);
-                const yMin = Math.min(pts[0].y, pts[1].y, pts[2].y);
-                const yMax = Math.max(pts[0].y, pts[1].y, pts[2].y);
-
-                // Zone élargie du seuil adaptatif si le setup est très petit
-                if (mouseX >= xMin - thr && mouseX <= xMax + thr &&
-                    mouseY >= yMin - thr && mouseY <= yMax + thr) {
+            const allX = pts.map(p => p.x).filter(x => x !== null);
+            const allY = pts.map(p => p.y).filter(y => y !== null);
+            if (allX.length && allY.length) {
+                const xMin = Math.min(...allX) - thr, xMax = Math.max(...allX) + thr;
+                const yMin = Math.min(...allY) - thr, yMax = Math.max(...allY) + thr;
+                if (mouseX >= xMin && mouseX <= xMax && mouseY >= yMin && mouseY <= yMax)
                     isOverLine = true;
-                }
             }
         }
-
         else if (type === 'fibo') {
-            const ys = validPts.map(p => p.y);
-            const yMin = Math.min(...ys), yMax = Math.max(...ys);
-            // Zone verticale de la fibo + tolérance adaptative
-            if (mouseY >= yMin - thr && mouseY <= yMax + thr) {
+            const ys = valid.map(p => p.y);
+            if (mouseY >= Math.min(...ys) - thr && mouseY <= Math.max(...ys) + thr)
                 isOverLine = true;
-            }
         }
-
         else if (type === 'path') {
             for (let j = 0; j < pts.length - 1; j++) {
                 if (pts[j].x === null || pts[j+1].x === null) continue;
-                const d = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
-                if (d < thr) { isOverLine = true; break; }
+                if (window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y) < thr) {
+                    isOverLine = true; break;
+                }
             }
         }
-
         else if (type === 'curve' && pts.length >= 3) {
-            const validAll = pts.filter(p => p.x !== null);
-            if (validAll.length >= 2) {
-                const d1 = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x ?? pts[1].x, pts[0].y, pts[1].x, pts[1].y);
-                const d2 = pts[2] && pts[2].x !== null
-                    ? window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[1].x, pts[1].y, pts[2].x, pts[2].y)
-                    : Infinity;
-                if (d1 < thr || d2 < thr) isOverLine = true;
-            }
+            const d1 = window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y);
+            const d2 = pts[2]?.x != null
+                ? window.DrawingUtils.getDistanceToSegment(mouseX, mouseY, pts[1].x, pts[1].y, pts[2].x, pts[2].y)
+                : Infinity;
+            if (d1 < thr || d2 < thr) isOverLine = true;
         }
-
         else {
-            // Trendline, arrow, et tout le reste : segment p0→p1
-            if (pts[0].x !== null && pts[1].x !== null) {
+            // trendline, arrow, et tout le reste
+            if (pts[0].x !== null && pts[1].x !== null)
                 isOverLine = window.DrawingUtils.getDistanceToSegment(
-                    mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y
-                ) < thr;
-            }
+                    mouseX, mouseY, pts[0].x, pts[0].y, pts[1].x, pts[1].y) < thr;
         }
     }
 
-    if (isOverAnyPoint || isOverText || isOverLine) {
-        found = i;
-    }
+    if (isOverAnyPoint || isOverText || isOverLine) found = i;
 });
 
             if (found!== null) {
@@ -503,11 +484,13 @@ mgr.drawings.forEach((dr, i) => {
         const y = e.clientY - rect.top;
         const dr = mgr.drawings[mgr.selectedIdx];
 
-        // Détection resize sur les ancres (resolveX partagé)
+        // Détection resize sur les ancres — utilise les coords pixel du dernier rendu
+        const cachedPts = dr._cachedCoords;
         dr.data.points.forEach((p, i) => {
-            const px = resolveX(p.time);
-            const py = window.candleSeries.priceToCoordinate(p.price);
-            if (px !== null && window.DrawingUtils.isOverPoint(x, y, px, py, 12)) {
+            // Coordonnée pixel depuis le cache du plugin, sinon fallback resolveX
+            const px = cachedPts?.[i]?.x ?? resolveX(p.time);
+            const py = cachedPts?.[i]?.y ?? window.candleSeries.priceToCoordinate(p.price);
+            if (px !== null && window.DrawingUtils.isOverPoint(x, y, px, py, 14)) {
                 mgr.dragState = { 
                     type: 'resize', 
                     index: i, 

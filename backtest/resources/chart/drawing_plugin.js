@@ -144,6 +144,10 @@
                                 this._pointToCoord(p, timeScale, step, width)
                             );
 
+                            // ── CACHE PIXEL COORDS pour la sélection ──────────────
+                            // Le manager lit _cachedCoords au lieu de recalculer
+                            d._cachedCoords = coords;
+
                             // Vérification : doit-on rendre ce dessin ?
                             if (!this._shouldRender(coords, d.data.type)) return;
 
