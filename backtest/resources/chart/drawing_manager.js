@@ -58,7 +58,7 @@
             // ── LARGEUR : 20% des bougies visibles ──────────────────────────
             const logicalRange = timeScale.getVisibleLogicalRange();
             const visibleBars = logicalRange ? (logicalRange.to - logicalRange.from) : 100;
-            const currentX = resolveX(p.time) ?? timeScale.logicalToCoordinate(logicalRange ? logicalRange.from : 0);
+            const currentX = window.resolveChartX(p.time) ?? timeScale.logicalToCoordinate(logicalRange ? logicalRange.from : 0);
             const containerWidth = document.getElementById('chart-container').clientWidth;
             const pxPerBar = containerWidth / visibleBars;
             const widthPx = Math.round(visibleBars * 0.20) * pxPerBar; // 20% de la vue
@@ -77,9 +77,15 @@
                     { time: futureTime, price: p.price + priceOffset }, // TP
                     { time: futureTime, price: p.price - priceOffset }  // SL
                 ];
+            } else {
+                // short_pos
+                finalPoints = [
+                    { time: p.time, price: p.price },
+                    { time: futureTime, price: p.price - priceOffset }, // TP (bas pour short)
+                    { time: futureTime, price: p.price + priceOffset }  // SL (haut pour short)
+                ];
             }
-
-		else if (type === 'fibo') {
+        } else if (type === 'fibo') {
 			// 1. On prépare les données par défaut
 			const fiboData = {
 				type: 'fibo',
@@ -97,13 +103,12 @@
 			// 3. On ouvre l'éditeur visuel (non-bloquant)
 			const lastIdx = this.drawings.length - 1;
 			setTimeout(() => this.editFibo(lastIdx), 100);
-		} else {
-                finalPoints = [
-                    { time: p.time, price: p.price },
-                    { time: futureTime, price: p.price - priceOffset }, // TP (bas pour short)
-                    { time: futureTime, price: p.price + priceOffset }  // SL (haut pour short)
-                ];
-            }
+			
+			// IMPORTANT: on sort ici pour éviter le code commun ci-dessous
+			// qui ajouterait un second dessin en double
+			this.setMode(null);
+			this.series.applyOptions({});
+			return;
         }
 
         // On ajoute le dessin avec les points finaux (soit 1, soit 3 pour les positions)
@@ -280,35 +285,39 @@ editFibo(index) {
     }
 };
 
+// ── Fonction globale de résolution timestamp → coordonnée X ────────
+// Définie GLOBALEMENT pour être accessible depuis DrawingManager.finishDrawing()
+// et depuis syncDrawingWithChart(). Utilise drawing_plugin._resolveX en fallback.
+window.resolveChartX = function(time) {
+    if (!time) return null;
+    const timeScale = window.chart.timeScale();
+    let x = timeScale.timeToCoordinate(time);
+    if (x !== null && !isNaN(x)) return x;
+
+    const logRange = timeScale.getVisibleLogicalRange();
+    if (logRange) {
+        for (let k = 0; k < 10; k++) {
+            const t  = timeScale.coordinateToTime(timeScale.logicalToCoordinate(Math.ceil(logRange.from) + k));
+            const t2 = timeScale.coordinateToTime(timeScale.logicalToCoordinate(Math.ceil(logRange.from) + k + 1));
+            if (t && t2 && t !== t2) {
+                const step = Math.abs(t2 - t);
+                for (const off of [0, 1, -1, 2, -2, 3, -3]) {
+                    x = timeScale.timeToCoordinate(Math.round(time / step) * step + off * step);
+                    if (x !== null && !isNaN(x)) return x;
+                }
+                break;
+            }
+        }
+    }
+    return null;
+};
+
 window.syncDrawingWithChart = function() {
     const mgr = window.DrawingManager;
     const container = document.getElementById('chart-container');
 
-    // ── Résolution robuste timestamp → coordonnée X ─────────────────
-    // Utilisée partout dans ce fichier (sélection, mousedown, mousemove)
-    function resolveX(time) {
-        if (!time) return null;
-        const timeScale = window.chart.timeScale();
-        let x = timeScale.timeToCoordinate(time);
-        if (x !== null && !isNaN(x)) return x;
-
-        const logRange = timeScale.getVisibleLogicalRange();
-        if (logRange) {
-            for (let k = 0; k < 10; k++) {
-                const t  = timeScale.coordinateToTime(timeScale.logicalToCoordinate(Math.ceil(logRange.from) + k));
-                const t2 = timeScale.coordinateToTime(timeScale.logicalToCoordinate(Math.ceil(logRange.from) + k + 1));
-                if (t && t2 && t !== t2) {
-                    const step = Math.abs(t2 - t);
-                    for (const off of [0, 1, -1, 2, -2, 3, -3]) {
-                        x = timeScale.timeToCoordinate(Math.round(time / step) * step + off * step);
-                        if (x !== null && !isNaN(x)) return x;
-                    }
-                    break;
-                }
-            }
-        }
-        return null;
-    }
+    // Alias local pour éviter de casser les closures existantes
+    const resolveX = window.resolveChartX;
 
     window.chart.subscribeClick(param => {
         // 1. Debugging de base

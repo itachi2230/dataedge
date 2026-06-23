@@ -1,0 +1,24 @@
+# DataEdge - Règles de Travail (Cline Rules)
+
+## 📋 Carte du Projet (Project Map)
+Un fichier `mapprojet.md` existe à la racine du projet. Il contient une description complète de l'architecture, des fichiers, des modèles de données et des flux.
+
+**IMPORTANT : Consultez toujours `mapprojet.md` avant d'effectuer des modifications.**
+Cela vous évitera de parcourir tous les dossiers et fichiers à chaque fois.
+
+## ⚙️ Règle de Mise à Jour
+Si vous effectuez des modifications qui impactent la structure ou l'architecture du projet (ajout/suppression de fichiers, modification de l'architecture, nouveaux services, nouvelles dépendances, modifications des flux de données), vous DEVEZ mettre à jour `mapprojet.md` en conséquence(ou le fichier mapchart.md si la modification est fait dans la partie chart).
+
+### Cas nécessitant une mise à jour :
+- ✅ Ajout ou suppression d'un fichier source (.cs, .xaml)
+- ✅ Nouveau service, nouvelle classe métier importante
+- ✅ Changement dans les dépendances NuGet
+- ✅ Modification de l'architecture ou des flux de données
+- ✅ Ajout de nouveaux dossiers ou réorganisation
+- ✅ Changement dans les endpoints API
+- ✅ Nouveaux modèles de données
+
+### Cas ne nécessitant PAS de mise à jour :
+- ❌ Modification de code purement fonctionnelle (bug fix, refactor)
+- ❌ Changements cosmétiques (UI, styles)
+- ❌ Traduction ou commentaires
