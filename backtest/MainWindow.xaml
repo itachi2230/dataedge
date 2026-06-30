@@ -315,11 +315,10 @@
 
                     <Grid Grid.Row="0" Margin="10,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="189*"/>
-                            <ColumnDefinition Width="189*"/>
-                            <ColumnDefinition Width="309*"/>
-                            <ColumnDefinition Width="112*"/>
-                            <ColumnDefinition Width="304*"/>
+                            <ColumnDefinition Width="1.2*"/>
+                            <ColumnDefinition Width="1.2*"/>
+                            <ColumnDefinition Width="0.7*"/>
+                            <ColumnDefinition Width="1.5*"/>
                         </Grid.ColumnDefinitions>
 
                         <Border Style="{StaticResource CardStyle}" Grid.Column="0" Margin="8,15,5,0">
@@ -356,19 +355,7 @@
                             </UniformGrid>
                         </Border>
 
-                        <Grid Grid.Column="2" Margin="15,0,4,0">
-                            <DockPanel>
-                                <Grid DockPanel.Dock="Top" Margin="5,0,5,0">
-                                    <TextBlock Text="STRATÉGIES" Foreground="Gray" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <Button HorizontalAlignment="Right" Width="30" Height="30" Content="+" FontSize="18" FontWeight="Bold" Style="{StaticResource CircleNavButton}" Click="AddStrategy_Click" ToolTip="Ajouter une nouvelle stratégie" Background="#FF478DF0"/>
-                                </Grid>
-                                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                    <StackPanel x:Name="perfStrat" Orientation="Vertical" VerticalAlignment="Top" Margin="0,0,0,0"/>
-                                </ScrollViewer>
-                            </DockPanel>
-                        </Grid>
-
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="4" Margin="10,0,5,0" Padding="10,8">
+                        <Border Style="{StaticResource CardStyle}" Grid.Column="3" Margin="10,0,5,0" Padding="10,8">
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Top" Text="SENTIMENT" Foreground="Gray" FontSize="12" FontWeight="Bold" Margin="5,0,0,0"/>
 
@@ -428,7 +415,7 @@
                             </DockPanel>
                         </Border>
 
-                        <Grid Grid.Column="3" VerticalAlignment="Center" Height="120" Margin="10,12,10,13">
+                        <Grid Grid.Column="2" VerticalAlignment="Center" Height="120" Margin="10,12,10,13">
                             <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="1.5" Width="90" Height="90" Opacity="0.7">
                                 <Ellipse.Effect>
                                     <BlurEffect Radius="8"/>
@@ -517,21 +504,41 @@
                             </DockPanel>
                         </Border>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="1">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="NOTES HEBDOMADAIRES" FontWeight="Bold" Foreground="{StaticResource AccentBlue}" Opacity="0.8"/>
-                                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5">
-                                    <Button Content="❮" Click="PreviousWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
-                                    <TextBlock x:Name="weekStartDateText" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontSize="12"/>
-                                    <Button Content="❯" Click="NextWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
-                                </StackPanel>
-                                <RichTextBox x:Name="richTextBoxNotesWeeks" Grid.Row="2" MouseDoubleClick="richTextBoxNotesWeeks_MouseLeftButtonDown" Background="#0D141D" Foreground="#EEE" BorderThickness="0" Padding="10" FontSize="14" DataObject.Pasting="richTextBoxNotesWeeks_Pasting"/>
-                            </Grid>
+                        <Border Style="{StaticResource CardStyle}" Grid.Column="1" Padding="0">
+                            <TabControl Background="Transparent" BorderThickness="0">
+                                <TabItem Header="NOTES">
+                                    <Grid Margin="10,8,10,10">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
+                                            <Button Content="❮" Click="PreviousWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                                            <TextBlock x:Name="weekStartDateText" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontSize="12"/>
+                                            <Button Content="❯" Click="NextWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                                        </StackPanel>
+                                        <RichTextBox x:Name="richTextBoxNotesWeeks" Grid.Row="1" MouseDoubleClick="richTextBoxNotesWeeks_MouseLeftButtonDown" Background="#0D141D" Foreground="#EEE" BorderThickness="0" Padding="10" FontSize="14" DataObject.Pasting="richTextBoxNotesWeeks_Pasting"/>
+                                    </Grid>
+                                </TabItem>
+                                <TabItem Header="STRATÉGIES">
+                                    <DockPanel Margin="10,8,10,10">
+                                        <Button DockPanel.Dock="Top"
+                                                HorizontalAlignment="Right"
+                                                Width="28" Height="28"
+                                                Content="+"
+                                                FontSize="18"
+                                                FontWeight="Bold"
+                                                Style="{StaticResource CircleNavButton}"
+                                                Click="AddStrategy_Click"
+                                                ToolTip="Ajouter une nouvelle stratégie"
+                                                Background="#FF478DF0"
+                                                Margin="0,0,0,8"/>
+                                        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                            <StackPanel x:Name="perfStrat" Orientation="Vertical" VerticalAlignment="Top"/>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </TabItem>
+                            </TabControl>
                         </Border>
                     </Grid>
                 </Grid>

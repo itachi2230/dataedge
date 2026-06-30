@@ -10,7 +10,7 @@ Cela vous évitera de parcourir tous les dossiers et fichiers à chaque fois.
 Si vous effectuez des modifications qui impactent la structure ou l'architecture du projet (ajout/suppression de fichiers, modification de l'architecture, nouveaux services, nouvelles dépendances, modifications des flux de données), vous DEVEZ mettre à jour `mapprojet.md` en conséquence(ou le fichier mapchart.md si la modification est fait dans la partie chart).
 
 ### Cas nécessitant une mise à jour :
-- ✅ Ajout ou suppression d'un fichier source (.cs, .xaml)
+- ✅ Ajout ou suppression d'un fichier source 
 - ✅ Nouveau service, nouvelle classe métier importante
 - ✅ Changement dans les dépendances NuGet
 - ✅ Modification de l'architecture ou des flux de données
