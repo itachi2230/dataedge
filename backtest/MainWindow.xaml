@@ -506,21 +506,8 @@
 
                         <Border Style="{StaticResource CardStyle}" Grid.Column="1" Padding="0">
                             <TabControl Background="Transparent" BorderThickness="0">
-                                <TabItem Header="NOTES">
-                                    <Grid Margin="10,8,10,10">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="*"/>
-                                        </Grid.RowDefinitions>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
-                                            <Button Content="❮" Click="PreviousWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
-                                            <TextBlock x:Name="weekStartDateText" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontSize="12"/>
-                                            <Button Content="❯" Click="NextWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
-                                        </StackPanel>
-                                        <RichTextBox x:Name="richTextBoxNotesWeeks" Grid.Row="1" MouseDoubleClick="richTextBoxNotesWeeks_MouseLeftButtonDown" Background="#0D141D" Foreground="#EEE" BorderThickness="0" Padding="10" FontSize="14" DataObject.Pasting="richTextBoxNotesWeeks_Pasting"/>
-                                    </Grid>
-                                </TabItem>
-                                <TabItem Header="STRATÉGIES">
+                                
+                                <TabItem Header="BACKTEST">
                                     <DockPanel Margin="10,8,10,10">
                                         <Button DockPanel.Dock="Top"
                                                 HorizontalAlignment="Right"
@@ -537,6 +524,20 @@
                                             <StackPanel x:Name="perfStrat" Orientation="Vertical" VerticalAlignment="Top"/>
                                         </ScrollViewer>
                                     </DockPanel>
+                                </TabItem>
+                                <TabItem Header="NOTES">
+                                    <Grid Margin="10,8,10,10">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
+                                            <Button Content="❮" Click="PreviousWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                                            <TextBlock x:Name="weekStartDateText" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontSize="12"/>
+                                            <Button Content="❯" Click="NextWeek_Click" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                                        </StackPanel>
+                                        <RichTextBox x:Name="richTextBoxNotesWeeks" Grid.Row="1" MouseDoubleClick="richTextBoxNotesWeeks_MouseLeftButtonDown" Background="#0D141D" Foreground="#EEE" BorderThickness="0" Padding="10" FontSize="14" DataObject.Pasting="richTextBoxNotesWeeks_Pasting"/>
+                                    </Grid>
                                 </TabItem>
                             </TabControl>
                         </Border>

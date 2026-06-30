@@ -1,44 +1,53 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace backtest
 {
-    /// <summary>
-    /// Interaction logic for ControlStat.xaml
-    /// </summary>
     public partial class ControlStat : UserControl
     {
-        public ControlStat(string label="",double valeur=0)
+        public ControlStat(string label = "", double profit = 0, int tradeCount = 0, double winrate = 0, double profitFactor = 0)
         {
             InitializeComponent();
             controlLabel.Text = label;
-            controlBar.Text = valeur.ToString() + " $";
-            if (valeur < 0)
+            txtTrades.Text = tradeCount.ToString();
+            txtWinrate.Text = $"{winrate:F0}%";
+            txtProfitFactor.Text = profitFactor >= 99 ? "∞" : $"{profitFactor:F2}";
+
+            Brush profitBrush;
+            string profitText;
+            if (profit < 0)
             {
-                controlBar.Foreground = Brushes.Red;
+                profitBrush = Brushes.OrangeRed;
+                profitText = $"{profit:F0} $";
+                StatusDot.Color = Colors.OrangeRed;
             }
-            else if (valeur == 0)
+            else if (profit == 0)
             {
-                controlBar.Foreground = Brushes.Orange;
+                profitBrush = Brushes.Orange;
+                profitText = "0 $";
+                StatusDot.Color = Colors.Orange;
             }
             else
             {
-                controlBar.Text = "+ " + valeur.ToString() +" $";
+                profitBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0xF9, 0x09));
+                profitText = $"+{profit:F0} $";
+                StatusDot.Color = Color.FromRgb(0x3A, 0xF9, 0x09);
             }
 
-            
+            controlBar.Text = profitText;
+            controlBar.Foreground = profitBrush;
+
+            double barRatio = Math.Min(Math.Abs(profit) / 500.0, 1.0);
+            if (profit == 0) barRatio = 0.05;
+            ProfitBarFill.Width = barRatio * ActualWidth;
+            Loaded += (_, __) =>
+            {
+                var parent = ProfitBarFill.Parent as Grid;
+                if (parent != null && parent.ActualWidth > 0)
+                    ProfitBarFill.Width = barRatio * parent.ActualWidth;
+            };
         }
     }
 }
