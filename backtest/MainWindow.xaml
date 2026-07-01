@@ -361,7 +361,7 @@
 
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,5">
 
-                                    <StackPanel Orientation="Vertical" Margin="0,0,18,0" VerticalAlignment="Bottom">
+                                    <StackPanel Orientation="Vertical" Margin="0,0,28,0" VerticalAlignment="Bottom">
                                         <TextBlock Text="GLOBAL" Foreground="Gray" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
                                         <Button Background="Transparent" MouseEnter="Button_MouseEnter" BorderBrush="Transparent" Click="FearGreed_Click" Cursor="Hand">
                                             <Button.Template>

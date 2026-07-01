@@ -7,6 +7,10 @@ namespace backtest
 {
     public partial class ControlStat : UserControl
     {
+        // Événement public pour que MainWindow puisse s'abonner (même comportement que le double-clic)
+        public event EventHandler StatsClicked;
+        public event EventHandler BacktestClicked;
+
         public ControlStat(string label = "", double profit = 0, int tradeCount = 0, double winrate = 0, double profitFactor = 0)
         {
             InitializeComponent();
@@ -38,16 +42,16 @@ namespace backtest
 
             controlBar.Text = profitText;
             controlBar.Foreground = profitBrush;
+        }
 
-            double barRatio = Math.Min(Math.Abs(profit) / 500.0, 1.0);
-            if (profit == 0) barRatio = 0.05;
-            ProfitBarFill.Width = barRatio * ActualWidth;
-            Loaded += (_, __) =>
-            {
-                var parent = ProfitBarFill.Parent as Grid;
-                if (parent != null && parent.ActualWidth > 0)
-                    ProfitBarFill.Width = barRatio * parent.ActualWidth;
-            };
+        private void BtnStats_Click(object sender, RoutedEventArgs e)
+        {
+            StatsClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void BtnBacktest_Click(object sender, RoutedEventArgs e)
+        {
+            BacktestClicked?.Invoke(this, EventArgs.Empty);
         }
     }
 }

@@ -20,12 +20,13 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <Grid Grid.Row="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -38,7 +39,84 @@
                                FontSize="13" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
                 <TextBlock x:Name="controlBar" Grid.Column="1" FontWeight="Black" FontSize="16"
-                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                           VerticalAlignment="Center" Margin="8,0,8,0"/>
+                <Button x:Name="btnStats" Grid.Column="2"
+                        Width="28" Height="28"
+                        VerticalAlignment="Center"
+                        BorderThickness="1"
+                        Cursor="Hand"
+                        ToolTip="Voir les statistiques"
+                        Click="BtnStats_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"
+                                    Width="28" Height="28">
+                                <Viewbox Stretch="Uniform" Width="14" Height="14">
+                                    <Canvas Width="24" Height="24">
+                                        <Polyline Points="2,22 6,14 10,16 14,8 18,10 22,2"
+                                                  Stroke="#00BFFF" StrokeThickness="2.5"
+                                                  StrokeLineJoin="Round" StrokeEndLineCap="Round"/>
+                                        <Line X1="2" Y1="22" X2="22" Y2="22"
+                                              Stroke="#00BFFF" StrokeThickness="2"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#0D131A"/>
+                            <Setter Property="BorderBrush" Value="#2A3546"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#1A2432"/>
+                                    <Setter Property="BorderBrush" Value="#00BFFF"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Grid.Column="3"
+                        Width="28" Height="28"
+                        VerticalAlignment="Center"
+                        BorderThickness="1"
+                        Cursor="Hand"
+                        ToolTip="Ouvrir le terminal de backtest"
+                        Margin="4,0,0,0"
+                        Click="BtnBacktest_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"
+                                    Width="28" Height="28">
+                                <Viewbox Stretch="Uniform" Width="14" Height="14">
+                                    <Canvas Width="24" Height="24">
+                                        <Polygon Points="5,3 5,21 21,12"
+                                                 Stroke="#FFD4AF37" StrokeThickness="2.5"
+                                                 StrokeLineJoin="Round" Fill="#FFD4AF37" Opacity="0.8"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#0D131A"/>
+                            <Setter Property="BorderBrush" Value="#2A3546"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#1A2432"/>
+                                    <Setter Property="BorderBrush" Value="#FFD4AF37"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </Grid>
 
             <UniformGrid Grid.Row="1" Columns="3" Margin="0,10,0,0">
@@ -61,18 +139,6 @@
                     </StackPanel>
                 </Border>
             </UniformGrid>
-
-            <Grid Grid.Row="2" Margin="0,10,0,0">
-                <Border Height="4" CornerRadius="2" Background="#1A2432"/>
-                <Border x:Name="ProfitBarFill" Height="4" CornerRadius="2" HorizontalAlignment="Left" Width="0">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#FF005DFF" Offset="0"/>
-                            <GradientStop Color="#FF3AF909" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
-            </Grid>
         </Grid>
     </Border>
 </UserControl>

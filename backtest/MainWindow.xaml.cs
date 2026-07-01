@@ -380,11 +380,12 @@ namespace backtest
                         else profitFactor = Convert.ToDouble(pf);
                     }
 
-                    // Calcul du profit net à partir des trades de backtest
+                    // Calcul du profit net à partir du Journal (affiché en haut de la carte)
                     double profit = 0;
-                    if (backtestTrades != null && backtestTrades.Count > 0)
+                    var journalTrades = st.GetJournal();
+                    if (journalTrades != null && journalTrades.Count > 0)
                     {
-                        profit = backtestTrades.Sum(t => t.Profit);
+                        profit = journalTrades.Sum(t => t.Profit);
                     }
 
                     var ctrl = new ControlStat(st.Nom, profit, tradeCount, winrate, profitFactor);
@@ -419,6 +420,8 @@ namespace backtest
 
                     ctrl.ContextMenu = cm;
                     ctrl.MouseDoubleClick += (s, e) => { ShowStatisticsDirect(st); };
+                    ctrl.StatsClicked += (s, e) => { ShowStatisticsDirect(st); };
+                    ctrl.BacktestClicked += (s, e) => { OpenBacktestTerminal(st); };
                     perfStrat.Children.Add(ctrl);
                 }
             }
@@ -482,6 +485,13 @@ namespace backtest
         #endregion
 
         #region NAVIGATION (Dashboard <-> StatisticsControl)
+
+        private void OpenBacktestTerminal(Strategie st)
+        {
+            var backtestWindow = new backtesteur(st);
+            backtestWindow.Closed += (s, args) => { loadStrategies(); };
+            backtestWindow.Show();
+        }
 
         private void ShowStatisticsDirect(Strategie st)
         {
