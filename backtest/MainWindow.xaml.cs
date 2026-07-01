@@ -352,7 +352,6 @@ namespace backtest
             if (PirePaire != null) PirePaire.Text = stats.WorstPair ?? "---";
 
             // 4. Affichage des vignettes (badges) de performance
-            // 4. Affichage des vignettes (badges) de performance
             if (perfStrat != null)
             {
                 perfStrat.Children.Clear();

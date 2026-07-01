@@ -277,7 +277,7 @@ namespace backtest
                 default: return day.ToString();
             }
         }
-        private void refresh()
+        public void refresh()
         {
             LoadTradesDataGrid();
             stv = new StatisticsView(strategie);
@@ -288,8 +288,16 @@ namespace backtest
         {
             // Déclenche l'affichage de l'interface de replay dans la WebView
             chart = new backtesteur(this.strategie);
-            this.chart.Show();
-            refresh();
+            try
+            {
+                chart.Closed += (s, args) =>
+                {
+                    refresh();
+                };
+
+                this.chart.Show();
+            }
+            catch { }
 
         }
     }
