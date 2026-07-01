@@ -336,13 +336,13 @@ namespace backtest
                 }
             }
 
-            // 2. Mise à jour du DataGrid
+            // 2. Mise à jour du DataGrid (toujours avec le Journal)
             if (TradesDataGri != null)
             {
                 TradesDataGri.ItemsSource = Journal;
             }
 
-            // 3. Calcul des statistiques globales pour le Dashboard
+            // 3. Calcul des statistiques globales pour le Dashboard (toujours avec le Journal)
             Statistics stats = utils.CalculateStatistics(Journal);
 
             if (nbreText != null) nbreText.Text = Journal.Count.ToString();
@@ -351,17 +351,43 @@ namespace backtest
             if (meilleurePaire != null) meilleurePaire.Text = stats.BestPair ?? "---";
             if (PirePaire != null) PirePaire.Text = stats.WorstPair ?? "---";
 
-            // 4. Affichage des vignettes (badges) de performance
+            // 4. Affichage des vignettes (badges) de performance dans le tab BACKTEST
+            //    Utilise les données de backtest (Trades) et les StatsBasiques déjà calculées
             if (perfStrat != null)
             {
                 perfStrat.Children.Clear();
                 foreach (var st in strategies)
                 {
-                    double profit = 0;
-                    if (stats.StrategyPerformance != null && stats.StrategyPerformance.ContainsKey(st.Nom))
-                        profit = stats.StrategyPerformance[st.Nom];
+                    var data = st.LoadData();
+                    var backtestTrades = data.Trades;
+                    var statsBasiques = data.StatsBasiques;
 
-                    var ctrl = new ControlStat(st.Nom, profit);
+                    int tradeCount = backtestTrades?.Count ?? 0;
+
+                    double winrate = 0;
+                    if (statsBasiques != null && statsBasiques.ContainsKey("Winrate"))
+                    {
+                        var wr = statsBasiques["Winrate"];
+                        if (wr is System.Text.Json.JsonElement je) winrate = je.GetDouble();
+                        else winrate = Convert.ToDouble(wr);
+                    }
+
+                    double profitFactor = 0;
+                    if (statsBasiques != null && statsBasiques.ContainsKey("Profit Factor"))
+                    {
+                        var pf = statsBasiques["Profit Factor"];
+                        if (pf is System.Text.Json.JsonElement je) profitFactor = je.GetDouble();
+                        else profitFactor = Convert.ToDouble(pf);
+                    }
+
+                    // Calcul du profit net à partir des trades de backtest
+                    double profit = 0;
+                    if (backtestTrades != null && backtestTrades.Count > 0)
+                    {
+                        profit = backtestTrades.Sum(t => t.Profit);
+                    }
+
+                    var ctrl = new ControlStat(st.Nom, profit, tradeCount, winrate, profitFactor);
 
                     // --- MENU CONTEXTUEL ---
                     ContextMenu cm = new ContextMenu();
