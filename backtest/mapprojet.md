@@ -56,7 +56,7 @@ backtest/
 │   ├── ControlStat.xaml / .cs       → Badge/vignette de performance d'une stratégie
 │   ├── EtudesView.xaml / .cs        → Module d'études (éditeur riche .etude)
 │   ├── TradeVisualizerControl.xaml / .cs → Affiche les screenshots (HTF/LTF) d'un trade
-│   ├── Demo.xaml / .cs              → Démo / tutoriel (slides)
+│   ├── Demo.xaml / .cs              → Onboarding professionnel (4 slides textuels, animations, style cyber)
 │   ├── CustomMessageBoxView.xaml / .cs → MessageBox personnalisée
 │   └── InputDialog.xaml / .cs       → Boîte de dialogue pour saisie texte
 │

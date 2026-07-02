@@ -8,7 +8,7 @@
         Icon="cf-flow-2rapArajcTSXxgLa8IS4fim2Rx2 (1).ico"
         WindowStyle="None"
         AllowsTransparency="True"
-        Background="Transparent" WindowStartupLocation="CenterScreen">
+        Background="Transparent" WindowStartupLocation="CenterScreen" WindowState="Maximized">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="40" 

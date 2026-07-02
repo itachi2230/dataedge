@@ -1,27 +1,23 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media.Imaging;
+using System.Windows.Media.Animation;
+using System.Windows.Media;
 
 namespace backtest
 {
     public partial class Demo : Window
     {
-        private List<string> slides = new List<string>
-        {
-            "Images/slide1.png",
-            "Images/slide2.png",
-            "Images/slide3.png"
-        };
-
         private int currentSlideIndex = 0;
+        private const int TotalSlides = 4;
 
         public Demo()
         {
             InitializeComponent();
-            LoadSlide();
+            ShowSlide(0, animate: false);
         }
+
         private void Window_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton == MouseButton.Left)
@@ -30,45 +26,135 @@ namespace backtest
             }
         }
 
-        private void LoadSlide()
+        private void ShowSlide(int index, bool animate = true)
         {
-            if (currentSlideIndex >= 0 && currentSlideIndex < slides.Count)
+            // Hide all slides
+            Slide1.Visibility = Visibility.Collapsed;
+            Slide2.Visibility = Visibility.Collapsed;
+            Slide3.Visibility = Visibility.Collapsed;
+            Slide4.Visibility = Visibility.Collapsed;
+
+            // Reset animations
+            Slide1.BeginAnimation(UIElement.OpacityProperty, null);
+            Slide2.BeginAnimation(UIElement.OpacityProperty, null);
+            Slide3.BeginAnimation(UIElement.OpacityProperty, null);
+            Slide4.BeginAnimation(UIElement.OpacityProperty, null);
+            Slide1.RenderTransform = new TranslateTransform(0, 30);
+            Slide2.RenderTransform = new TranslateTransform(0, 30);
+            Slide3.RenderTransform = new TranslateTransform(0, 30);
+            Slide4.RenderTransform = new TranslateTransform(0, 30);
+
+            // Show the target slide
+            Grid targetSlide = index switch
             {
-                SlideImage.Source = new BitmapImage(new Uri(slides[currentSlideIndex], UriKind.Relative));
-            }
+                0 => Slide1,
+                1 => Slide2,
+                2 => Slide3,
+                3 => Slide4,
+                _ => Slide1
+            };
 
-            // Désactiver le bouton Précédent si on est sur le premier slide
-            PreviousSlideButton.IsEnabled = currentSlideIndex > 0;
+            targetSlide.Visibility = Visibility.Visible;
 
-            // Désactiver le bouton Suivant si on est sur le dernier slide
-            NextSlideButton.Content = currentSlideIndex == slides.Count - 1 ? "Terminer" : "Suivant";
-        }
-
-        private void NextSlide_Click(object sender, RoutedEventArgs e)
-        {
-            if (currentSlideIndex < slides.Count - 1)
+            if (animate)
             {
-                currentSlideIndex++;
-                LoadSlide();
+                // Animate in
+                var storyboard = new Storyboard();
+
+                var opacityAnim = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromSeconds(0.4),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                Storyboard.SetTarget(opacityAnim, targetSlide);
+                Storyboard.SetTargetProperty(opacityAnim, new PropertyPath(UIElement.OpacityProperty));
+
+                var translateAnim = new DoubleAnimation
+                {
+                    From = 30,
+                    To = 0,
+                    Duration = TimeSpan.FromSeconds(0.4),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                Storyboard.SetTarget(translateAnim, targetSlide);
+                Storyboard.SetTargetProperty(translateAnim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+
+                storyboard.Children.Add(opacityAnim);
+                storyboard.Children.Add(translateAnim);
+                storyboard.Begin();
             }
             else
             {
-                // Fermer la fenêtre de démo et ouvrir la fenêtre principale
-                
-                MainWindow mainWindow = new MainWindow();
-                mainWindow.Show();
-                Application.Current.MainWindow = mainWindow;
-                this.Close();
+                targetSlide.Opacity = 1;
+                targetSlide.RenderTransform = new TranslateTransform(0, 0);
+            }
+
+            // Update dots
+            UpdateDots(index);
+
+            // Update navigation buttons
+            PreviousBtn.IsEnabled = index > 0;
+            NextBtn.Content = index == TotalSlides - 1 ? "COMMENCER →" : "SUIVANT →";
+        }
+
+        private void UpdateDots(int activeIndex)
+        {
+            var dots = new[] { Dot1, Dot2, Dot3, Dot4 };
+            for (int i = 0; i < dots.Length; i++)
+            {
+                if (i == activeIndex)
+                {
+                    dots[i].Fill = (SolidColorBrush)new BrushConverter().ConvertFrom("#00BFFF");
+                    dots[i].Stroke = (SolidColorBrush)new BrushConverter().ConvertFrom("#00BFFF");
+                    dots[i].Width = 10;
+                    dots[i].Height = 10;
+                }
+                else
+                {
+                    dots[i].Fill = (SolidColorBrush)new BrushConverter().ConvertFrom("#333");
+                    dots[i].Stroke = (SolidColorBrush)new BrushConverter().ConvertFrom("#555");
+                    dots[i].Width = 8;
+                    dots[i].Height = 8;
+                }
             }
         }
 
-        private void PreviousSlide_Click(object sender, RoutedEventArgs e)
+        private void Next_Click(object sender, RoutedEventArgs e)
+        {
+            if (currentSlideIndex < TotalSlides - 1)
+            {
+                currentSlideIndex++;
+                ShowSlide(currentSlideIndex);
+            }
+            else
+            {
+                // Last slide - close demo and open MainWindow
+                OpenMainWindow();
+            }
+        }
+
+        private void Previous_Click(object sender, RoutedEventArgs e)
         {
             if (currentSlideIndex > 0)
             {
                 currentSlideIndex--;
-                LoadSlide();
+                ShowSlide(currentSlideIndex);
             }
+        }
+
+        private void Skip_Click(object sender, RoutedEventArgs e)
+        {
+            OpenMainWindow();
+        }
+
+        private void OpenMainWindow()
+        {
+            MainWindow mainWindow = new MainWindow();
+            mainWindow.Show();
+            Application.Current.MainWindow = mainWindow;
+            this.Close();
         }
     }
 }

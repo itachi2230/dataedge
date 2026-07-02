@@ -117,7 +117,7 @@
                     </StackPanel>
 
                     <StackPanel Margin="0,2">
-                        <Button Style="{StaticResource CircleNavButton}" Content="👥" Margin="0" Click="Button_Click_1"/>
+                        <Button Style="{StaticResource CircleNavButton}" Content="👥" Margin="0" />
                         <TextBlock Text="Space" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
