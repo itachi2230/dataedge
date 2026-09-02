@@ -566,6 +566,21 @@ namespace backtest
             };
             chart.BeginAnimation(OpacityProperty, fadeIn);
         }
+
+        private void ShowAiAgent()
+        {
+            var aiChat = new Views.FxAiChatControl(_cloudService);
+            MainViewContainer.Content = aiChat;
+
+            var fadeIn = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromSeconds(0.4),
+                EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
+            };
+            aiChat.BeginAnimation(OpacityProperty, fadeIn);
+        }
         #endregion
 
         #region GESTION DES NOTES
@@ -755,6 +770,7 @@ namespace backtest
         }
         private void Button_Click_2(object sender, RoutedEventArgs e) { new addStrategieWindow().ShowDialog(); loadStrategies(); } // + Strat
         private void ButtonEtude(object sender, RoutedEventArgs e) { ShowEtude(); }
+        private void ButtonAiAgent(object sender, RoutedEventArgs e) { ShowAiAgent(); }
         private void ButtonHome(object sender, RoutedEventArgs e) { ShowDashboard(); }
         private void CloseButton_Click(object sender, RoutedEventArgs e) { SaveNotes(); this.Close(); }
 

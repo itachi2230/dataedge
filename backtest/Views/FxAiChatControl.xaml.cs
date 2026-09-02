@@ -85,7 +85,10 @@ namespace backtest.Views
             catch (Exception ex)
             {
                 // En cas d'erreur réseau ou API, on affiche l'erreur dans la bulle
-                aiMessage.Text = $"[Erreur de connexion : {ex.Message}]";
+                aiMessage.Text = ex is AiAgentException aiException
+                    ? $"[ERREUR AGENT IA]\n{aiException.Error.ToDisplayText()}"
+                    : $"[ERREUR AGENT IA]\nType : {ex.GetType().FullName}\nMessage : {ex.Message}";
+                FxCloudService.Log($"Erreur affichée dans le chat : {ex}");
             }
             finally
             {

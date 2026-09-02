@@ -232,6 +232,7 @@
     <Compile Include="services\FxAiAgentService.cs" />
     <Compile Include="services\PdfExportService.cs" />
     <Compile Include="Models\ChatMessage.cs" />
+    <Compile Include="Models\AiAgentError.cs" />
     <Compile Include="SettingsView.xaml.cs">
       <DependentUpon>SettingsView.xaml</DependentUpon>
     </Compile>

@@ -13,18 +13,15 @@
             FontFamily="Segoe MDL2 Assets" Click="BackToDashboard_Click" 
             ToolTip="Retour au Dashboard"/>
 
-            <Button Style="{StaticResource CircleNavButton}" Content="" 
-            FontFamily="Segoe MDL2 Assets" Margin="10,0" ToolTip="Capture d'écran"/>
-
+            
             <Button Style="{StaticResource CircleNavButton}" Content="" 
-            FontFamily="Segoe MDL2 Assets" ToolTip="Partager PDF" Click="SharePdf_Click"/>
+            FontFamily="Segoe MDL2 Assets" Margin="10,0,10,0" ToolTip="Partager PDF" Click="SharePdf_Click"/>
 
             <!-- Bouton Backtest avec icône de Chart (Analytics) -->
             <Button x:Name="BtnBacktest"
             Style="{StaticResource CircleNavButton}" 
             Content="" 
             FontFamily="Segoe MDL2 Assets" 
-            Margin="10,0,0,0"
             Click="OpenBacktest_Click" 
             ToolTip="Mode Replay / Backtest"/>
         </StackPanel>

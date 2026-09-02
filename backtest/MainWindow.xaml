@@ -110,6 +110,10 @@
                         <Button Style="{StaticResource CircleNavButton}" Content="📂" Click="ButtonEtude" Margin="0"/>
                         <TextBlock Text="ÉTUDES" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
+                    <StackPanel Margin="0,2">
+                        <Button Style="{StaticResource CircleNavButton}" Content="🤖" Click="ButtonAiAgent" Margin="0" ToolTip="Agent IA"/>
+                        <TextBlock Text="AGENT IA" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                    </StackPanel>
 
                     <StackPanel Margin="0,2">
                         <Button Style="{StaticResource CircleNavButton}" Content="📊" Margin="0" Click="Button_Click" />

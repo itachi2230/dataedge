@@ -240,6 +240,7 @@ POST /api/user/update                     → Update profil
 POST /software/handshake                  → Version check + notifications
 POST /software/report-crash               → Crash report
 POST /support/send                        → Message support
+POST /api/ai/chat                         → Chat IA authentifié, réponse streamée
 POST /api/cloud/sync-file                 → Upload fichier
 POST /api/cloud/file-info                 → Vérification hash
 GET  /api/cloud/list?app_id=...           → Liste fichiers distants
@@ -295,3 +296,7 @@ msbuild backtest.csproj /p:Configuration=Debug
 
 # Build Release
 msbuild backtest.csproj /p:Configuration=Release
+
+## Agent IA
+
+`MainWindow` affiche `FxAiChatControl` dans `MainViewContainer`. Le client appelle `/api/ai/chat` avec le token cloud et lit directement la réponse streamée du serveur. Le backend copié localement dans `aiback/` ne contient pas de publisher Mercure.
