@@ -94,8 +94,15 @@ namespace backtest
                             col.Item().PaddingTop(8).Element(ReturnBreakdown(trades));
                             col.Item().PaddingTop(12).Element(SectionHeader("3", "PERFORMANCE AVANCÉE"));
                             col.Item().PaddingTop(8).Element(AdvancedBreakdown(stats, advanced));
-                            col.Item().PaddingTop(12).Element(SectionHeader("4", "HISTORIQUE DES TRADES"));
+                            col.Item().PaddingTop(12).Element(DimensionBreakdown(advanced));
+                            col.Item().PaddingTop(12).Element(DynamicBreakdown(advanced));
+                            col.Item().PaddingTop(12).Element(SectionHeader("4", "AUDIT EXÉCUTIF"));
+                            col.Item().PaddingTop(8).Element(ExecutiveAudit(stats, trades));
+                            col.Item().PaddingTop(12).Element(SectionHeader("5", "SIMULATION MONÉTAIRE"));
+                            col.Item().PaddingTop(8).Element(MoneyProjection(trades));
+                            col.Item().PaddingTop(12).Element(SectionHeader("6", "HISTORIQUE DES TRADES"));
                             col.Item().PaddingTop(8).Element(TradeTable(trades));
+                            col.Item().PaddingTop(12).Element(TradeDetailsTable(trades));
                         });
                     });
 
@@ -168,7 +175,12 @@ namespace backtest
                             col.Item().PaddingTop(12).Element(KpiGrid(finalStats, finalAdvanced, trades));
                             col.Item().PaddingTop(12).Element(ReturnBreakdown(trades));
                             col.Item().PaddingTop(12).Element(AdvancedBreakdown(finalStats, finalAdvanced));
+                            col.Item().PaddingTop(12).Element(DimensionBreakdown(finalAdvanced));
+                            col.Item().PaddingTop(12).Element(DynamicBreakdown(finalAdvanced));
+                            col.Item().PaddingTop(12).Element(ExecutiveAudit(finalStats, trades));
+                            col.Item().PaddingTop(12).Element(MoneyProjection(trades));
                             col.Item().PaddingTop(12).Element(TradeTable(trades));
+                            col.Item().PaddingTop(12).Element(TradeDetailsTable(trades));
                         });
                     });
                 });
@@ -391,6 +403,158 @@ namespace backtest
             };
         }
 
+        private static Action<IContainer> DimensionBreakdown(AdvancedStats advanced)
+        {
+            return c => c.Border(1).BorderColor(CardBorder).Padding(10).Column(col =>
+            {
+                col.Item().Text("TABLEAU DE PERFORMANCE PAR DIMENSION").FontSize(8).Bold().FontColor(TextDark);
+                AddPerformanceTable(col, "PAIRES", advanced?.PairStats == null ? null : advanced.PairStats.ToDictionary(x => x.Key, x => x.Value));
+                AddPerformanceTable(col, "TYPE D'ORDRE", advanced?.TypeOrdreStats == null ? null : advanced.TypeOrdreStats.ToDictionary(x => x.Key.ToString(), x => x.Value));
+                AddPerformanceTable(col, "JOURS", advanced?.DayOfWeekStats == null ? null : advanced.DayOfWeekStats.ToDictionary(x => GetFrenchDay(x.Key), x => x.Value));
+                AddPerformanceTable(col, "SESSIONS", advanced?.SessionStats);
+            });
+        }
+
+        private static void AddPerformanceTable(ColumnDescriptor column, string title, Dictionary<string, PerformanceStat> values)
+        {
+            if (values == null || values.Count == 0) return;
+
+            column.Item().PaddingTop(8).Text(title).FontSize(7.5f).Bold().FontColor(TextGray);
+            column.Item().PaddingTop(3).Table(table =>
+            {
+                table.ColumnsDefinition(def =>
+                {
+                    def.RelativeColumn(2);
+                    def.RelativeColumn();
+                    def.RelativeColumn();
+                    def.RelativeColumn();
+                    def.RelativeColumn();
+                });
+                table.Header(header =>
+                {
+                    header.Cell().Element(Th).Text("DIMENSION");
+                    header.Cell().Element(Th).Text("TRADES");
+                    header.Cell().Element(Th).Text("WINRATE");
+                    header.Cell().Element(Th).Text("NET R");
+                    header.Cell().Element(Th).Text("EXPECTANCY");
+                });
+                foreach (var entry in values.OrderByDescending(x => x.Value?.Expectancy ?? 0))
+                {
+                    var stat = entry.Value ?? new PerformanceStat();
+                    table.Cell().Element(Td).Text(entry.Key ?? "—");
+                    table.Cell().Element(Td).Text(stat.TotalTrades.ToString("N0", Fr));
+                    table.Cell().Element(Td).Text(FormatPercent(stat.Winrate));
+                    table.Cell().Element(Td).Text(FormatR(stat.NetProfit)).FontColor(stat.NetProfit >= 0 ? Green : Red);
+                    table.Cell().Element(Td).Text(FormatR(stat.Expectancy)).FontColor(stat.Expectancy >= 0 ? Green : Red);
+                }
+            });
+        }
+
+        private static Action<IContainer> DynamicBreakdown(AdvancedStats advanced)
+        {
+            return c => c.Border(1).BorderColor(CardBorder).Padding(10).Column(col =>
+            {
+                col.Item().Text("PARAMÈTRES DYNAMIQUES ET CONFIGURATIONS").FontSize(8).Bold().FontColor(TextDark);
+                if (advanced?.PerformanceStats != null)
+                {
+                    foreach (var field in advanced.PerformanceStats)
+                    {
+                        AddPerformanceTable(col, field.Key.ToUpperInvariant(), field.Value);
+                    }
+                }
+
+                AddConfigTable(col, "MEILLEURES CONFIGURATIONS", advanced?.BestConfigs);
+                AddConfigTable(col, "CONFIGURATIONS À ÉVITER", advanced?.WorstConfigs);
+            });
+        }
+
+        private static void AddConfigTable(ColumnDescriptor column, string title, List<ConfigRank> configs)
+        {
+            if (configs == null || configs.Count == 0) return;
+            column.Item().PaddingTop(10).Text(title).FontSize(7.5f).Bold().FontColor(TextGray);
+            column.Item().PaddingTop(3).Table(table =>
+            {
+                table.ColumnsDefinition(def => { def.RelativeColumn(2); def.RelativeColumn(); def.RelativeColumn(); def.RelativeColumn(); });
+                table.Header(header =>
+                {
+                    header.Cell().Element(Th).Text("CONFIGURATION");
+                    header.Cell().Element(Th).Text("CATÉGORIE");
+                    header.Cell().Element(Th).Text("TRADES");
+                    header.Cell().Element(Th).Text("EXPECTANCY");
+                });
+                foreach (var config in configs.Take(10))
+                {
+                    table.Cell().Element(Td).Text(config.NomParametre ?? "—");
+                    table.Cell().Element(Td).Text(config.Categorie ?? "—");
+                    table.Cell().Element(Td).Text(config.NombreTrades.ToString("N0", Fr));
+                    table.Cell().Element(Td).Text(FormatR(config.Expectancy)).FontColor(config.Expectancy >= 0 ? Green : Red);
+                }
+            });
+        }
+
+        private static Action<IContainer> ExecutiveAudit(Dictionary<string, object> stats, List<Trade> trades)
+        {
+            return c =>
+            {
+                var items = trades ?? new List<Trade>();
+                var expectancy = TryDouble(stats, "Expectancy");
+                var winrate = TryDouble(stats, "Winrate");
+                var profitFactor = TryDouble(stats, "Profit Factor");
+                var maxDrawdown = ComputeMaxDrawdown(items);
+                var summary = items.Count == 0 ? "En attente de données pour l'audit." :
+                    $"Analyse sur {items.Count} trades. Espérance : {expectancy:F2}R. " + (maxDrawdown > 10 ? "Drawdown élevé détecté." : "Courbe stable.");
+                var risk = items.Count < 20 ? "Échantillon trop faible pour un profil fiable." :
+                    winrate > 65 ? $"Profil Sniper ({winrate:F0}%). Séries de pertes courtes." : $"Profil Équilibré. DD de {maxDrawdown:F1}R.";
+                var scalability = profitFactor > 1.5 && maxDrawdown < 10 ? "EXCELLENTE. Prêt pour augmenter le risque." : "MODÉRÉE À FAIBLE.";
+                var verdict = expectancy <= 0 ? "SYSTÈME À ÉCARTER" : expectancy >= 0.5 ? "PÉPITE DÉTECTÉE" : "SYSTÈME SOLIDE";
+
+                c.Background("#F8FAFC").Border(1).BorderColor(CardBorder).Padding(12).Column(col =>
+                {
+                    col.Item().Text("AUDIT EXÉCUTIF").FontSize(8).Bold().FontColor(Accent2);
+                    col.Item().PaddingTop(6).Text(summary).FontSize(10).FontColor(TextDark);
+                    col.Item().PaddingTop(8).Table(table =>
+                    {
+                        table.ColumnsDefinition(def => { def.RelativeColumn(); def.RelativeColumn(); });
+                        table.Cell().Element(Td).Text(t => { t.Span("Profil de risque\n").Bold(); t.Span(risk); });
+                        table.Cell().Element(Td).Text(t => { t.Span("Potentiel de scalabilité\n").Bold(); t.Span(scalability); });
+                        table.Cell().ColumnSpan(2).Element(Td).Text(t => { t.Span("Recommandation finale\n").Bold(); t.Span(verdict); });
+                    });
+                });
+            };
+        }
+
+        private static Action<IContainer> MoneyProjection(List<Trade> trades)
+        {
+            return c =>
+            {
+                const double initialCapital = 10000;
+                const double riskPercent = 0.01;
+                double capital = initialCapital;
+                double peak = capital;
+                double maxDrawdown = 0;
+                foreach (var trade in trades ?? new List<Trade>())
+                {
+                    capital += capital * riskPercent * TradeR(trade);
+                    peak = Math.Max(peak, capital);
+                    maxDrawdown = Math.Max(maxDrawdown, peak - capital);
+                }
+
+                c.Border(1).BorderColor(CardBorder).Padding(10).Column(col =>
+                {
+                    col.Item().Text("PROJECTION DU SIMULATEUR DE CAPITAL").FontSize(8).Bold().FontColor(TextDark);
+                    col.Item().PaddingTop(6).Text("Hypothèses identiques aux valeurs par défaut de la fenêtre : capital initial 10 000 EUR, risque 1% par trade.").FontSize(8).FontColor(TextGray);
+                    col.Item().PaddingTop(8).Grid(grid =>
+                    {
+                        grid.Columns(3);
+                        grid.Spacing(8);
+                        grid.Item().Element(MetricCard("CAPITAL INITIAL", initialCapital.ToString("N2", Fr) + " EUR", null, TextDark));
+                        grid.Item().Element(MetricCard("CAPITAL FINAL", capital.ToString("N2", Fr) + " EUR", null, capital >= initialCapital ? Green : Red));
+                        grid.Item().Element(MetricCard("DD MONÉTAIRE", "-" + maxDrawdown.ToString("N2", Fr) + " EUR", null, Red));
+                    });
+                });
+            };
+        }
+
         private static Action<IContainer> TradeTable(List<Trade> trades)
         {
             return c =>
@@ -437,6 +601,50 @@ namespace backtest
                     });
                 });
             };
+        }
+
+        private static Action<IContainer> TradeDetailsTable(List<Trade> trades)
+        {
+            return c => c.Border(1).BorderColor(CardBorder).Padding(8).Column(col =>
+            {
+                col.Item().Text("ANNEXE — DONNÉES COMPLÈTES DES TRADES").FontSize(8).Bold().FontColor(TextDark);
+                col.Item().PaddingTop(6).Table(table =>
+                {
+                    table.ColumnsDefinition(def =>
+                    {
+                        def.RelativeColumn(1.2f);
+                        def.RelativeColumn();
+                        def.RelativeColumn();
+                        def.RelativeColumn();
+                        def.RelativeColumn();
+                        def.RelativeColumn(2.5f);
+                    });
+                    table.Header(header =>
+                    {
+                        header.Cell().Element(Th).Text("ID / PAIRE");
+                        header.Cell().Element(Th).Text("ENTRÉE");
+                        header.Cell().Element(Th).Text("SORTIE");
+                        header.Cell().Element(Th).Text("PRIX OUV.");
+                        header.Cell().Element(Th).Text("PRIX FERM.");
+                        header.Cell().Element(Th).Text("PROFIT / NOTES / CHAMPS");
+                    });
+                    foreach (var trade in trades ?? new List<Trade>())
+                    {
+                        var custom = trade.ChampsPersonnalises == null ? "" : string.Join(" | ", trade.ChampsPersonnalises.Select(x =>
+                            (x.Nom ?? "Champ") + "=" + (x.Valeur == null ? "—" : x.Valeur.ToString())));
+                        var notes = string.IsNullOrWhiteSpace(trade.description) ? "" : trade.description.Trim();
+                        var detail = "Profit: " + trade.Profit.ToString("N2", Fr) + "\n" + notes +
+                                     (string.IsNullOrWhiteSpace(custom) ? "" : "\n" + custom);
+
+                        table.Cell().Element(Td).Text(trade.Id.ToString() + "\n" + (trade.Paire ?? "—"));
+                        table.Cell().Element(Td).Text(trade.DateEntree.ToString("dd/MM/yyyy HH:mm", Fr));
+                        table.Cell().Element(Td).Text(trade.DateSortie == default(DateTime) ? "—" : trade.DateSortie.ToString("dd/MM/yyyy HH:mm", Fr));
+                        table.Cell().Element(Td).Text(trade.prixOpen.ToString("N5", Fr));
+                        table.Cell().Element(Td).Text(trade.prixClose.ToString("N5", Fr));
+                        table.Cell().Element(Td).Text(detail);
+                    }
+                });
+            });
         }
 
         private static Action<IContainer> MetricCard(string label, string value, string sub, string color)
