@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -300,5 +301,40 @@ namespace backtest
             catch { }
 
         }
-    }
+        private void SharePdf_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (strategie == null)
+                {
+                    MessageBox.Show("Aucune stratégie active pour générer le PDF.", "Export PDF", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                strategie.CalculateStatistics();
+                string pdfPath = PdfExportService.ExportStatisticsPdf(strategie);
+
+                if (!string.IsNullOrWhiteSpace(pdfPath) && System.IO.File.Exists(pdfPath))
+                {
+                    try
+                    {
+                        Process.Start("explorer.exe", "/select,\"" + pdfPath + "\"");
+                    }
+                    catch { }
+
+                    MessageBox.Show("Rapport PDF généré et enregistré dans votre dossier Documents :\n" + pdfPath,
+                        "Export PDF", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("Le PDF a été généré mais son emplacement n’a pas pu être vérifié.",
+                        "Export PDF", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Impossible de générer le PDF de la stratégie.\n\nErreur : " + ex.Message,
+                    "Erreur PDF", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }    }
 }

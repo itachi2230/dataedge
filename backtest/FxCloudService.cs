@@ -14,7 +14,7 @@ namespace backtest.Services
 {
     public class FxCloudService
     {
-        private static HttpClient _httpClient;
+        public static HttpClient _httpClient;
         private const string TokenFileName = "session.bin";
         private readonly string _localProfileCache = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
         private readonly string _configFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.txt");
@@ -28,6 +28,11 @@ namespace backtest.Services
         public FxCloudService()
         {
             InitializeService();
+        }
+
+        public HttpClient GetHttpClient()
+        {
+            return _httpClient;
         }
 
         #region CONFIGURATION ET INITIALISATION
@@ -397,7 +402,7 @@ namespace backtest.Services
             }
         }
 
-        private async Task<HttpResponseMessage> SecureRequestAsync(Func<Task<HttpResponseMessage>> requestFunc)
+        public async Task<HttpResponseMessage> SecureRequestAsync(Func<Task<HttpResponseMessage>> requestFunc)
         {
             SetAuthHeader();
             var res = await requestFunc();

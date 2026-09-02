@@ -1,0 +1,253 @@
+﻿<UserControl x:Class="backtest.Views.FxAiChatControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="550" d:DesignWidth="400">
+
+    <Grid Background="{StaticResource BgDark}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- En-tête de l'agent (Look Cyberpunk / DataEdge) -->
+        <Border Grid.Row="0" 
+                Background="{StaticResource CardBg}" 
+                BorderThickness="0,0,0,1" 
+                BorderBrush="#1AFFFFFF" 
+                Padding="15,12" 
+                CornerRadius="0,0,12,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Avatar avec halo néon cyan -->
+                <Ellipse Grid.Column="0" Width="38" Height="38" Stroke="{StaticResource CyanNeon}" StrokeThickness="1.5">
+                    <Ellipse.Effect>
+                        <DropShadowEffect Color="{StaticResource AccentBlueColor}" BlurRadius="8" ShadowDepth="0" Opacity="0.5"/>
+                    </Ellipse.Effect>
+                    <Ellipse.Fill>
+                        <ImageBrush ImageSource="pack://application:,,,/Resources/default_user.png" Stretch="UniformToFill"/>
+                    </Ellipse.Fill>
+                </Ellipse>
+
+                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="DATAEDGE AI AGENT" 
+                               Foreground="{StaticResource CyanNeon}" 
+                               FontSize="12" 
+                               FontWeight="Black" 
+                               />
+                    <TextBlock Text="Analyse de performance &amp; sentiment de marché" 
+                               Foreground="Gray" 
+                               FontSize="10" 
+                               Margin="0,2,0,0"/>
+                </StackPanel>
+
+                <!-- Petit indicateur de statut ONLINE vert flashy -->
+                <Border Grid.Column="2" Width="8" Height="8" CornerRadius="4" Background="#FF00FF03" VerticalAlignment="Center" Margin="0,0,5,0">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#FF00FF03" BlurRadius="6" ShadowDepth="0" Opacity="0.8"/>
+                    </Border.Effect>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Liste des messages du Chat -->
+        <ScrollViewer Grid.Row="1" x:Name="ChatScrollViewer" Padding="10,5" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <ItemsControl x:Name="ChatItemsControl">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid HorizontalAlignment="{Binding Alignment}" Margin="0,6" MaxWidth="320">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Bulle de message stylisée selon l'expéditeur -->
+                                <Border Grid.Row="0" 
+                                        CornerRadius="10" 
+                                        Padding="12,10"
+                                        Background="{Binding BubbleColor}" 
+                                        BorderBrush="{Binding BorderColor}" 
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Text}" 
+                                                   Foreground="White" 
+                                                   FontSize="12.5" 
+                                                   TextWrapping="Wrap" 
+                                                   LineHeight="18"/>
+                                        <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm}" 
+                                                   Foreground="Gray" 
+                                                   FontSize="8.5" 
+                                                   HorizontalAlignment="Right" 
+                                                   Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Actions rapides sous la bulle (Uniquement visibles au survol du message) -->
+                                <StackPanel Grid.Row="1" 
+                                            Orientation="Horizontal" 
+                                            HorizontalAlignment="Right" 
+                                            Margin="0,3,4,0" 
+                                            Opacity="0.75">
+                                    <!-- Bouton Copier -->
+                                    <Button Content="📋 Copier" 
+                                            FontSize="9.5" 
+                                            Foreground="Gray" 
+                                            Background="Transparent" 
+                                            BorderThickness="0" 
+                                            Cursor="Hand"
+                                            Margin="0,0,10,0"
+                                            Click="BtnCopy_Click"
+                                            Tag="{Binding Text}">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource CyanNeon}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+
+                                    <!-- Bouton Renvoyer -->
+                                    <Button Content="🔄 Relancer" 
+                                            FontSize="9.5" 
+                                            Foreground="Gray" 
+                                            Background="Transparent" 
+                                            BorderThickness="0" 
+                                            Cursor="Hand"
+                                            Click="BtnResend_Click"
+                                            Tag="{Binding Text}">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource CyanNeon}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Indicateur visuel de chargement de l'IA (Anneau rotatif néon discret) -->
+                <!-- Indicateur visuel de chargement de l'IA (Anneau rotatif néon discret compatible WPF standard) -->
+                <Grid x:Name="LoadingIndicator" Visibility="Collapsed" HorizontalAlignment="Left" Margin="8,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Utilisation d'une Ellipse avec StrokeDashArray pour simuler un arc de cercle parfait -->
+                    <Ellipse Grid.Column="0" Width="16" Height="16" 
+             Stroke="{StaticResource CyanNeon}" StrokeThickness="2.5" 
+             StrokeDashArray="3 1"
+             RenderTransformOrigin="0.5,0.5">
+                        <Ellipse.RenderTransform>
+                            <RotateTransform x:Name="SpinnerTransform" Angle="0"/>
+                        </Ellipse.RenderTransform>
+                        <Ellipse.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetName="SpinnerTransform" 
+                                         Storyboard.TargetProperty="Angle" 
+                                         From="0" To="360" Duration="0:0:1.2"/>
+                                        <!-- Fait une rotation fluide de l'anneau -->
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </Ellipse.Triggers>
+                    </Ellipse>
+                    <TextBlock Grid.Column="1" Text="L'agent réfléchit..." Foreground="Gray" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Boîte de saisie moderne -->
+        <Border Grid.Row="2" 
+                Background="{StaticResource CardBg}" 
+                BorderThickness="0,1,0,0" 
+                BorderBrush="#1AFFFFFF" 
+                Padding="12" 
+                CornerRadius="12,12,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Utilisation du style CyberTextBox fourni par ton dictionnaire d'application -->
+                <TextBox x:Name="TxtInput" 
+                         Style="{StaticResource CyberTextBox}"
+                         FontSize="12.5" 
+                         VerticalAlignment="Center" 
+                         TextWrapping="Wrap" 
+                         MaxHeight="75"
+                         Padding="10,8"
+                         KeyDown="TxtInput_KeyDown"
+                         Tag="Posez votre question à l'IA..."/>
+
+                <!-- Bouton d'envoi rond et futuriste -->
+                <Button Grid.Column="1" 
+                        x:Name="BtnSend"
+                        Width="36" 
+                        Height="36" 
+                        Content="➔" 
+                        Foreground="Black" 
+                        Background="{StaticResource CyanNeon}" 
+                        BorderThickness="0" 
+                        FontSize="16" 
+                        FontWeight="Bold"
+                        Cursor="Hand" 
+                        Margin="8,0,0,0"
+                        Click="BtnSend_Click">
+                    <Button.Resources>
+                        <!-- Style local rapide pour rendre le bouton d'envoi parfaitement rond et réactif -->
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}" CornerRadius="18">
+                                            <Border.Effect>
+                                                <DropShadowEffect Color="{StaticResource AccentBlueColor}" BlurRadius="8" ShadowDepth="0" Opacity="0.4"/>
+                                            </Border.Effect>
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="White"/>
+                                                <Setter TargetName="BtnBorder" Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect Color="White" BlurRadius="12" ShadowDepth="0" Opacity="0.6"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="Background" Value="#11FFFFFF"/>
+                                                <Setter Property="Foreground" Value="Gray"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

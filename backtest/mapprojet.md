@@ -71,7 +71,9 @@ backtest/
 │   ├── services/
 │   │   ├── FxCloudService.cs  → Service cloud (auth, sync, profil, support, crash reports)
 │   │   ├── ChartBridge.cs     → Bridge C# ↔ JavaScript (WebView2 graphique)
-│   │   └── Dataservice.cs     → Récupération données marché (API Symfony, cache CSV)
+│   │   ├── Dataservice.cs     → Récupération données marché (API Symfony, cache CSV)
+│   │   ├── PdfExportService.cs → Génération d’un rapport PDF moderne et structuré de la stratégie
+│   │   └── RichTextService.cs → Service Rich Text (sauvegarde/chargement XamlPackage)
 │   └── RichTextService.cs     → Service Rich Text (sauvegarde/chargement XamlPackage)
 │
 ├── 🎨 Resources (XAML / UI)
@@ -133,6 +135,7 @@ backtest/
 │  │  StatisticsControl (vue stats stratégie)                      │  │
 │  │  ├── DataGrid trades filtrable                                │  │
 │  │  ├── Statistiques (Winrate, PF, Best/Worst Config)           │  │
+│  │  ├── Bouton de partage PDF vers Documents                     │  │
 │  │  └── StatisticsView (OxyPlot graphs)                         │  │
 │  │                                                               │  │
 │  │  Chart (WebView2 graphique)                                   │  │

@@ -17,7 +17,7 @@
             FontFamily="Segoe MDL2 Assets" Margin="10,0" ToolTip="Capture d'écran"/>
 
             <Button Style="{StaticResource CircleNavButton}" Content="" 
-            FontFamily="Segoe MDL2 Assets" ToolTip="Partager"/>
+            FontFamily="Segoe MDL2 Assets" ToolTip="Partager PDF" Click="SharePdf_Click"/>
 
             <!-- Bouton Backtest avec icône de Chart (Analytics) -->
             <Button x:Name="BtnBacktest"
