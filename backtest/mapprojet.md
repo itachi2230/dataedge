@@ -72,6 +72,7 @@ backtest/
 │   │   ├── FxCloudService.cs  → Service cloud (auth, sync, profil, support, crash reports)
 │   │   ├── ChartBridge.cs     → Bridge C# ↔ JavaScript (WebView2 graphique)
 │   │   ├── Dataservice.cs     → Récupération données marché (API Symfony, cache CSV)
+│   │   ├── AgentWorkspaceService.cs → Contexte utilisateur et exécution contrôlée des tools IA
 │   │   ├── PdfExportService.cs → Génération d’un rapport PDF moderne et structuré de la stratégie
 │   │   └── RichTextService.cs → Service Rich Text (sauvegarde/chargement XamlPackage)
 │   └── RichTextService.cs     → Service Rich Text (sauvegarde/chargement XamlPackage)
@@ -241,6 +242,7 @@ POST /software/handshake                  → Version check + notifications
 POST /software/report-crash               → Crash report
 POST /support/send                        → Message support
 POST /api/ai/chat                         → Chat IA authentifié, réponse streamée
+                                          → Déclare les tools Gemini, émet `tool_call`, reçoit `tool_result` et poursuit la boucle agent
 POST /api/cloud/sync-file                 → Upload fichier
 POST /api/cloud/file-info                 → Vérification hash
 GET  /api/cloud/list?app_id=...           → Liste fichiers distants
@@ -259,6 +261,9 @@ GET  /api/public/data/pairs               → Liste paires disponibles
 | `strategie.cs` | Modèle + logique métier : CRUD trades, calcul stats, migration Excel→JSON |
 | `Chart.xaml.cs` | Graphique TradingView WebView2, gestion timeframes, watchlist, ajout trades |
 | `FxCloudService.cs` | Service cloud : auth, sync, profil, handshake, crash reporting |
+| `services/AgentWorkspaceService.cs` | Expose le contexte local et les tools IA de lecture/mutation confirmée |
+| `fxglobal/src/Controller/AIChatController.php` | Endpoint IA : route `POST /api/ai/chat`, streaming SSE, persistance BDD |
+| `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclare les fonctions et convertit ses `functionCall` en `tool_call` |
 | `Dataservice.cs` | Récupération données marché depuis API Symfony, cache CSV local |
 | `ChartBridge.cs` | Pont C#↔JS pour le WebView2 du graphique (dessins, captures) |
 | `StatisticsControl.xaml.cs` | Contrôle statistiques d'une stratégie (DataGrid + vues) |
@@ -299,4 +304,6 @@ msbuild backtest.csproj /p:Configuration=Release
 
 ## Agent IA
 
-`MainWindow` affiche `FxAiChatControl` dans `MainViewContainer`. Le client appelle `/api/ai/chat` avec le token cloud et lit directement la réponse streamée du serveur. Le backend copié localement dans `aiback/` ne contient pas de publisher Mercure.
+`MainWindow` affiche `FxAiChatControl` dans `MainViewContainer`. Le client appelle `/api/ai/chat` avec le token cloud (JWT Bearer) et lit directement la réponse streamée du serveur. Le backend liveer est celui du dossier `fxglobal/` (pas de publisher Mercure dans cette version).
+
+📄 **Voir le mapping complet et détaillé de l'agent IA (front + back) dans `mapia.md`.**

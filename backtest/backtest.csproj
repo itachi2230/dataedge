@@ -230,6 +230,7 @@
     <Compile Include="services\ChartBridge.cs" />
     <Compile Include="services\Dataservice.cs" />
     <Compile Include="services\FxAiAgentService.cs" />
+    <Compile Include="services\AgentWorkspaceService.cs" />
     <Compile Include="services\PdfExportService.cs" />
     <Compile Include="Models\ChatMessage.cs" />
     <Compile Include="Models\AiAgentError.cs" />

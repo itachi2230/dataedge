@@ -12,12 +12,14 @@ namespace backtest.Views
     public partial class FxAiChatControl : UserControl
     {
         private readonly FxAiAgentService _aiService;
+        private readonly AgentWorkspaceService _workspaceService;
         public ObservableCollection<ChatMessage> Messages { get; set; }
 
         public FxAiChatControl(FxCloudService cloudService)
         {
             InitializeComponent();
             _aiService = new FxAiAgentService(cloudService);
+            _workspaceService = new AgentWorkspaceService(cloudService);
             Messages = new ObservableCollection<ChatMessage>();
             ChatItemsControl.ItemsSource = Messages;
 
@@ -61,6 +63,7 @@ namespace backtest.Views
             // 4. Lancer la lecture du flux asynchrone
             try
             {
+                string workspaceContext = await _workspaceService.BuildContextAsync();
                 await Task.Run(async () =>
                 {
                     await _aiService.SendMessageToAiStreamAsync(query, (chunk) =>
@@ -79,7 +82,7 @@ namespace backtest.Views
 
                             ScrollToBottom();
                         });
-                    });
+                    }, workspaceContext, _workspaceService.GetToolDefinitions(), HandleToolCallAsync);
                 });
             }
             catch (Exception ex)
@@ -102,6 +105,25 @@ namespace backtest.Views
                 TxtInput.Focus();
             }
         }
+
+        private async Task<AiToolResult> HandleToolCallAsync(AiToolCall call)
+        {
+            // Toute action déclarée requires_confirmation (création/suppression de stratégie,
+            // ajout de trade, habitudes...) passe par une validation explicite de l'utilisateur.
+            bool allowed = true;
+            if (_workspaceService.RequiresConfirmation(call.Name))
+            {
+                allowed = (bool)Dispatcher.Invoke(new Func<bool>(() =>
+                    MessageBox.Show(
+                        $"L'agent souhaite effectuer l'action '{call.Name}'.\n\nArguments : {call.Arguments}\n\nAutoriser cette modification ?",
+                        "Confirmation requise", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes));
+            }
+
+            if (!allowed)
+                return AiToolResult.Error("Action refusée ou annulée par l'utilisateur.");
+
+            return await _workspaceService.ExecuteAsync(call, requestedCall => Task.FromResult(true));
+        }
         private void ScrollToBottom()
         {
             ChatScrollViewer.UpdateLayout();
@@ -109,6 +131,15 @@ namespace backtest.Views
         }
 
         private void BtnSend_Click(object sender, RoutedEventArgs e) => SendMessage();
+
+        private void QuickPrompt_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is string prompt)
+            {
+                TxtInput.Text = prompt;
+                SendMessage(prompt);
+            }
+        }
 
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
         {

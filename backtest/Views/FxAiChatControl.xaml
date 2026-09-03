@@ -14,12 +14,7 @@
         </Grid.RowDefinitions>
 
         <!-- En-tête de l'agent (Look Cyberpunk / DataEdge) -->
-        <Border Grid.Row="0" 
-                Background="{StaticResource CardBg}" 
-                BorderThickness="0,0,0,1" 
-                BorderBrush="#1AFFFFFF" 
-                Padding="15,12" 
-                CornerRadius="0,0,12,12">
+        <Border Background="{StaticResource CardBg}" BorderBrush="#1AFFFFFF" BorderThickness="0,0,0,1" CornerRadius="0,0,12,12" Grid.Row="0" Padding="15,12">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -28,9 +23,9 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Avatar avec halo néon cyan -->
-                <Ellipse Grid.Column="0" Width="38" Height="38" Stroke="{StaticResource CyanNeon}" StrokeThickness="1.5">
+                <Ellipse Grid.Column="0" Height="38" Stroke="{StaticResource CyanNeon}" StrokeThickness="1.5" Width="38">
                     <Ellipse.Effect>
-                        <DropShadowEffect Color="{StaticResource AccentBlueColor}" BlurRadius="8" ShadowDepth="0" Opacity="0.5"/>
+                        <DropShadowEffect BlurRadius="8" Color="{StaticResource AccentBlueColor}" Opacity="0.5" ShadowDepth="0"/>
                     </Ellipse.Effect>
                     <Ellipse.Fill>
                         <ImageBrush ImageSource="pack://application:,,,/Resources/default_user.png" Stretch="UniformToFill"/>
@@ -38,28 +33,24 @@
                 </Ellipse>
 
                 <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="DATAEDGE AI AGENT" 
-                               Foreground="{StaticResource CyanNeon}" 
-                               FontSize="12" 
-                               FontWeight="Black" 
-                               />
-                    <TextBlock Text="Analyse de performance &amp; sentiment de marché" 
-                               Foreground="Gray" 
-                               FontSize="10" 
-                               Margin="0,2,0,0"/>
+                    <TextBlock FontSize="12" FontWeight="Black" Foreground="{StaticResource CyanNeon}" Text="DATAEDGE AI AGENT"/>
+                    <TextBlock FontSize="10" Foreground="Gray" Margin="0,2,0,0" Text="Copilote personnel - données locales sécurisées"/>
                 </StackPanel>
 
                 <!-- Petit indicateur de statut ONLINE vert flashy -->
-                <Border Grid.Column="2" Width="8" Height="8" CornerRadius="4" Background="#FF00FF03" VerticalAlignment="Center" Margin="0,0,5,0">
-                    <Border.Effect>
-                        <DropShadowEffect Color="#FF00FF03" BlurRadius="6" ShadowDepth="0" Opacity="0.8"/>
-                    </Border.Effect>
-                </Border>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock FontSize="8" FontWeight="Bold" Foreground="#FF00FF03" Margin="0,0,8,0" Text="OUTILS ACTIFS" VerticalAlignment="Center"/>
+                    <Border Background="#FF00FF03" CornerRadius="4" Height="8" Margin="0,0,5,0" VerticalAlignment="Center" Width="8">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="6" Color="#FF00FF03" Opacity="0.8" ShadowDepth="0"/>
+                        </Border.Effect>
+                    </Border>
+                </StackPanel>
             </Grid>
         </Border>
 
         <!-- Liste des messages du Chat -->
-        <ScrollViewer Grid.Row="1" x:Name="ChatScrollViewer" Padding="10,5" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1" Padding="10,5" VerticalScrollBarVisibility="Auto" x:Name="ChatScrollViewer">
             <StackPanel>
                 <ItemsControl x:Name="ChatItemsControl">
                     <ItemsControl.ItemTemplate>
@@ -71,42 +62,17 @@
                                 </Grid.RowDefinitions>
 
                                 <!-- Bulle de message stylisée selon l'expéditeur -->
-                                <Border Grid.Row="0" 
-                                        CornerRadius="10" 
-                                        Padding="12,10"
-                                        Background="{Binding BubbleColor}" 
-                                        BorderBrush="{Binding BorderColor}" 
-                                        BorderThickness="1">
+                                <Border Background="{Binding BubbleColor}" BorderBrush="{Binding BorderColor}" BorderThickness="1" CornerRadius="10" Grid.Row="0" Padding="12,10">
                                     <StackPanel>
-                                        <TextBlock Text="{Binding Text}" 
-                                                   Foreground="White" 
-                                                   FontSize="12.5" 
-                                                   TextWrapping="Wrap" 
-                                                   LineHeight="18"/>
-                                        <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm}" 
-                                                   Foreground="Gray" 
-                                                   FontSize="8.5" 
-                                                   HorizontalAlignment="Right" 
-                                                   Margin="0,6,0,0"/>
+                                        <TextBlock FontSize="12.5" Foreground="White" LineHeight="18" Text="{Binding Text}" TextWrapping="Wrap"/>
+                                        <TextBlock FontSize="8.5" Foreground="Gray" HorizontalAlignment="Right" Margin="0,6,0,0" Text="{Binding Timestamp, StringFormat=HH:mm}"/>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Actions rapides sous la bulle (Uniquement visibles au survol du message) -->
-                                <StackPanel Grid.Row="1" 
-                                            Orientation="Horizontal" 
-                                            HorizontalAlignment="Right" 
-                                            Margin="0,3,4,0" 
-                                            Opacity="0.75">
+                                <!-- Actions rapides sous la bulle -->
+                                <StackPanel Grid.Row="1" HorizontalAlignment="Right" Margin="0,3,4,0" Opacity="0.75" Orientation="Horizontal">
                                     <!-- Bouton Copier -->
-                                    <Button Content="📋 Copier" 
-                                            FontSize="9.5" 
-                                            Foreground="Gray" 
-                                            Background="Transparent" 
-                                            BorderThickness="0" 
-                                            Cursor="Hand"
-                                            Margin="0,0,10,0"
-                                            Click="BtnCopy_Click"
-                                            Tag="{Binding Text}">
+                                    <Button Background="Transparent" BorderThickness="0" Click="BtnCopy_Click" Content="📋 Copier" Cursor="Hand" FontSize="9.5" Foreground="Gray" Margin="0,0,10,0" Tag="{Binding Text}">
                                         <Button.Style>
                                             <Style TargetType="Button">
                                                 <Style.Triggers>
@@ -119,14 +85,7 @@
                                     </Button>
 
                                     <!-- Bouton Renvoyer -->
-                                    <Button Content="🔄 Relancer" 
-                                            FontSize="9.5" 
-                                            Foreground="Gray" 
-                                            Background="Transparent" 
-                                            BorderThickness="0" 
-                                            Cursor="Hand"
-                                            Click="BtnResend_Click"
-                                            Tag="{Binding Text}">
+                                    <Button Background="Transparent" BorderThickness="0" Click="BtnResend_Click" Content="🔄 Relancer" Cursor="Hand" FontSize="9.5" Foreground="Gray" Tag="{Binding Text}">
                                         <Button.Style>
                                             <Style TargetType="Button">
                                                 <Style.Triggers>
@@ -143,96 +102,71 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- Indicateur visuel de chargement de l'IA (Anneau rotatif néon discret) -->
-                <!-- Indicateur visuel de chargement de l'IA (Anneau rotatif néon discret compatible WPF standard) -->
-                <Grid x:Name="LoadingIndicator" Visibility="Collapsed" HorizontalAlignment="Left" Margin="8,10">
+                <!-- Indicateur visuel de chargement de l'IA -->
+                <Grid HorizontalAlignment="Left" Margin="8,10" Visibility="Collapsed" x:Name="LoadingIndicator">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Utilisation d'une Ellipse avec StrokeDashArray pour simuler un arc de cercle parfait -->
-                    <Ellipse Grid.Column="0" Width="16" Height="16" 
-             Stroke="{StaticResource CyanNeon}" StrokeThickness="2.5" 
-             StrokeDashArray="3 1"
-             RenderTransformOrigin="0.5,0.5">
+                    <Ellipse Grid.Column="0" Height="16" RenderTransformOrigin="0.5,0.5" Stroke="{StaticResource CyanNeon}" StrokeDashArray="3 1" StrokeThickness="2.5" Width="16">
                         <Ellipse.RenderTransform>
-                            <RotateTransform x:Name="SpinnerTransform" Angle="0"/>
+                            <RotateTransform Angle="0" x:Name="SpinnerTransform"/>
                         </Ellipse.RenderTransform>
                         <Ellipse.Triggers>
                             <EventTrigger RoutedEvent="Loaded">
                                 <BeginStoryboard>
                                     <Storyboard RepeatBehavior="Forever">
-                                        <DoubleAnimation Storyboard.TargetName="SpinnerTransform" 
-                                         Storyboard.TargetProperty="Angle" 
-                                         From="0" To="360" Duration="0:0:1.2"/>
-                                        <!-- Fait une rotation fluide de l'anneau -->
+                                        <DoubleAnimation Duration="0:0:1.2" From="0" Storyboard.TargetName="SpinnerTransform" Storyboard.TargetProperty="Angle" To="360"/>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </EventTrigger>
                         </Ellipse.Triggers>
                     </Ellipse>
-                    <TextBlock Grid.Column="1" Text="L'agent réfléchit..." Foreground="Gray" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock FontSize="11" Foreground="Gray" Grid.Column="1" Margin="8,0,0,0" Text="L'agent réfléchit..." VerticalAlignment="Center"/>
                 </Grid>
             </StackPanel>
         </ScrollViewer>
 
         <!-- Boîte de saisie moderne -->
-        <Border Grid.Row="2" 
-                Background="{StaticResource CardBg}" 
-                BorderThickness="0,1,0,0" 
-                BorderBrush="#1AFFFFFF" 
-                Padding="12" 
-                CornerRadius="12,12,0,0">
+        <Border Background="{StaticResource CardBg}" BorderBrush="#1AFFFFFF" BorderThickness="0,1,0,0" CornerRadius="12,12,0,0" Grid.Row="2" Padding="12">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Utilisation du style CyberTextBox fourni par ton dictionnaire d'application -->
-                <TextBox x:Name="TxtInput" 
-                         Style="{StaticResource CyberTextBox}"
-                         FontSize="12.5" 
-                         VerticalAlignment="Center" 
-                         TextWrapping="Wrap" 
-                         MaxHeight="75"
-                         Padding="10,8"
-                         KeyDown="TxtInput_KeyDown"
-                         Tag="Posez votre question à l'IA..."/>
+                <WrapPanel Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="0" Margin="0,0,0,6">
+                    <Button Background="#142633" BorderThickness="0" Click="QuickPrompt_Click" Content="Bilan" FontSize="10" Foreground="{StaticResource CyanNeon}" Margin="0,0,5,0" Padding="8,4" Tag="Fais un bilan de mon espace de trading et donne-moi trois priorités."/>
+                    <Button Background="#142633" BorderThickness="0" Click="QuickPrompt_Click" Content="Mes règles" FontSize="10" Foreground="{StaticResource CyanNeon}" Margin="0,0,5,0" Padding="8,4" Tag="Résume mes habitudes, mes règles et les écarts récents."/>
+                    <Button Background="#142633" BorderThickness="0" Click="QuickPrompt_Click" Content="Analyser" FontSize="10" Foreground="{StaticResource CyanNeon}" Padding="8,4" Tag="Analyse mes trades récents et identifie les biais répétitifs."/>
+                </WrapPanel>
 
-                <!-- Bouton d'envoi rond et futuriste -->
-                <Button Grid.Column="1" 
-                        x:Name="BtnSend"
-                        Width="36" 
-                        Height="36" 
-                        Content="➔" 
-                        Foreground="Black" 
-                        Background="{StaticResource CyanNeon}" 
-                        BorderThickness="0" 
-                        FontSize="16" 
-                        FontWeight="Bold"
-                        Cursor="Hand" 
-                        Margin="8,0,0,0"
-                        Click="BtnSend_Click">
+                <TextBox FontSize="12.5" Grid.Column="0" Grid.Row="1" KeyDown="TxtInput_KeyDown" MaxHeight="75" Padding="10,8" Style="{StaticResource CyberTextBox}" Tag="Posez votre question à l'IA..." TextWrapping="Wrap" VerticalAlignment="Center" x:Name="TxtInput"/>
+
+                <!-- Bouton d'envoi rond -->
+                <Button Background="{StaticResource CyanNeon}" BorderThickness="0" Click="BtnSend_Click" Content="➔" Cursor="Hand" FontSize="16" FontWeight="Bold" Foreground="Black" Grid.Column="1" Grid.Row="1" Height="36" Margin="8,0,0,0" Width="36" x:Name="BtnSend">
                     <Button.Resources>
-                        <!-- Style local rapide pour rendre le bouton d'envoi parfaitement rond et réactif -->
                         <Style TargetType="Button">
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}" CornerRadius="18">
+                                        <Border Background="{TemplateBinding Background}" CornerRadius="18" x:Name="BtnBorder">
                                             <Border.Effect>
-                                                <DropShadowEffect Color="{StaticResource AccentBlueColor}" BlurRadius="8" ShadowDepth="0" Opacity="0.4"/>
+                                                <DropShadowEffect BlurRadius="8" Color="{StaticResource AccentBlueColor}" Opacity="0.4" ShadowDepth="0"/>
                                             </Border.Effect>
                                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter Property="Background" Value="White"/>
-                                                <Setter TargetName="BtnBorder" Property="Effect">
+                                                <Setter Property="Effect" TargetName="BtnBorder">
                                                     <Setter.Value>
-                                                        <DropShadowEffect Color="White" BlurRadius="12" ShadowDepth="0" Opacity="0.6"/>
+                                                        <DropShadowEffect BlurRadius="12" Color="White" Opacity="0.6" ShadowDepth="0"/>
                                                     </Setter.Value>
                                                 </Setter>
                                             </Trigger>
