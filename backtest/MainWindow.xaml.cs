@@ -567,20 +567,141 @@ namespace backtest
             chart.BeginAnimation(OpacityProperty, fadeIn);
         }
 
+        #region COPILOTE IA (panneau latéral flottant)
+
+        private Views.FxAiChatControl _aiChat;
+        private bool _aiAgentOpen;
+        private bool _aiAgentExpanded;
+        private double _aiDrawerWidth = 430; // largeur normale du panneau (XAML)
+
+        /// <summary>
+        /// Ouvre/ferme le copilote IA sans quitter la vue courante : le panneau
+        /// glisse depuis le bord droit et se superpose au contenu (dashboard,
+        /// graphique, journal...) — accessible partout via le bouton flottant.
+        /// L'instance est créée une seule fois : l'historique est conservé.
+        /// </summary>
+        private void ToggleAiAgent()
+        {
+            if (_aiAgentOpen)
+            {
+                HideAiAgent();
+            }
+            else
+            {
+                ShowAiAgent();
+            }
+        }
+
         private void ShowAiAgent()
         {
-            var aiChat = new Views.FxAiChatControl(_cloudService);
-            MainViewContainer.Content = aiChat;
+            if (_aiChat == null)
+            {
+                _aiChat = new Views.FxAiChatControl(_cloudService);
+                _aiChat.CloseRequested += (s, e) => HideAiAgent();
+                _aiChat.ExpandRequested += (s, e) => ToggleAiAgentSize();
+                AiAgentPanelHost.Child = _aiChat;
+            }
 
+            _aiAgentOpen = true;
+            AiAgentDrawer.Visibility = Visibility.Visible;
+
+            // Offset de glisse dynamique : le panneau doit partir entièrement
+            // hors écran, même une fois agrandi (largeur > 430).
+            double slideOffset = _aiDrawerWidth + 60;
+            var slide = new DoubleAnimation
+            {
+                From = slideOffset,
+                To = 0,
+                Duration = TimeSpan.FromSeconds(0.38),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
             var fadeIn = new DoubleAnimation
             {
                 From = 0,
                 To = 1,
-                Duration = TimeSpan.FromSeconds(0.4),
-                EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
+                Duration = TimeSpan.FromSeconds(0.3)
             };
-            aiChat.BeginAnimation(OpacityProperty, fadeIn);
+            AiDrawerTransform.BeginAnimation(TranslateTransform.XProperty, slide);
+            AiAgentDrawer.BeginAnimation(OpacityProperty, fadeIn);
+
+            // Le bouton flottant s'efface pendant que le panneau est ouvert.
+            var fabFadeOut = new DoubleAnimation
+            {
+                From = 1,
+                To = 0,
+                Duration = TimeSpan.FromSeconds(0.15)
+            };
+            fabFadeOut.Completed += (s, e) => { if (_aiAgentOpen) BtnAiFab.Visibility = Visibility.Collapsed; };
+            BtnAiFab.BeginAnimation(OpacityProperty, fabFadeOut);
         }
+
+        private void HideAiAgent()
+        {
+            if (!_aiAgentOpen) return;
+            _aiAgentOpen = false;
+
+            double slideOffset = _aiDrawerWidth + 60;
+            var slideOut = new DoubleAnimation
+            {
+                From = 0,
+                To = slideOffset,
+                Duration = TimeSpan.FromSeconds(0.3),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+            };
+            slideOut.Completed += (s, e) =>
+            {
+                // Si l'utilisateur a rouvert pendant l'animation, on ne cache pas.
+                if (!_aiAgentOpen)
+                {
+                    AiAgentDrawer.Visibility = Visibility.Collapsed;
+
+                    // Le bouton flottant réapparaît (fondu) une fois le panneau parti.
+                    BtnAiFab.Visibility = Visibility.Visible;
+                    var fabFadeIn = new DoubleAnimation
+                    {
+                        From = 0,
+                        To = 1,
+                        Duration = TimeSpan.FromSeconds(0.2)
+                    };
+                    BtnAiFab.BeginAnimation(OpacityProperty, fabFadeIn);
+                }
+            };
+            var fadeOut = new DoubleAnimation
+            {
+                From = 1,
+                To = 0,
+                Duration = TimeSpan.FromSeconds(0.3)
+            };
+            AiDrawerTransform.BeginAnimation(TranslateTransform.XProperty, slideOut);
+            AiAgentDrawer.BeginAnimation(OpacityProperty, fadeOut);
+        }
+
+        /// <summary>
+        /// Agrandit/réduit le panneau de discussion (bouton ⤢ du chat) : bascule
+        /// entre la largeur normale (430 px) et une largeur étendue (~60 % de la
+        /// vue, plafonnée) avec une animation de largeur.
+        /// </summary>
+        private void ToggleAiAgentSize()
+        {
+            double normalWidth = 430;
+            double expandedWidth = Math.Min(780, Math.Max(normalWidth + 150,
+                (MainViewContainer.ActualWidth > 0 ? MainViewContainer.ActualWidth : this.ActualWidth) - 90));
+
+            double targetWidth = _aiAgentExpanded ? normalWidth : expandedWidth;
+            _aiAgentExpanded = !_aiAgentExpanded;
+            _aiDrawerWidth = targetWidth;
+
+            var widthAnim = new DoubleAnimation
+            {
+                To = targetWidth,
+                Duration = TimeSpan.FromSeconds(0.25),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            AiAgentDrawer.BeginAnimation(WidthProperty, widthAnim);
+            _aiChat?.SetExpandedState(_aiAgentExpanded);
+        }
+
+        #endregion
         #endregion
 
         #region GESTION DES NOTES
@@ -770,7 +891,7 @@ namespace backtest
         }
         private void Button_Click_2(object sender, RoutedEventArgs e) { new addStrategieWindow().ShowDialog(); loadStrategies(); } // + Strat
         private void ButtonEtude(object sender, RoutedEventArgs e) { ShowEtude(); }
-        private void ButtonAiAgent(object sender, RoutedEventArgs e) { ShowAiAgent(); }
+        private void BtnAiFab_Click(object sender, RoutedEventArgs e) { ToggleAiAgent(); }
         private void ButtonHome(object sender, RoutedEventArgs e) { ShowDashboard(); }
         private void CloseButton_Click(object sender, RoutedEventArgs e) { SaveNotes(); this.Close(); }
 

@@ -57,6 +57,29 @@ namespace backtest.Models
 
         public bool IsUser => Sender == "User";
 
+        private string _statusText;
+
+        /// <summary>
+        /// Statut transitoire affiché dans le bandeau de la bulle IA (réflexion du
+        /// modèle, exécution d'outils, chrono). Null ou vide = bandeau masqué —
+        /// le bandeau disparaît dès que la réponse finale commence.
+        /// </summary>
+        public string StatusText
+        {
+            get => _statusText;
+            set
+            {
+                if (_statusText != value)
+                {
+                    _statusText = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(HasStatus));
+                }
+            }
+        }
+
+        public bool HasStatus => !string.IsNullOrEmpty(_statusText);
+
         // Conversion propre pour WPF
         public HorizontalAlignment Alignment => IsUser ? HorizontalAlignment.Right : HorizontalAlignment.Left;
 

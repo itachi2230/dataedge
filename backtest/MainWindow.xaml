@@ -15,6 +15,15 @@
                      Duration="0:0:1" 
                      RepeatBehavior="Forever"/>
         </Storyboard>
+
+        <!-- Halo pulsé du bouton flottant Copilote IA -->
+        <Storyboard x:Key="FabPulse" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="FabHalo" Storyboard.TargetProperty="Opacity" From="0.25" To="0.65" Duration="0:0:1.8" AutoReverse="True">
+                <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
     </Window.Resources>
 
     <Border Background="{StaticResource BgDark}" CornerRadius="7" BorderBrush="#222" BorderThickness="5">
@@ -109,10 +118,6 @@
                     <StackPanel Margin="0,2">
                         <Button Style="{StaticResource CircleNavButton}" Content="📂" Click="ButtonEtude" Margin="0"/>
                         <TextBlock Text="ÉTUDES" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                    </StackPanel>
-                    <StackPanel Margin="0,2">
-                        <Button Style="{StaticResource CircleNavButton}" Content="🤖" Click="ButtonAiAgent" Margin="0" ToolTip="Agent IA"/>
-                        <TextBlock Text="AGENT IA" Foreground="Gray" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <StackPanel Margin="0,2">
@@ -309,6 +314,77 @@
                     <Button Content="✕" Click="CloseButton_Click" Background="Transparent" Foreground="#E74C3C" BorderThickness="0" Width="35" Height="40" FontSize="16" Cursor="Hand"/>
                 </StackPanel>
             </Grid>
+
+            <!-- Copilote IA : panneau latéral flottant (glisse depuis la droite,
+                 superposé à la vue courante — le contexte reste visible) -->
+            <Grid x:Name="AiAgentDrawer" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Panel.ZIndex="500"
+                  Visibility="Collapsed" HorizontalAlignment="Right" Margin="0,8,38,8" Width="430">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="AiDrawerTransform" X="470"/>
+                </Grid.RenderTransform>
+                <Border CornerRadius="18" BorderBrush="#2A3B4E" BorderThickness="1" Background="{StaticResource BgDark}">
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="34" ShadowDepth="0" Opacity="0.65"/>
+                    </Border.Effect>
+                    <Border x:Name="AiAgentPanelHost" CornerRadius="18" ClipToBounds="True"/>
+                </Border>
+            </Grid>
+
+            <!-- Bouton flottant Copilote IA (disque néon, bas-droit du dashboard ;
+                 masqué pendant que le panneau est ouvert). Ressources locales :
+                 les gradients du chat ne sont pas visibles depuis MainWindow. -->
+            <Button x:Name="BtnAiFab" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Panel.ZIndex="400"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,42,26"
+                    Width="58" Height="58" Click="BtnAiFab_Click" ToolTip="Copilote IA"
+                    BorderThickness="0" Cursor="Hand">
+                <Button.Resources>
+                    <LinearGradientBrush x:Key="FabDiscGradient" StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#00E5FF" Offset="0"/>
+                        <GradientStop Color="#0090D0" Offset="1"/>
+                    </LinearGradientBrush>
+                    <RadialGradientBrush x:Key="FabHaloGradient" GradientOrigin="0.35,0.3" Center="0.4,0.35">
+                        <GradientStop Color="#33E9FF" Offset="0"/>
+                        <GradientStop Color="#00BFFF" Offset="0.55"/>
+                        <GradientStop Color="#065B8C" Offset="1"/>
+                    </RadialGradientBrush>
+                </Button.Resources>
+                <Button.Background>
+                    <StaticResource ResourceKey="FabDiscGradient"/>
+                </Button.Background>
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="FabHalo" Fill="{StaticResource FabHaloGradient}" Opacity="0.35" Margin="-8">
+                                <Ellipse.Effect>
+                                    <DropShadowEffect BlurRadius="22" Color="{StaticResource AccentBlueColor}" ShadowDepth="0" Opacity="0.55"/>
+                                </Ellipse.Effect>
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource FabPulse}"/>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+                            <Ellipse x:Name="FabDisc" Fill="{TemplateBinding Background}" Stroke="#3AD9F5" StrokeThickness="1.3">
+                                <Ellipse.Effect>
+                                    <DropShadowEffect BlurRadius="14" Color="{StaticResource AccentBlueColor}" ShadowDepth="0" Opacity="0.5"/>
+                                </Ellipse.Effect>
+                            </Ellipse>
+                            <Path Data="M12,2 A2,2 0 0,1 14,4 V5 H10 V4 A2,2 0 0,1 12,2 M5,6 H19 A2,2 0 0,1 21,8 V16 A2,2 0 0,1 19,18 H5 A2,2 0 0,1 3,16 V8 A2,2 0 0,1 5,6 M8,9.6 A1.3,1.3 0 1,0 8,12.2 A1.3,1.3 0 0,0 8,9.6 M16,9.6 A1.3,1.3 0 1,0 16,12.2 A1.3,1.3 0 0,0 16,9.6 M9,14 H15 V15.4 H9 Z"
+                                  Fill="White" Width="25" Height="25" Stretch="Uniform"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="FabHalo" Property="Opacity" Value="0.8"/>
+                                <Setter TargetName="FabDisc" Property="Fill" Value="{StaticResource CyanNeon}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="FabDisc" Property="StrokeThickness" Value="2.2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
 
             <ContentControl x:Name="MainViewContainer" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0">
                 <Grid x:Name="DashboardView">

@@ -242,7 +242,9 @@ POST /software/handshake                  → Version check + notifications
 POST /software/report-crash               → Crash report
 POST /support/send                        → Message support
 POST /api/ai/chat                         → Chat IA authentifié, réponse streamée
-                                          → Déclare les tools Gemini, émet `tool_call`, reçoit `tool_result` et poursuit la boucle agent
+                                          → Déclare les tools du fournisseur LLM (OpenRouter ou Gemini), émet `tool_call`, reçoit `tool_result` et poursuit la boucle agent
+                                          → Interrupteurs admin : 503 si agent désactivé, 429 si quota utilisateur dépassé (software_config)
+GET  /api/ai/history?limit=...            → Historique de conversation IA (affichage client, sans rappel Gemini)
 POST /api/cloud/sync-file                 → Upload fichier
 POST /api/cloud/file-info                 → Vérification hash
 GET  /api/cloud/list?app_id=...           → Liste fichiers distants
@@ -264,6 +266,7 @@ GET  /api/public/data/pairs               → Liste paires disponibles
 | `services/AgentWorkspaceService.cs` | Expose le contexte local et les tools IA de lecture/mutation confirmée |
 | `fxglobal/src/Controller/AIChatController.php` | Endpoint IA : route `POST /api/ai/chat`, streaming SSE, persistance BDD |
 | `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclare les fonctions et convertit ses `functionCall` en `tool_call` |
+| `fxglobal/src/Service/OpenRouterService.php` | Fournisseur LLM OpenRouter (compatible OpenAI) : streaming SSE, function calling, chaîne de repli de modèles, plugin web `:online` |
 | `Dataservice.cs` | Récupération données marché depuis API Symfony, cache CSV local |
 | `ChartBridge.cs` | Pont C#↔JS pour le WebView2 du graphique (dessins, captures) |
 | `StatisticsControl.xaml.cs` | Contrôle statistiques d'une stratégie (DataGrid + vues) |
@@ -304,6 +307,12 @@ msbuild backtest.csproj /p:Configuration=Release
 
 ## Agent IA
 
-`MainWindow` affiche `FxAiChatControl` dans `MainViewContainer`. Le client appelle `/api/ai/chat` avec le token cloud (JWT Bearer) et lit directement la réponse streamée du serveur. Le backend liveer est celui du dossier `fxglobal/` (pas de publisher Mercure dans cette version).
+`MainWindow` héberge `FxAiChatControl` dans un **panneau latéral flottant** (`AiAgentDrawer`, superposé à droite, largeur 430 px agrandissable jusqu'à ~780 px via le bouton ⤢ du chat). Le déclencheur est un **bouton flottant néon** (bas-droit du dashboard, halo pulsé) accessible depuis n'importe quelle vue : le panneau glisse par-dessus le contenu sans quitter le contexte courant (dashboard, chart, journal restent visibles/actifs derrière). Le client appelle `/api/ai/chat` avec le token cloud (JWT Bearer) et lit directement la réponse streamée du serveur ; pendant la réflexion du modèle et l'exécution des tools, un bandeau de statut live (chrono + raisonnement + actions d'outils) s'affiche dans la bulle IA. Le backend utilisé est celui du dossier `fxglobal/` (pas de publisher Mercure dans cette version).
 
 📄 **Voir le mapping complet et détaillé de l'agent IA (front + back) dans `mapia.md`.**
+
+## Backend — `fxglobal/` (Symfony)
+
+Le dossier `fxglobal/` contient l'intégralité du backend Symfony 6.4 : API REST JWT consommée par le client WPF (auth, cloud storage, handshake, données marché, agent IA), site web public (Twig) et back-office admin (`/admin`). Sa structure complète (10 contrôleurs, 7 entités, 4 migrations, stockage, sécurité) est cartographiée dans un fichier dédié.
+
+📄 **Voir le mapping complet et détaillé du backend dans `fxglobal/mapbackend.md`.**

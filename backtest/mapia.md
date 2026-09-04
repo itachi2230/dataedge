@@ -10,7 +10,7 @@ L'agent IA de DataEdge est un **copilote de trading intégré** au logiciel WPF.
 - **Discuter** de ses performances, stratégies, trades et habitudes en langage naturel.
 - **Agir sur son espace local** via des *function calls* (tools) : lire le workspace, créer/supprimer des stratégies, ajouter des trades au journal, gérer les habitudes.
 
-Le modèle LLM utilisé est **Google Gemini** (API `generativelanguage.googleapis.com`), appelé **uniquement par le serveur** (la clé `GEMINI_API_KEY` ne quitte jamais le backend).
+Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY` / `GEMINI_API_KEY` ne quittent jamais le backend). Le fournisseur est choisi par le paramètre `ai_provider` de `fxglobal/config/services.yaml` : **`openrouter`** (défaut — API compatible OpenAI, modèle `openrouter_model`, ex. `z-ai/glm-5.3-flash` : ~10x moins cher que Gemini Flash, function calling testé) ou **`gemini`** (API `generativelanguage.googleapis.com`). Les deux implémentent `AiChatProviderInterface` et émettent le même protocole de chunks : le client ne change pas.
 
 ```
 ┌───────────────────────────────┐        ┌─────────────────────────────────────┐        ┌──────────────────────────┐
@@ -33,6 +33,8 @@ Le modèle LLM utilisé est **Google Gemini** (API `generativelanguage.googleapi
 | **Front - modèles** | `Models/ChatMessage.cs`, `Models/AiAgentError.cs` | Objets de données du chat et erreurs agent |
 | **Back - endpoint** | `fxglobal/src/Controller/AIChatController.php` | Route `POST /api/ai/chat`, streaming SSE, persistance BDD |
 | **Back - LLM** | `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclaration des fonctions, conversion `functionCall` |
+| **Back - LLM** | `fxglobal/src/Service/OpenRouterService.php` | Fournisseur OpenRouter (compatible OpenAI) : streaming SSE, function calling, chaîne de repli de modèles (429/402/5xx), plugin web `:online` pour la veille marché |
+| **Back - contrat** | `fxglobal/src/Service/AiChatProviderInterface.php` | Contrat commun des fournisseurs LLM : chunks `text` / `tool_call` / `error` / `ping` |
 | **Back - données** | `fxglobal/src/Entity/AIChatMessage.php` + `.../Repository/AIChatMessageRepository.php` | Historique de conversation en base |
 | **Back - migration** | `fxglobal/migrations/Version20260714022623.php` | Table `aichat_message` |
 
@@ -40,18 +42,18 @@ Le modèle LLM utilisé est **Google Gemini** (API `generativelanguage.googleapi
 
 ## 🔄 Flux de communication (chat classique)
 
-1. L'utilisateur clique sur le bouton **🤖 AGENT IA** (`MainWindow.xaml` ligne 114) → `ShowAiAgent()` instancie `FxAiChatControl(_cloudService)` dans `MainViewContainer`.
+1. L'utilisateur clique sur le bouton **🤖 AGENT IA** (`MainWindow.xaml` ligne 114) → `ShowAiAgent()` instancie `FxAiChatControl(_cloudService)` dans `MainViewContainer`. À l'instanciation, `LoadHistoryAsync()` appelle `FxAiAgentService.GetChatHistoryAsync()` → **GET `/api/ai/history`** : si des échanges existent, ils remplacent le message d'accueil (historique affiché **sans rappeler Gemini**) ; la saisie est bloquée pendant le chargement.
 2. L'utilisateur saisit un message → `SendMessage()` :
    - ajoute le message utilisateur dans la liste ;
    - affiche l'indicateur « L'agent réfléchit... » ;
-   - construit le **contexte local** via `AgentWorkspaceService.BuildContextAsync()` (profil, habitudes, stratégies, trades, études) ;
+   - construit le **contexte d'identité minimal** via `AgentWorkspaceService.BuildIdentityContextAsync()` (profil : nom/email/bio uniquement — plus aucun dump workspace automatique) ;
    - lance `FxAiAgentService.SendMessageToAiStreamAsync(...)` sur un thread de fond (`Task.Run`).
 3. Le client POST `api/ai/chat` avec un **JWT Bearer** (via `FxCloudService.SecureRequestAsync`) :
 
    ```json
    {
      "message": "le prompt",
-     "context": "{...contexte workspace JSON...}",
+     "context": "{...identité JSON (profil)...}",
      "app_id": "FX_DATAEDGE",
      "session_id": "guid",
      "tools": [ { "name": "...", "description": "...", "requires_confirmation": true,
@@ -64,28 +66,32 @@ Le modèle LLM utilisé est **Google Gemini** (API `generativelanguage.googleapi
 
 4. Le backend (`AIChatController::chat`) :
    - vérifie `$this->getUser()` (firewall JWT) → `401` sinon ;
-   - **tour normal** : sauvegarde le message **user** en base (`AIChatMessage` role=`user`) ;
+   - **interrupteurs admin** (`software_config` de l'app cliente, pilotables au dashboard `/admin/software`) : agent IA désactivé (`ai_chat_enabled`) → `503` JSON `{"error": ...}` ; quota utilisateur actif (`ai_quota_enabled`) et dépassé (comptage des tours `user` du jour) → `429` JSON — le client affiche le message métier du corps ;
+   - **tour normal** : persiste d'abord le **contexte d'identité** du client en role=`context` (`persistContextOnce` — une seule fois par conversation : tant qu'un tour `context` existe dans la fenêtre des 40 derniers messages, il n'est pas re-stocké), puis le message **user** (role=`user`) ;
    - **tour outil** : sauvegarde les résultats en base sous forme d'un `AIChatMessage` role=`function` contenant `{"functionResponses": [{name, response: {name, content, is_error}}]}` ;
    - renvoie un `StreamedResponse` (SSE : `Content-Type: text/event-stream`, `Connection: keep-alive`, `X-Accel-Buffering: no`) ;
    - dans le callback : `GeminiService::generateStreamResponse(...)` avec un callback qui re-émet chaque morceau au client sous forme `data: {json}\n\n` (le texte et les tool_calls sont accumulés côté serveur) ;
    - après le stream : sauvegarde du tour **model** — texte final simple, **ou** JSON structuré `{"text": "...", "functionCalls": [{name, args}]}` si le tour contenait des appels d'outils.
 5. `GeminiService` :
-   - recharge les **40** derniers messages (`findChatHistory`) — y compris les tours `model` (functionCalls) et `function` (functionResponses) ;
-   - reconstruit les `contents` Gemini dans l'ordre **exact exigé par l'API** : `[model: functionCall]` → `[user: functionResponse]` → suite ; le prompt courant est dédoublonné puis ré-ajouté une seule fois, augmenté du `context` client ;
-   - appelle `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse&key=...` en cURL ; `alt=sse` garantit des événements SSE autonomes (un JSON complet par ligne `data:`), bufferisés ligne par ligne dans `CURLOPT_WRITEFUNCTION`.
+   - recharge les **40** derniers messages (`findChatHistory`) — y compris le tour `context` (identité), les tours `model` (functionCalls) et `function` (functionResponses) ;
+   - reconstruit les `contents` Gemini dans l'ordre **exact exigé par l'API** : `[user: context/identité]` → `[model: functionCall]` → `[user: functionResponse]` → suite ; le prompt courant est dédoublonné puis ré-ajouté une seule fois, **sans aucun contexte collé au prompt** ;
+   - appelle `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse&key=...` en cURL ; `alt=sse` garantit des événements SSE autonomes (un JSON complet par ligne `data:`), bufferisés ligne par ligne dans `CURLOPT_WRITEFUNCTION` ; garde-fous réseau : connexion 10 s, flux inactif 45 s (`STALL_TIMEOUT`), durée max 600 s (`MAX_STREAM_TIME`), boucle `curl_multi` avec pings keep-alive ;
+   - injecte les **directives système** (constante `DIRECTIVES_TEXT`, cf. section « 🧠 Directives système ») et ajoute le bloc **`google_search`** (veille marché live) aux tools ; si l'API rejette la combinaison functionDeclarations + google_search (HTTP 400), **repli automatique** sur un appel sans google_search (`streamToGemini` / `stripGoogleSearch`) ; les fragments de raisonnement interne (`thought`) sont filtrés et ne sont jamais diffusés au client.
 6. Chaque événement reçu de Google est analysé (`processSseLine`) :
    - `part.text` → émis au client : `{"text": "..."}` ;
    - `part.functionCall` → émis au client : `{"tool_call": {id, name, arguments}}` (plusieurs appels parallèles possibles) ;
+   - battement keep-alive : pendant les silences du modèle (grounding `google_search`), le serveur émet toutes les ~10 s un `{"ping": true}` — ignoré par le client et non persisté ;
    - erreur API/HTTP/cURL → émis : `{"error": "..."}` (le client lève `AiAgentException`).
 7. Le client (`FxAiAgentService`) lit le flux **en entier** :
    - lignes `text` → affichées en direct dans la bulle (`Dispatcher.Invoke`) ;
-   - lignes `tool_call` → **collectées** ; à la fin du flux, chaque outil est **exécuté localement** puis un **nouveau tour serveur** est lancé avec `tool_results`.
+   - lignes `reasoning` (réflexion du modèle) → routées vers le **callback de statut** (`onStatusReceived`), affichées dans le bandeau de statut de la bulle — jamais dans le texte final ;
+   - lignes `tool_call` → **collectées** ; à la fin du flux, chaque outil est **exécuté localement** (statuts `🔍 …` / `✓ …` émis au même callback de statut) puis un **nouveau tour serveur** est lancé avec `tool_results`.
 
 ## 🔁 Boucle agent (function calling)
 
 `SendMessageToAiStreamAsync` exécute une boucle de **8 itérations maximum** :
 
-- **Tour 1** : envoie `message` + `context` + `tools` → le serveur renvoie du texte **et/ou** un ou plusieurs `tool_call` (appels parallèles inclus, tous collectés).
+- **Tour 1** : envoie `message` + `context` (identité) + `tools` → le serveur renvoie du texte **et/ou** un ou plusieurs `tool_call` (appels parallèles inclus, tous collectés). Les tours suivants n'envoient plus le `context` : le serveur rejoue le tour `context` persisté depuis l'historique.
 - Si aucun `tool_call` → fin de la boucle (réponse textuelle affichée).
 - Sinon → chaque `toolHandler(toolCall)` exécute le tool localement (`AgentWorkspaceService.ExecuteAsync`, avec confirmation pour les mutations ; une exception d'outil est interceptée par `ExecuteSafelyAsync` et renvoyée comme `is_error: true`), puis un **tour N+1** est envoyé avec :
 
@@ -117,23 +123,29 @@ Client                         Serveur                            Gemini
 
 ### `Views/FxAiChatControl.xaml` (+ `.xaml.cs`) — Interface du chat
 
+Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), en-tête dégradé avec ligne d'accent cyan, bulles dégradées distinctes (IA / utilisateur), chips de prompts rapides, bouton d'envoi dégradé avec halo, indicateur de frappe à 3 points pulsés. Hébergé dans un **panneau latéral flottant** (`MainWindow`).
+
 | Élément | Description |
 |---|---|
-| **En-tête** | Avatar néon cyan, titre « DATAEDGE AI AGENT », badge « OUTILS ACTIFS » |
-| **Liste des messages** | `ItemsControl` lié à `ObservableCollection<ChatMessage>`, bulles différenciées (User / IA), boutons **📋 Copier** et **🔄 Relancer** par message |
-| **Indicateur** | Spinner rotatif + « L'agent réfléchit... » (`LoadingIndicator`), masqué dès le 1er token |
-| **Quick prompts** | 3 boutons : « Bilan », « Mes règles », « Analyser » (envoient un prompt pré-rempli) |
-| **Saisie** | `TextBox` multiligne, envoi par bouton « ➔ » ou touche `Entrée` |
+| **En-tête** | Orbe IA néon pulsant, titre « DATAEDGE **AI** », pastille verte « Copilote connecté · vos données restent locales », bouton **⤢** (`ExpandRequested` → agrandit/réduit le panneau) et bouton **✕** (`CloseRequested` → masque le panneau) |
+| **Bandeau de statut live** | Dans la bulle IA : point cyan pulsé + texte italique cyan (#7FD8E8) affiché **uniquement pendant le travail de l'agent** — chrono `⏱ x.xs`, fragments de réflexion du modèle (stream `reasoning`) et actions d'outils (`🔍 …` / `✓ … terminé`). Disparaît dès que la réponse finale commence (propriété `StatusText` → `HasStatus`, convertisseur `BoolToVis`) |
+| **Liste des messages** | `ItemsControl` lié à `ObservableCollection<ChatMessage>`, bulles dégradées différenciées (User / IA via `DataTrigger IsUser`), boutons fantômes **⧉ Copier** et **↺ Relancer** |
+| **Indicateur** | 3 points cyan ondulants + « L'agent analyse... » (`LoadingIndicator`), masqué dès le 1er token |
+| **Quick prompts** | 3 chips : « ◆ Bilan », « ◆ Mes règles », « ◆ Analyser » (envoient un prompt pré-rempli) |
+| **Saisie** | `TextBox` multiligne dans une bordure arrondie (caret cyan), envoi par bouton disque dégradé « ➤ » ou touche `Entrée` |
 
 #### Code-behind — fonctions principales
 
 | Fonction | Rôle |
 |---|---|
 | `FxAiChatControl(FxCloudService)` | Ctor : instancie `FxAiAgentService` + `AgentWorkspaceService`, message d'accueil |
-| `SendMessage(messageText)` | Pipeline complet : ajout msg user → spinner → bulle IA vide → `BuildContextAsync()` → `SendMessageToAiStreamAsync()` (dans `Task.Run`) → mise à jour UI via `Dispatcher.Invoke` |
+| `SendMessage(messageText)` | Pipeline complet : ajout msg user → indicateur de frappe → bulle IA vide → `StartStatusTracking()` → `BuildContextAsync()` → `SendMessageToAiStreamAsync(..., onStatusReceived)` (dans `Task.Run`) → mise à jour UI via `Dispatcher.Invoke` ; le 1er fragment de texte appelle `StopStatusTracking()` (bandeau effacé, bulle propre) |
+| `StartStatusTracking / StopStatusTracking / PushStatus / RefreshStatusText` | Région « Bandeau de statut live » : chrono (`DispatcherTimer` 100 ms), fragments `reasoning` conservés sur ~220 caractères (queue défilante), statuts d'outils prioritaires 4 s ; ré-armé automatiquement si un outil s'exécute après un premier fragment de texte (tours multi-étapes) |
+| `CloseRequested` / `ExpandRequested` (+ `BtnClose_Click`, `BtnExpand_Click`, `SetExpandedState`) | Événements levés par les boutons de l'en-tête : ✕ → le `MainWindow` masque le panneau flottant ; ⤢ → le `MainWindow` bascule la largeur du panneau (430 px ↔ étendue) puis rappelle `SetExpandedState(bool)` pour basculer le glyphe ⤢/⤡ |
+| `LoadHistoryAsync()` | Au démarrage du contrôle : `GetChatHistoryAsync()` en tâche de fond → si historique non vide **et** aucun message déjà envoyé, remplace le message d'accueil par l'historique ; saisie bloquée pendant le chargement, réactivée ensuite (échec silencieux, log) |
 | `HandleToolCallAsync(AiToolCall)` | Demande une `MessageBox` Yes/No pour **tout** tool dont la définition déclare `requires_confirmation: true` (via `AgentWorkspaceService.RequiresConfirmation`) ; si refus → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` transmis au modèle en `is_error: true` |
 | `ScrollToBottom()` | Auto-défilement du chat |
-| `BtnCopy_Click` | Copie le texte de la bulle dans le presse-papiers (feedback « ✔️ Copié ! » temporaire) |
+| `BtnCopy_Click` | Copie le texte de la bulle dans le presse-papiers (feedback temporaire) |
 | `BtnResend_Click` | Relance le prompt correspondant |
 | `TxtInput_KeyDown` | Envoi sur `Enter` |
 | `QuickPrompt_Click` | Remplit et envoie un prompt prédéfini |
@@ -142,12 +154,15 @@ Client                         Serveur                            Gemini
 
 | Fonction | Rôle |
 |---|---|
-| `SendMessageToAiStreamAsync(prompt, onChunkReceived, userContext, tools, toolHandler)` | **Point d'entrée.** Vérifications réseau/compte → boucle agent (max 8 tours) → exceptions `AiAgentException` |
-| `SendTurnAsync(...)` | Envoie un tour complet (payload JSON : `message`, `context`, `app_id`, `session_id`, `tools`, `tool_results`) en POST `api/ai/chat` avec rejeu JWT (`SecureRequestAsync`), lit le flux SSE **en entier** et retourne la liste des `tool_call` collectés |
+| `SendMessageToAiStreamAsync(prompt, onChunkReceived, userContext, tools, toolHandler, onStatusReceived)` | **Point d'entrée.** Vérifications réseau/compte → boucle agent (max 8 tours, garde anti-boucle : un même appel outil+arguments exécuté 2 fois n'est plus ré-exécuté, le modèle doit répondre avec les données obtenues) → exceptions `AiAgentException`. `onStatusReceived` (optionnel) reçoit les statuts transitoires : fragments `reasoning` du modèle + statuts locaux d'exécution des outils (`🔍 <libellé>…` / `✓ <libellé> — terminé`, via `DescribeTool()`) — appelé sur un thread de fond, l'UI marshal via `Dispatcher` |
+| `GetChatHistoryAsync(limit = 40)` | GET `api/ai/history` via `SecureRequestAsync` → parse `{messages: [{role, content, createdAt}]}` → `List<ChatMessage>` (Sender `User`/`AI`, horodatage ISO-8601 → local) ; liste vide si hors ligne/non connecté/erreur |
+| `SendTurnAsync(...)` | Envoie un tour complet (payload JSON : `message`, `context`, `app_id`, `session_id`, `tools`, `tool_results` — le `context` n'est transmis qu'au tour 1) en POST `api/ai/chat` avec rejeu JWT (`SecureRequestAsync`), lit le flux SSE **en entier** et retourne la liste des `tool_call` collectés |
 | `TryReadToolCall(line)` | Détecte une ligne contenant `tool_call` → construit `AiToolCall { Id, Name, Arguments }` (id généré si absent) |
+| `ReadServerErrorMessage(body, fallback)` | Extrait le message métier `{"error": "..."}` des réponses 4xx/5xx du serveur (agent désactivé 503, quota dépassé 429) pour un affichage propre dans le chat ; repli technique sinon |
 | `NormalizeArguments(call)` | Normalise les arguments du functionCall vers un objet JSON (sinon `{}` vide) |
 | `ExecuteSafelyAsync(toolHandler, call)` | Exécute un tool en interceptant toute exception → l'erreur est renvoyée au modèle (`is_error: true`) au lieu de casser la boucle |
-| `EmitChunk(line, onChunkReceived)` | Parse une ligne SSE : si `error` → lève `AiAgentException` ; si `text` → callback ; sinon émet la ligne brute |
+| `EmitChunk(line, onChunkReceived, onStatusReceived)` | Parse une ligne SSE : si `error` → lève `AiAgentException` ; si `reasoning` → callback de statut (réflexion du modèle, jamais mélangée au texte) ; si `text` → callback de contenu ; payload non JSON (bruit, fragment technique) → journalisé puis **ignoré**, jamais affiché |
+| `DescribeTool(toolName)` | Traduit un nom technique de tool en libellé lisible pour le bandeau de statut (« get_workspace_snapshot » → « Lecture du workspace ») |
 | `AiToolResultPayload` (classe) | Payload `tool_results` : `name`, `id`, `arguments`, `content`, `is_error` |
 
 > 💡 **session_id** : généré par tour d'appel (`Guid.NewGuid()`), conservé sur toute la durée de la boucle agent pour un même prompt utilisateur.
@@ -158,13 +173,14 @@ Client                         Serveur                            Gemini
 |---|---|
 | `GetToolDefinitions()` | Retourne la liste des 9 tools déclarés au modèle, avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
 | `RequiresConfirmation(toolName)` | Indique si un tool nécessite une confirmation utilisateur (tool inconnu → `true` par sécurité) |
-| `BuildContextAsync()` | Sérialise en JSON le « workspace » : profil cloud (`GetProfileAsync`), habitudes (`HabitsManager`), stratégies (`utils.getStrategies()`), stats, 100 derniers trades, catalogue d'études (`*.etude` dans `etudes/` et `Notes/`) |
+| `BuildIdentityContextAsync()` | Sérialise en JSON l'**identité seule** (profil cloud via `GetProfileCachedAsync`, cache 5 min) — envoyée au premier tour, persistée role=`context` côté serveur |
+| `BuildWorkspaceSnapshotAsync()` | Sérialise le **résumé workspace** (habitudes du jour, stratégies + stats, 25 derniers trades, catalogue d'études) — renvoyé uniquement quand le modèle appelle `get_workspace_snapshot` |
 | `ExecuteAsync(call, confirmMutation)` | Dispatch par `switch` vers l'implémentation de chaque outil ; gère la **confirmation** pour les outils marqués `requiresConfirmation` ; log + `AiToolResult.Error` sur exception |
 | Coercition des arguments | `GetString` / `GetBool` / `GetNumber` tolèrent tous les ValueKind JSON (nombre, booléen, chaîne) — évite les exceptions quand Gemini envoie `rr`/`profit` en number ou `is_checked` en boolean |
 | Outils lecture | `GetStrategyDetails`, `SearchTrades`, `GetStudyCatalog` |
 | Outils mutation | `CreateStrategy`, `DeleteStrategy`, `AddJournalTrade`, `AddHabit`, `MarkHabit` |
 
-> ℹ️ Le contexte local n'est **jamais** envoyé tel quel à Gemini par le client : il est inclus dans le champ `context` du POST, puis injecté par le serveur dans le prompt envoyé à l'API.
+> ℹ️ Depuis l'optimisation du payload : le client n'envoie plus que l'**identité** (profil) — persistée une fois par conversation (role `context`) et rejouée depuis l'historique BDD. Les données du workspace (stratégies, trades, habitudes, études) ne sont plus jamais injectées automatiquement : le modèle les lit à la demande via `get_workspace_snapshot` et les autres tools.
 
 ### Modèles dédiés
 
@@ -182,24 +198,28 @@ Client                         Serveur                            Gemini
 | **Route** | `#[Route('/api/ai')]` sur la classe + `#[Route('/chat', name: 'api_ai_chat', methods: ['POST'])]` sur `chat()` |
 | **Sécurité** | `$this->getUser()` (firewall `api` : JWT, `IS_AUTHENTICATED_FULLY`) → `401` « Not authenticated » sinon |
 | **Entrée** | Body JSON : `message`, `context`, `tools`, `tool_results` (tableau ; legacy `tool_result` accepté) |
-| **Persistance tour normal** | Sauvegarde d'un `AIChatMessage` (role=`user`) avant le stream |
+| **Persistance tour normal** | Persiste d'abord le contexte d'identité (`persistContextOnce` : role=`context`, une seule fois par conversation) puis un `AIChatMessage` (role=`user`) avant le stream |
 | **Persistance tour outil** | Sauvegarde d'un `AIChatMessage` (role=`function`) contenant `{"functionResponses": [{name, response}]}` avant le stream |
 | **Sortie** | `StreamedResponse` (SSE) : headers `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no` |
 | **Stream** | Appelle `GeminiService::generateStreamResponse()` avec callback → chaque chunk émis en `data: <json>\n\n` ; le texte et les tool_calls sont accumulés ; `try/catch` → chunk `{"error": ...}` |
-| **Persistance modèle** | Après le stream : si le tour contenait des functionCalls → `AIChatMessage` (role=`model`) avec JSON `{"text": "...", "functionCalls": [{name, args}]}` ; sinon texte final simple. Rien n'est persisté si le tour est vide (erreur) |
+| **Persistance modèle** | Après le stream : si le tour contenait des functionCalls → `AIChatMessage` (role=`model`) avec JSON `{"text": "...", "functionCalls": [{name, args, thought_signature}], "thought_signature": "..."}` ; sinon texte final simple (ou JSON avec `thought_signature` seule si un part texte en portait une). Rien n'est persisté si le tour est vide (erreur) |
+| **Interrupteurs admin** | Avant toute persistance : `software_config` de `app_id` → agent désactivé (`ai_chat_enabled`) = `503` JSON ; quota utilisateur actif (`ai_quota_enabled`) et atteint = `429` JSON (tours `user` du jour via `countUserMessagesToday`). Pas de ligne de config = fonctionnalités ouvertes |
+| **`GET /api/ai/history`** | `history()` : renvoie `{messages: [{role, content, createdAt}]}` pour l'affichage client — rôles `user`/`model` uniquement (tours internes `context`/`function` et tours model sans texte exclus via `extractModelText`) ; query `limit` (défaut 40, plafonné 200). **Accessible même si l'agent IA est désactivé** : aucun quota Gemini |
 
 ### `src/Service/GeminiService.php` — Moteur Gemini
 
 | Fonction | Rôle |
 |---|---|
 | `__construct(AIChatMessageRepository, string $geminiApiKey)` | Injection ; `$geminiApiKey` bindée depuis `config/services.yaml` (`%env(GEMINI_API_KEY)%`) |
-| `preparePayload(User, userPrompt, context, tools)` | Construit le payload pour l'API Gemini : |
-| | • **historique** : `findChatHistory(user, 40)` — inclut les tours `user`, `model` (texte ou functionCalls) et `function` (functionResponses) |
-| | • **prompt user** : dédoublonné de l'historique puis ré-ajouté une seule fois + `\n\nDONNEES ESPACE UTILISATEUR:\n` + `context` |
+| `preparePayload(User, userPrompt, tools)` | Construit le payload pour l'API Gemini : |
+| | • **historique** : `findChatHistory(user, 40)` — inclut le tour `context` (identité), les tours `user`, `model` (texte ou functionCalls) et `function` (functionResponses) |
+| | • **prompt user** : dédoublonné de l'historique puis ré-ajouté une seule fois, **sans contexte collé** (identité via le tour `context`, workspace via les tools) |
 | | • **tours outils** : `buildContents` / `decodeModelTurn` / `buildFunctionResponseParts` reconstruisent l'ordre exigé : `[model: functionCall]` → `[user: functionResponse]` |
 | | • **systemInstruction** : prompt système « DataEdge AI Assistant » (identité, expertise, directives, **section 5 : utilisation des outils**) |
 | | • **generationConfig** : `temperature: 0.7`, `maxOutputTokens: 8192` |
 | | • **tools.functionDeclarations** : conversion des déclarations client — paramètres typés `{name, type, description, required}` (format chaîne simple legacy accepté), `properties` en objet JSON, `required` omis si vide |
+| | • **google_search à la demande** : attaché seulement si `shouldEnableWebSearch()` est vrai — `isMarketNewsIntent()` matche le prompt contre `MARKET_NEWS_PATTERN` (prix, cours, news, macro, paires, calendrier…, regex `\b...\b/u` anti faux positifs type « discours ») ; sur les tours outils (prompt vide), l'intention du dernier message `user` de l'historique est rejouée ; master switch `ENABLE_WEB_SEARCH` et repli HTTP 400 (`stripGoogleSearch`) inchangés |
+| | • **thought signatures (Gemini 3, obligatoires)** : `processSseLine` capture la `thoughtSignature` de chaque part (texte ET functionCall — préfixe de namespace `default_api.` / `default_api:` retiré du nom d'appel) → le contrôleur la persiste dans le JSON du tour `model` → `decodeModelTurn` la rejoue verbatim au tour suivant (champ camelCase `thoughtSignature`), sinon l'API répond **HTTP 400** ; les tours historiques persistés avant ce mécanisme (sans signature) sont **rétrogradés en texte simple** dans `buildContents` et leurs `functionResponse` deviennent orphelins (purgés par `sanitizeContents`) au lieu de casser la conversation |
 | `generateStreamResponse(...)` | Appelle `streamGenerateContent?alt=sse` du modèle **`gemini-3.5-flash`** en cURL ; `CURLOPT_WRITEFUNCTION` bufferise et traite les lignes SSE complètes ; `processSseLine` parse chaque événement et émet `text`, `tool_call` ou `error` ; après `curl_exec` : erreur cURL / code HTTP ≥ 400 → chunk `error` |
 
 > ℹ️ **Boucle agent** : c'est côté **serveur** que la conversion `functionCall` → `tool_call` se fait (dans `GeminiService`), puis c'est le **client** qui exécute l'outil et renvoie `tool_results`. Le serveur persiste **tous les tours** (model functionCalls + function responses), ce qui permet de rejouer la boucle à chaque requête sans état en mémoire.
@@ -210,7 +230,7 @@ Client                         Serveur                            Gemini
 |---|---|---|
 | `id` | INT PK auto | Identifiant |
 | `user` | FK → `user(id)` ON DELETE CASCADE | Propriétaire du message |
-| `role` | VARCHAR(20) | `user` (message utilisateur), `model` (texte final ou JSON `{"text","functionCalls"}`) ou `function` (JSON `{"functionResponses":[...]}`) |
+| `role` | VARCHAR(20) | `context` (identité persistée une fois par conversation), `user` (message utilisateur), `model` (texte final ou JSON `{"text","functionCalls"}`) ou `function` (JSON `{"functionResponses":[...]}`) |
 | `content` | LONGTEXT | Texte du message, ou JSON structuré pour les tours outils |
 | `createdAt` | DATETIME (auto `new \DateTime()`) | Horodatage |
 
@@ -218,20 +238,46 @@ Client                         Serveur                            Gemini
 
 | Fonction | Rôle |
 |---|---|
-| `findChatHistory(User $user, int $limit = 30)` | Récupère les messages d'un utilisateur triés DESC puis **inversés** (ordre chronologique pour Gemini) ; limit 30 par défaut (le service appelle avec `40` pour couvrir les tours outils) |
+| `findChatHistory(User $user, int $limit = 30)` | Récupère les messages d'un utilisateur triés DESC (tiebreaker `id` : départage les tours écrits dans la même seconde) puis **inversés** (ordre chronologique pour Gemini) ; limit 30 par défaut (le service appelle avec `40` pour couvrir les tours outils) |
+| `hasRecentRole(User $user, string $role, int $limit = 40)` | Indique si un tour du rôle donné existe dans la fenêtre d'historique rejouée au modèle (utilisé par `persistContextOnce` : identité stockée une seule fois par conversation) |
+| `countUserMessagesToday(User $user)` | Nombre de messages `user` depuis minuit (heure serveur) — alimente le **quota par utilisateur** de l'agent IA (activable au dashboard admin) |
+
+### `src/Service/OpenRouterService.php` — Fournisseur OpenRouter (défaut)
+
+| Élément | Détail |
+|---|---|
+| **Constructeur** | `__construct(AIChatMessageRepository, string $openRouterApiKey, string $openRouterModel, string $openRouterReasoningEffort = 'low')` — paramètres bindés depuis `config/services.yaml` |
+| **Latence — effort de raisonnement** | Payload OpenRouter : `reasoning: {effort: <openrouter_reasoning_effort>}` (défaut **`low`** — premier token quasi immédiat pour un copilote de chat ; `''`/`'none'` = champ omis). Supporté par GLM 5.3 Flash et DeepSeek V4 Flash (vérifié API) |
+| **Latence — fenêtre d'historique** | `HISTORY_LIMIT = 24` : fenêtre **rejouée au modèle** (distincte de l'affichage client qui reste à 40) → prefill plus court/moins cher à chaque tour d'outil |
+| **Réflexion diffusée** | `EMIT_REASONING = true` : les fragments `delta.reasoning` (ou `reasoning_content` selon le fournisseur) sont émis au client sous forme de chunks **`{"reasoning": "..."}`** — protocole inchangé pour le reste (un type de chunk de plus) ; jamais mélangés au texte |
+| **Chaîne de repli** | `FALLBACK_MODELS = ['deepseek/deepseek-v4-flash-0731', 'z-ai/glm-5.2:free']` sur 429/402/5xx, repli silencieux. Sur 429/5xx : le plugin `:online` est **abandonné d'abord sur le même modèle** (il aggrave la charge), puis modèle suivant — avec **backoff croissant** (`RETRY_BACKOFF_MS = 800` × n : 0.8/1.6/2.4 s) car les pools saturés se libèrent vite. Chaîne épuisée → erreurs orientées « que faire » : 429 = « Tous les modèles IA sont momentanément saturés… réessayez », 402 = « Crédits OpenRouter insuffisants… » |
+| **Veille marché** | `ENABLE_WEB_SEARCH = true` : suffixe `:online` (plugin web OpenRouter) si l'intention touche au présent ; retente sans le plugin en cas de refus HTTP 4xx (combinaison tools + web) |
+| **Garde-fous réseau** | `CONNECT_TIMEOUT=10`, `STALL_TIMEOUT=45` (flux sans octet → coupure), `MAX_STREAM_TIME=600`, pings SSE `{"ping":true}` toutes les ~10 s pendant les silences, coupure si le client se déconnecte |
 
 ### Migration & config
 
 | Fichier | Rôle |
 |---|---|
 | `migrations/Version20260714022623.php` | Crée la table `aichat_message` + FK `user_id` |
-| `config/services.yaml` | Paramètre `gemini_api_key: '%env(GEMINI_API_KEY)%'` → bindé sur `$geminiApiKey` |
+| `migrations/Version20260904100000.php` | Ajoute sur `software_config` : `ai_chat_enabled` (défaut 1, kill switch agent IA), `ai_quota_enabled` (défaut 0, quota par utilisateur) et `ai_daily_quota` (défaut 30 messages/jour) |
+| `config/services.yaml` | `gemini_api_key: '%env(GEMINI_API_KEY)%'` → bindé sur `$geminiApiKey` ; **fournisseur IA** : `ai_provider` (`openrouter` défaut / `gemini`), `openrouter_api_key` (`%env(OPENROUTER_API_KEY)%`), `openrouter_model` (`z-ai/glm-5.3-flash`) et `openrouter_reasoning_effort` (`low`) bindés sur le constructeur d'`OpenRouterService` |
 | `.env` | Contient `GEMINI_API_KEY` (clé remise via la variable d'environnement) |
 | `config/packages/security.yaml` | Firewall `api` (`jwt`) sur `^/api` ; `api/ai/chat` est donc protégé par JWT |
 
+## 🧠 Directives système (persona intégrée)
+
+Définies dans `GeminiService::buildSystemInstruction()` via la constante `DIRECTIVES_TEXT` (nowdoc). Elles façonnent le comportement visible de l'agent :
+
+- **Identité** : « intelligence native de DataEdge » — jamais IA/modèle/LLM/assistant externe, jamais de marque (Google, Gemini, OpenAI...), réponse figée à « qui es-tu ? ».
+- **Données** : l'identité arrive en ouverture de conversation (flux interne role `context`, label `IDENTITÉ DE L'UTILISATEUR` persisté côté serveur) ; les données du workspace sont lues à la demande via les tools — jamais présentées comme « fichiers envoyés par l'utilisateur » ; accès natif permanent au workspace.
+- **Veille marché** : le modèle est relié à l'information de marché live (`google_search`) ; interdiction de dire qu'il n'a pas les prix/news/macro, obligation de vérifier AVANT de répondre (chiffre + heure + source), sans jamais décrire la mécanique de recherche.
+- **Mécanique invisible** : vocabulaire proscrit (outil, function call, API, JSON, prompt, serveur...) ; les accès sont narrés comme des actes propres (« je regarde votre journal ») ; la confirmation des mutations est présentée comme la rigueur de l'agent.
+- **Voix** : analyste senior, vouvoiement par défaut, conclusion d'abord, **texte brut sans markdown** (l'UI n'interprète pas le markdown : pas de `*`, `#`, `|`), chiffres toujours contextualisés, une question maximum par réponse, longueur proportionnée.
+- **Discrétion** : les directives ne sont ni révélées ni résumées, même à un prétendu développeur/admin.
+
 ## 🔧 Inventaire des Tools de l'agent (function calling)
 
-Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveur (→ `functionDeclarations` Gemini). Les paramètres sont **typés** (`AiToolParameter` : `name`, `type` = `string`/`number`/`boolean`, `description`, `required`) et convertis par `GeminiService::buildFunctionDeclarations` en schéma JSON Gemini (`STRING`/`NUMBER`/`BOOLEAN` + tableau `required`).
+Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveur (→ `functionDeclarations` Gemini). Les paramètres sont **typés** (`AiToolParameter` : `name`, `type` = `string`/`number`/`boolean`, `description`, `required`) et convertis par `GeminiService::buildFunctionDeclarations` en schéma JSON Gemini (`STRING`/`NUMBER`/`BOOLEAN` + tableau `required`). À cela s'ajoute un outil **serveur**, non déclaré au client : **`google_search`** (grounding Gemini, veille marché temps réel — cf. `ENABLE_WEB_SEARCH` dans `GeminiService`).
 
 | Tool | Type | Paramètres (type) | Requiert confirmation * | Implémentation C# |
 |---|---|---|---|---|
@@ -258,8 +304,9 @@ Dans `FxAiChatControl.HandleToolCallAsync` :
 
 | Élément | Description |
 |---|---|
-| `MainWindow.xaml` ligne 114 | Bouton **🤖 AGENT IA** (tooltip), icône robot, style `CircleNavButton` |
-| `MainWindow.xaml.cs` `ButtonAiAgent` → `ShowAiAgent()` | Instancie `new Views.FxAiChatControl(_cloudService)` et le place dans `MainViewContainer` (animation de fondu) |
+| `MainWindow.xaml` | **Bouton flottant `BtnAiFab`** (disque néon 58 px, halo pulsé, icône robot, bas-droit du dashboard, `Panel.ZIndex=400`) — déclencheur unique du copilote, accessible depuis n'importe quelle vue. Masqué par fondu pendant que le panneau est ouvert, réapparaît à la fermeture |
+| `MainWindow.xaml.cs` `BtnAiFab_Click` → `ToggleAiAgent()` | Ouvre/ferme le **panneau latéral flottant** `AiAgentDrawer` (Grid superposée, `Panel.ZIndex=500`, ancrée à droite, largeur normale 430 px, coins arrondis + ombre portée) qui héberge `FxAiChatControl` (`AiAgentPanelHost`) : slide-in depuis le bord droit (0.38 s, CubicEase) + fondu ; l'offset de glisse est **dynamique** (`_aiDrawerWidth + 60`) pour partir entièrement hors écran même après agrandissement. L'instance est créée **une seule fois** (`_aiChat`) : l'historique et la conversation sont conservés entre les ouvertures. La vue courante (dashboard, chart, journal...) reste intacte derrière le panneau ; `CloseRequested` masque le panneau (`HideAiAgent`), `ExpandRequested` bascule la taille (`ToggleAiAgentSize`) |
+| `MainWindow.xaml.cs` `ToggleAiAgentSize()` | **Agrandissement du panneau** (demandé par le bouton ⤢ du chat) : animation de largeur 430 px ↔ largeur étendue (`min(780, largeur vue - 90)`), état mémorisé (`_aiAgentExpanded`), glyphe du bouton mis à jour via `SetExpandedState` |
 | `FxCloudService` | Fournit HTTP client (`BaseAddress` = serveur, `GetHttpClient()` + `SecureRequestAsync` avec refresh JWT) ; `AppId` = `FX_DATAEDGE` |
 | Authentification | Le client envoie `Authorization: Bearer <token>` via `SetAuthHeader()` ; le backend exige le firewall JWT (`IS_AUTHENTICATED_FULLY`) |
 
@@ -309,6 +356,7 @@ Points relevés dans le code actuel (à vérifier dans l'ordre) :
 | **`functionResponse`** | Format Gemini pour renvoyer le **résultat** d'un tool au modèle |
 | **`tool_result`** | Payload client→serveur transportant le résultat d'un tool |
 | **`functionDeclarations`** | Schéma JSON décrivant les tools à Gemini (section `tools`) |
+| **`thought_signature`** | Signature de raisonnement chiffrée attachée par les modèles Gemini 3 aux parts (texte et functionCall) — doit être renvoyée **verbatim** au tour suivant (rejeu d'historique), sinon l'API répond HTTP 400 ; persistée dans le JSON du tour `model` et restituée en camelCase `thoughtSignature` dans les parts |
 | **`StreamedResponse`** | Objet Symfony permettant d'écrire la réponse progressivement |
 | **`CURLOPT_WRITEFUNCTION`** | Callback cURL appelé à chaque réception de données du flux HTTP |
 
@@ -316,10 +364,41 @@ Points relevés dans le code actuel (à vérifier dans l'ordre) :
 
 1. ✅ ~~**Réparer les function calls**~~ → fait : parsing SSE `alt=sse`, reconstruction `functionCall → functionResponse` depuis l'historique, déclarations typées.
 2. ✅ ~~**Uniformiser la confirmation des mutations**~~ → fait : confirmation branchée sur `requires_confirmation` pour tous les tools.
-3. **Rendre le chat persistant côté client** : le client ne recharge pas l'historique (`findChatHistory` n'est utilisé que par le serveur pour le modèle) — possibilité de charger les derniers messages au démarrage du `FxAiChatControl`.
+3. ✅ ~~**Rendre le chat persistant côté client**~~ → fait : `FxAiChatControl.LoadHistoryAsync()` charge automatiquement l'historique serveur (`GET /api/ai/history`, 40 messages) à l'ouverture du chat et remplace le message d'accueil ; aucun appel Gemini ; garde-fou si un message est envoyé pendant le chargement.
 4. **Ajouter la gestion des erreurs réseau au niveau de l'UI** : distinguer « message CTA » des vraies erreurs (déjà partiellement fait avec `AiAgentError`).
-5. **Améliorer le prompt système** : le contexte `DONNEES ESPACE UTILISATEUR` est envoyé à chaque tour — attention à la limite de tokens (20 messages + contexte + tools) avec `maxOutputTokens: 1500`.
+5. ✅ ~~**Améliorer le prompt système**~~ → fait : noyau directif complet (constante `DIRECTIVES_TEXT` de `GeminiService`), veille marché via `google_search` (repli automatique en HTTP 400) ; §1 réécrit pour le nouveau flux (identité en ouverture, workspace à la demande par tools, regroupement des accès dans un même tour).
 6. **Prévoir un format de stream robuste** : si le backend est déployé derrière un reverse proxy, garder `X-Accel-Buffering: no` (et PHP `output_buffering=off` dans `php.ini` pour un flush immédiat).
+7. ✅ ~~**Alléger le payload et la latence par message**~~ → fait : identité seule envoyée au premier tour (persistée role `context` une fois par conversation, auto-régénérée en sortie de fenêtre), workspace uniquement via tools (`get_workspace_snapshot` compact : 25 trades, sans best_configs), cache 30 s des sondes réseau (`GetCloudStatusAsync`), cache 5 min du profil, ordre d'historique déterministe (tiebreaker `id`).
+8. ✅ ~~**Supprimer le contenu technique du chat**~~ → fait : marqueurs `[Outil ...]` retirés de la bulle (journalisation seule via `FxCloudService.Log`), payloads SSE non JSON ignorés côté client (`EmitChunk`), `TryReadToolCall` durci (functionCall sans nom ignoré), garde anti-boucle sur les appels d'outils répétés, `extractModelText` ne renvoie plus les tours JSON bruts dans `/api/ai/history`.
+9. ✅ ~~**Ajouter un fournisseur LLM économique**~~ → fait : `OpenRouterService` (API compatible OpenAI, `ai_provider=openrouter`, modèle principal `z-ai/glm-5.3-flash`, replis `deepseek/deepseek-v4-flash-0731` puis `z-ai/glm-5.2:free` sur 429/402/5xx, plugin `:online` pour la veille marché avec repli automatique) ; Gemini conservé comme fournisseur alternatif (`ai_provider=gemini`).
+10. ✅ ~~**Réduire la latence réelle (premier token)**~~ → fait : `reasoning: {effort: 'low'}` injecté dans le payload OpenRouter (paramètre `openrouter_reasoning_effort`, défaut `low` — TTFT quasi immédiat, effort max inutile pour un copilote) + fenêtre d'historique **rejouée au modèle** réduite à 24 tours (`HISTORY_LIMIT` OpenRouterService, affichage client inchangé à 40).
+11. ✅ ~~**Ne plus jamais laisser un écran figé pendant la réflexion / les outils**~~ → fait : chunks `{"reasoning": ...}` émis par `OpenRouterService` (delta.reasoning) et routés côté client vers un **bandeau de statut live** dans la bulle IA (`ChatMessage.StatusText`) : chrono ⏱ + réflexion qui défile + statuts d'outils `🔍 / ✓` (`DescribeTool`) ; le bandeau disparaît dès que la réponse finale commence (aucun contenu technique dans la bulle). Interface redessinée « copilote » (orbe néon, bulles dégradées, chips, bouton gradient) et agent déplacé dans un **panneau latéral flottant** (`AiAgentDrawer`) accessible depuis n'importe quelle vue via le bouton 🤖 (bascule ouvre/ferme).
+
+## 🚀 Déploiement — Checklist CloudPanel / VPS (streaming SSE)
+
+Le flux IA est un **SSE long** (jusqu'à 600 s) : sans ces réglages, nginx/PHP-FPM coupent ou bufferisent le stream (chat figé, coupure à 5 min).
+
+### PHP-FPM (`php.ini` + pool FPM)
+| Réglage | Valeur cible | Pourquoi |
+|---|---|---|
+| `request_terminate_timeout` | **700** | Défaut 300 s : PHP-FPM **tuerait** le worker en plein flux de 10 min |
+| `max_execution_time` | **0** (ou ≥ 700) | Idem, côté PHP |
+| `output_buffering` | **0** | Sinon les chunks `data:` sont retenus → l'utilisateur ne voit rien arriver |
+| `zlib.output_compression` | **Off** | La compression attend de remplir son buffer → détruit le streaming |
+| `pm.max_children` | ≥ nb utilisateurs IA simultanés + marge | **1 child FPM = 1 chat SSE** pendant toute la génération ; sous-dimensionné → les autres requêtes du site attendent |
+
+### nginx (vhost CloudPanel)
+```nginx
+# Dans le bloc location ~ \.php$ du vhost :
+fastcgi_buffering off;          # équivalent serveur du header X-Accel-Buffering: no (déjà émis par AIChatController)
+fastcgi_read_timeout 700s;      # ne pas couper avant la fin du flux
+gzip off;                       # sur text/event-stream uniquement si règle globale
+```
+> Le contrôleur émet déjà `X-Accel-Buffering: no` — `fastcgi_buffering off` est le filet de sécurité si un `location` ne transmet pas le header.
+
+### Divers
+- **VPS en région EU** (Paris/Frankfurt) : OpenRouter est servi depuis l'EU → RTT minimal pour le TTFT.
+- **Valider après déploiement** : `php -l` OK, un message de chat avec observation du **TTFT avant/après** (`effort low` vs `max`), bandeau de statut visible pendant la réflexion et les tools, et aucune coupure sur une réponse longue (> 5 min).
 
 ## 📐 Règle de mise à jour de ce fichier
 

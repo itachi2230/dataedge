@@ -26,9 +26,58 @@ namespace backtest.Views
             Messages.Add(new ChatMessage
             {
                 Sender = "AI",
-                Text = "Bonjour ! Je suis l'agent IA de DataEdge. Posez-moi des questions sur vos performances, le sentiment de marché ou pour synthétiser vos notes de trading.",
+                Text = "DataEdge Intelligence. Je suis le module d'analyse intégré au logiciel : votre journal, vos stratégies et le marché en direct passent par moi. Que voulez-vous regarder ?",
                 Timestamp = DateTime.Now
             });
+
+            // Chargement automatique de l'historique persisté côté serveur :
+            // si des échanges existent déjà, ils remplacent le message d'accueil.
+            _ = LoadHistoryAsync();
+        }
+
+        /// <summary>
+        /// Charge l'historique de conversation depuis le serveur (aucun appel Gemini)
+        /// et l'affiche à la place du message d'accueil. La saisie reste bloquée
+        /// pendant le chargement ; si un premier message a déjà été envoyé entre-
+        /// temps, l'historique n'écrase pas la conversation en cours (il sera
+        /// rechargé à la prochaine ouverture de la fenêtre).
+        /// </summary>
+        private async Task LoadHistoryAsync()
+        {
+            TxtInput.IsEnabled = false;
+            BtnSend.IsEnabled = false;
+            try
+            {
+                var history = await Task.Run(() => _aiService.GetChatHistoryAsync());
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    bool userAlreadyActive = false;
+                    foreach (var message in Messages)
+                    {
+                        if (message.Sender == "User")
+                        {
+                            userAlreadyActive = true;
+                            break;
+                        }
+                    }
+
+                    if (history.Count > 0 && !userAlreadyActive)
+                    {
+                        Messages.Clear();
+                        foreach (var message in history)
+                        {
+                            Messages.Add(message);
+                        }
+                        ScrollToBottom();
+                    }
+                });
+            }
+            finally
+            {
+                TxtInput.IsEnabled = true;
+                BtnSend.IsEnabled = true;
+                TxtInput.Focus();
+            }
         }
 
         private async void SendMessage(string messageText = null)
@@ -49,7 +98,7 @@ namespace backtest.Views
             Messages.Add(new ChatMessage { Sender = "User", Text = query, Timestamp = DateTime.Now });
             ScrollToBottom();
 
-            // 2. Afficher l'indicateur de chargement
+            // 2. Afficher l'indicateur de frappe
             if (LoadingIndicator != null)
             {
                 LoadingIndicator.Visibility = Visibility.Visible;
@@ -59,11 +108,17 @@ namespace backtest.Views
             var aiMessage = new ChatMessage { Sender = "AI", Text = "", Timestamp = DateTime.Now };
             Messages.Add(aiMessage);
             ScrollToBottom();
+            _activeAiMessage = aiMessage;
 
-            // 4. Lancer la lecture du flux asynchrone
+            // 4. Statut live (style Cline) : réflexion du modèle + exécution des outils,
+            //    affichés dans le bandeau de la bulle avec un chrono. Jamais mélangés
+            //    au texte final : le bandeau disparaît dès que la réponse commence.
+            StartStatusTracking(aiMessage);
+
+            // 5. Lancer la lecture du flux asynchrone
             try
             {
-                string workspaceContext = await _workspaceService.BuildContextAsync();
+                string identityContext = await _workspaceService.BuildIdentityContextAsync();
                 await Task.Run(async () =>
                 {
                     await _aiService.SendMessageToAiStreamAsync(query, (chunk) =>
@@ -71,23 +126,33 @@ namespace backtest.Views
                         // Mettre à jour l'UI sur le thread principal
                         Dispatcher.Invoke(() =>
                         {
-                            // Cacher le chargement dès qu'on reçoit le premier token
+                            // Cacher l'indicateur dès qu'on reçoit le premier token
                             if (LoadingIndicator != null && LoadingIndicator.Visibility == Visibility.Visible)
                             {
                                 LoadingIndicator.Visibility = Visibility.Collapsed;
                             }
+
+                            // Premier fragment de la réponse finale : le bandeau de
+                            // statut s'efface, la place est laissée au texte propre.
+                            StopStatusTracking();
 
                             // On ajoute le fragment. Grâce à INotifyPropertyChanged, l'UI se met à jour instantanément !
                             aiMessage.Text += chunk;
 
                             ScrollToBottom();
                         });
-                    }, workspaceContext, _workspaceService.GetToolDefinitions(), HandleToolCallAsync);
+                    }, identityContext, _workspaceService.GetToolDefinitions(), HandleToolCallAsync,
+                    (status) =>
+                    {
+                        // Statuts transitoires (reasoning + outils) : marshalés vers l'UI.
+                        Dispatcher.Invoke(() => PushStatus(status));
+                    });
                 });
             }
             catch (Exception ex)
             {
                 // En cas d'erreur réseau ou API, on affiche l'erreur dans la bulle
+                StopStatusTracking();
                 aiMessage.Text = ex is AiAgentException aiException
                     ? $"[ERREUR AGENT IA]\n{aiException.Error.ToDisplayText()}"
                     : $"[ERREUR AGENT IA]\nType : {ex.GetType().FullName}\nMessage : {ex.Message}";
@@ -95,7 +160,9 @@ namespace backtest.Views
             }
             finally
             {
-                // 5. Réactiver les contrôles de saisie
+                // 6. Réactiver les contrôles de saisie
+                StopStatusTracking();
+                _activeAiMessage = null;
                 if (LoadingIndicator != null)
                 {
                     LoadingIndicator.Visibility = Visibility.Collapsed;
@@ -104,6 +171,143 @@ namespace backtest.Views
                 BtnSend.IsEnabled = true;
                 TxtInput.Focus();
             }
+        }
+
+        #region Bandeau de statut live (réflexion + outils + chrono)
+
+        private ChatMessage _statusMessage;
+        private ChatMessage _activeAiMessage;
+        private DateTime _statusStart;
+        private DateTime _toolStatusAt;
+        private readonly System.Text.StringBuilder _reasoningTail = new System.Text.StringBuilder();
+        private string _toolStatusLine;
+        private System.Windows.Threading.DispatcherTimer _statusTimer;
+
+        /// <summary>
+        /// Démarre le suivi du statut pour la bulle en cours de génération :
+        /// chrono + dernier événement (raisonnement ou outil) rafraîchis 10x/s.
+        /// </summary>
+        private void StartStatusTracking(ChatMessage message)
+        {
+            StopStatusTracking();
+            _statusMessage = message;
+            _statusStart = DateTime.Now;
+            _reasoningTail.Clear();
+            _toolStatusLine = null;
+            _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+            _statusTimer.Tick += (s, e) => RefreshStatusText();
+            _statusTimer.Start();
+        }
+
+        /// <summary>
+        /// Arrête le suivi et masque le bandeau (réponse finale commencée, erreur
+        /// ou fin de génération) : la bulle reste propre, aucun contenu technique.
+        /// </summary>
+        private void StopStatusTracking()
+        {
+            if (_statusTimer != null)
+            {
+                _statusTimer.Stop();
+                _statusTimer = null;
+            }
+            if (_statusMessage != null)
+            {
+                _statusMessage.StatusText = null;
+                _statusMessage = null;
+            }
+        }
+
+        /// <summary>
+        /// Reçoit un fragment de statut (thread UI) : soit un morceau de réflexion
+        /// du modèle (chunks reasoning OpenRouter), soit un statut d'outil local
+        /// (🔍 en cours / ✓ terminé). Le dernier événement d'outil prime sur la
+        /// réflexion pendant 4 s pour que l'action reste lisible.
+        /// </summary>
+        private void PushStatus(string status)
+        {
+            if (string.IsNullOrEmpty(status)) return;
+
+            // Tour multi-étapes : après un premier fragment de texte le suivi est
+            // arrêté (bulle propre) ; une action d'outil réarme le bandeau.
+            if (_statusMessage == null)
+            {
+                if (_activeAiMessage == null) return;
+                StartStatusTracking(_activeAiMessage);
+            }
+
+            if (status.StartsWith("🔍") || status.StartsWith("✓"))
+            {
+                _toolStatusLine = status;
+                _toolStatusAt = DateTime.Now;
+            }
+            else
+            {
+                // Réflexion du modèle : on garde la fin (~220 derniers caractères)
+                // pour un affichage compact qui « défile » comme un stream.
+                _reasoningTail.Append(status.Replace('\n', ' ').Replace('\r', ' '));
+                if (_reasoningTail.Length > 220)
+                {
+                    _reasoningTail.Remove(0, _reasoningTail.Length - 220);
+                }
+            }
+            RefreshStatusText();
+        }
+
+        private void RefreshStatusText()
+        {
+            if (_statusMessage == null) return;
+
+            double elapsed = (DateTime.Now - _statusStart).TotalSeconds;
+            string activity = null;
+
+            // L'action d'outil masque la réflexion pendant 4 s après son émission.
+            if (_toolStatusLine != null && (DateTime.Now - _toolStatusAt).TotalSeconds < 4)
+            {
+                activity = _toolStatusLine;
+            }
+            else if (_reasoningTail.Length > 0)
+            {
+                string tail = _reasoningTail.ToString().TrimStart();
+                activity = tail.Length > 160 ? "…" + tail.Substring(tail.Length - 160) : tail;
+            }
+
+            _statusMessage.StatusText = activity == null
+                ? $"⏱ {elapsed:0.0}s — réflexion en cours…"
+                : $"⏱ {elapsed:0.0}s · {activity}";
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Demandé par l'en-tête du contrôle (mode panneau flottant) : le
+        /// MainWindow masque le copilote sans quitter la vue courante.
+        /// </summary>
+        public event EventHandler CloseRequested;
+
+        /// <summary>
+        /// Demandé par le bouton ⤢ de l'en-tête : le MainWindow bascule le
+        /// panneau entre sa largeur normale et une largeur étendue.
+        /// </summary>
+        public event EventHandler ExpandRequested;
+
+        private void BtnClose_Click(object sender, RoutedEventArgs e)
+        {
+            CloseRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void BtnExpand_Click(object sender, RoutedEventArgs e)
+        {
+            ExpandRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Le MainWindow notifie l'état réel du panneau après bascule pour que
+        /// le bouton affiche le bon glyphe (⤢ agrandir / ⤡ réduire).
+        /// </summary>
+        public void SetExpandedState(bool expanded)
+        {
+            BtnExpand.Content = expanded ? "⤡" : "⤢";
+            BtnExpand.ToolTip = expanded ? "Réduire la discussion" : "Agrandir la discussion";
         }
 
         private async Task<AiToolResult> HandleToolCallAsync(AiToolCall call)

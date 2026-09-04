@@ -22,7 +22,7 @@ namespace backtest.Services
         {
             return new List<AiToolDefinition>
             {
-                new AiToolDefinition("get_workspace_snapshot", "Lire le profil, les habitudes, les stratégies et les métriques globales de l'utilisateur.", false),
+                new AiToolDefinition("get_workspace_snapshot", "Lire l'état du workspace : habitudes du jour, stratégies et leurs statistiques, trades récents et catalogue d'études. À utiliser dès qu'une question porte sur les données de l'utilisateur.", false),
                 new AiToolDefinition("get_strategy_details", "Lire les trades, statistiques et configurations d'une stratégie précise.", false,
                     new AiToolParameter("strategy_name", "string", "Nom exact de la stratégie à inspecter.")),
                 new AiToolDefinition("search_trades", "Rechercher dans le journal et le backtest par paire, résultat ou stratégie.", false,
@@ -61,16 +61,43 @@ namespace backtest.Services
             return definition?.RequiresConfirmation ?? true;
         }
 
-        public async Task<string> BuildContextAsync()
+        // Cache du profil cloud : l'identité est quasi statique, inutile de re-télécharger
+        // api/me avant chaque message de l'agent IA.
+        private const double ProfileCacheMinutes = 5;
+        private UserSessionData _cachedProfile;
+        private DateTime _profileCachedAtUtc;
+
+        /// <summary>
+        /// Contexte MINIMAL du premier message d'une conversation : l'identité de
+        /// l'utilisateur uniquement. Le serveur la persiste (role 'context') et la
+        /// rejoue ensuite depuis l'historique BDD. Les données du workspace
+        /// (stratégies, trades, habitudes, études) ne sont plus injectées
+        /// automatiquement : le modèle les lit à la demande via les tools — le
+        /// payload et le prefill Gemini restent minimaux.
+        /// </summary>
+        public async Task<string> BuildIdentityContextAsync()
         {
-            var profile = await _cloudService.GetProfileAsync();
+            var profile = await GetProfileCachedAsync();
+            var context = new
+            {
+                profile = profile == null ? null : new { name = profile.FullName, email = profile.Email, bio = profile.Bio }
+            };
+            return JsonSerializer.Serialize(context);
+        }
+
+        /// <summary>
+        /// État du workspace renvoyé quand le modèle appelle get_workspace_snapshot :
+        /// résumé volontairement compact (25 derniers trades, sans les configurations
+        /// détaillées — get_strategy_details les fournit à la demande).
+        /// </summary>
+        public async Task<string> BuildWorkspaceSnapshotAsync()
+        {
             var strategies = utils.getStrategies();
             var trades = strategies.SelectMany(strategy => strategy.GetJournal().Select(trade => new { strategy = strategy.Nom, trade }))
                 .ToList();
             var habits = new HabitsManager();
-            var context = new
+            var snapshot = new
             {
-                profile = profile == null ? null : new { name = profile.FullName, email = profile.Email, bio = profile.Bio },
                 habits = habits.Habits.Select(h => h.Name).ToList(),
                 habits_today = habits.DailyHabitStates.Select(h => new { name = h.HabitName, completed = h.IsChecked }).ToList(),
                 strategies = strategies.Select(strategy => new
@@ -79,13 +106,21 @@ namespace backtest.Services
                     description = strategy.description,
                     journal_trades = strategy.GetJournal().Count,
                     backtest_trades = strategy.GetTrades().Count,
-                    statistics = strategy.GetStatistics(),
-                    best_configurations = strategy.RetrieveStats()?.BestConfigs
+                    statistics = strategy.GetStatistics()
                 }).ToList(),
-                recent_trades = trades.OrderByDescending(item => item.trade.DateEntree).Take(100).Select(ToTradeSummary).ToList(),
+                recent_trades = trades.OrderByDescending(item => item.trade.DateEntree).Take(25).Select(ToTradeSummary).ToList(),
                 studies = GetStudyCatalog()
             };
-            return JsonSerializer.Serialize(context);
+            return JsonSerializer.Serialize(snapshot);
+        }
+
+        private async Task<UserSessionData> GetProfileCachedAsync()
+        {
+            if (_cachedProfile != null && (DateTime.UtcNow - _profileCachedAtUtc).TotalMinutes < ProfileCacheMinutes)
+                return _cachedProfile;
+            _cachedProfile = await _cloudService.GetProfileAsync();
+            _profileCachedAtUtc = DateTime.UtcNow;
+            return _cachedProfile;
         }
 
         public async Task<AiToolResult> ExecuteAsync(AiToolCall call, Func<AiToolCall, Task<bool>> confirmMutation)
@@ -105,7 +140,7 @@ namespace backtest.Services
                 switch (call.Name)
                 {
                     case "get_workspace_snapshot":
-                        return AiToolResult.Success(await BuildContextAsync());
+                        return AiToolResult.Success(await BuildWorkspaceSnapshotAsync());
                     case "get_strategy_details":
                         return GetStrategyDetails(call.Arguments);
                     case "search_trades":

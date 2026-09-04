@@ -5,8 +5,10 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.IO;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -24,6 +26,20 @@ namespace backtest.Services
         public string CurrentToken { get; private set; }
         public string RefreshToken { get; private set; }
         public string AppId { get; private set; }
+
+        static FxCloudService()
+        {
+            // Réglages réseau de .NET Framework (ServicePoint) — sans eux, les défauts
+            // plombent toutes les communications avec le serveur :
+            //  - DefaultConnectionLimit = 2 : dès que le chat IA (flux SSE longue durée)
+            //    occupe une connexion, sync/profil/données marché font la file d'attente ;
+            //  - Expect100Continue = true : chaque POST attend d'abord un aller-retour
+            //    "Expect: 100-continue" avant d'envoyer son corps ;
+            //  - UseNagleAlgorithm = true : délais de groupement TCP (jusqu'à ~200 ms).
+            ServicePointManager.DefaultConnectionLimit = 64;
+            ServicePointManager.Expect100Continue = false;
+            ServicePointManager.UseNagleAlgorithm = false;
+        }
 
         public FxCloudService()
         {
@@ -43,7 +59,14 @@ namespace backtest.Services
 
             if (_httpClient == null)
             {
-                _httpClient = new HttpClient { BaseAddress = new Uri(serverUrl) };
+                _httpClient = new HttpClient
+                {
+                    BaseAddress = new Uri(serverUrl),
+                    // Défaut .NET = 100 s : coupait les réponses dont les en-têtes tardent
+                    // (sync multi-fichiers, tours agent IA). La lecture des flux SSE n'est
+                    // pas concernée (HttpCompletionOption.ResponseHeadersRead côté agent).
+                    Timeout = TimeSpan.FromMinutes(10)
+                };
                 _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             }
 
@@ -423,22 +446,59 @@ namespace backtest.Services
                 ? new AuthenticationHeaderValue("Bearer", CurrentToken) : null;
         }
 
-        public async Task<string> GetCloudStatusAsync()
+        // Cache court du statut cloud : évite de rejouer les sondes (ping 8.8.8.8 +
+        // GET /home) avant chaque message de l'agent IA. Seul un statut positif est
+        // mémorisé : un échec reste toujours vérifié en temps réel.
+        private const int CloudStatusCacheSeconds = 30;
+        private string _cachedCloudStatus;
+        private DateTime _cachedCloudStatusAt;
+
+        public async Task<string> GetCloudStatusAsync(bool useCachedIfFresh = false)
         {
-            if (!await IsInternetAvailableAsync()) return "OFFLINE_NO_INTERNET";
-            if (!await IsServerReachableAsync()) return "OFFLINE_SERVER_DOWN";
-            return string.IsNullOrEmpty(CurrentToken) ? "ONLINE_NO_ACCOUNT" : "READY";
+            if (useCachedIfFresh
+                && _cachedCloudStatus == "READY"
+                && (DateTime.UtcNow - _cachedCloudStatusAt).TotalSeconds < CloudStatusCacheSeconds)
+            {
+                return _cachedCloudStatus;
+            }
+
+            // Les deux sondes sont indépendantes : on les lance en parallèle pour ne
+            // pas additionner leurs délais avant chaque message envoyé à l'agent IA.
+            var internetTask = IsInternetAvailableAsync();
+            var serverTask = IsServerReachableAsync();
+            await Task.WhenAll(internetTask, serverTask);
+
+            if (!internetTask.Result) return "OFFLINE_NO_INTERNET";
+            if (!serverTask.Result) return "OFFLINE_SERVER_DOWN";
+
+            string status = string.IsNullOrEmpty(CurrentToken) ? "ONLINE_NO_ACCOUNT" : "READY";
+            if (status == "READY")
+            {
+                _cachedCloudStatus = status;
+                _cachedCloudStatusAt = DateTime.UtcNow;
+            }
+            return status;
         }
 
         public async Task<bool> IsInternetAvailableAsync()
         {
-            try { using (var p = new Ping()) return (await p.SendPingAsync("8.8.8.8", 2000)).Status == IPStatus.Success; }
+            try { using (var p = new Ping()) return (await p.SendPingAsync("8.8.8.8", 1000)).Status == IPStatus.Success; }
             catch { return false; }
         }
 
         public async Task<bool> IsServerReachableAsync()
         {
-            try { var res = await _httpClient.GetAsync("home"); return true; }
+            try
+            {
+                // Sonde bornée à 2 s et limitée aux en-têtes (HttpCompletionOption) :
+                // avant, on téléchargeait la page "home" complète (Twig + moteur) à
+                // chaque appel — inutile pour vérifier que le serveur répond.
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+                using (var res = await _httpClient.GetAsync("home", HttpCompletionOption.ResponseHeadersRead, cts.Token))
+                {
+                    return (int)res.StatusCode < 500;
+                }
+            }
             catch { return false; }
         }
 
