@@ -468,21 +468,59 @@ namespace backtest.Services
             var serverTask = IsServerReachableAsync();
             await Task.WhenAll(internetTask, serverTask);
 
-            if (!internetTask.Result) return "OFFLINE_NO_INTERNET";
-            if (!serverTask.Result) return "OFFLINE_SERVER_DOWN";
-
-            string status = string.IsNullOrEmpty(CurrentToken) ? "ONLINE_NO_ACCOUNT" : "READY";
-            if (status == "READY")
+            // La sonde HTTP vers le serveur fait foi : si fxdataedge.com répond,
+            // la connexion est fonctionnelle même si l'ICMP sortant (ping 8.8.8.8)
+            // est bloqué par le réseau (VPN, pare-feu d'entreprise/public, FAI).
+            // Avant, le ping était testé EN PREMIER : le client annonçait
+            // « Connexion Internet non disponible » alors que le serveur répondait
+            // 200 (visible dans les logs) — faux négatif désormais impossible.
+            if (serverTask.Result)
             {
-                _cachedCloudStatus = status;
-                _cachedCloudStatusAt = DateTime.UtcNow;
+                string status = string.IsNullOrEmpty(CurrentToken) ? "ONLINE_NO_ACCOUNT" : "READY";
+                if (status == "READY")
+                {
+                    _cachedCloudStatus = status;
+                    _cachedCloudStatusAt = DateTime.UtcNow;
+                }
+                return status;
             }
-            return status;
+
+            // Serveur injoignable : la sonde Internet (ping + replis) permet de
+            // départager « pas d'internet » d'un « serveur down ».
+            if (!internetTask.Result) return "OFFLINE_NO_INTERNET";
+            return "OFFLINE_SERVER_DOWN";
         }
 
         public async Task<bool> IsInternetAvailableAsync()
         {
-            try { using (var p = new Ping()) return (await p.SendPingAsync("8.8.8.8", 1000)).Status == IPStatus.Success; }
+            // Sonde primaire : ICMP vers 8.8.8.8 (le plus rapide). Mais de nombreux
+            // réseaux bloquent l'ICMP sortant sans toucher au HTTP : on retente un
+            // second point d'entrée ICMP (1.1.1.1) puis une sonde HTTP légère
+            // (gstatic generate_204 → 204 sans corps). Si tout échoue, pas d'internet.
+            try
+            {
+                using (var p = new Ping())
+                {
+                    if ((await p.SendPingAsync("8.8.8.8", 1000)).Status == IPStatus.Success) return true;
+                    if ((await p.SendPingAsync("1.1.1.1", 1000)).Status == IPStatus.Success) return true;
+                }
+            }
+            catch { }
+
+            try
+            {
+                // HttpWebRequest isolé (pas le _httpClient partagé) : ce dernier porte
+                // l'en-tête Authorization Bearer par défaut — inutile de l'envoyer à
+                // un domaine tiers. Sonde sans corps (HEAD), bornée à 2 s.
+                var probe = (HttpWebRequest)WebRequest.Create("https://www.gstatic.com/generate_204");
+                probe.Method = "HEAD";
+                probe.Timeout = 2000;
+                probe.ReadWriteTimeout = 2000;
+                using (var res = (HttpWebResponse)(await probe.GetResponseAsync()))
+                {
+                    return (int)res.StatusCode < 500;
+                }
+            }
             catch { return false; }
         }
 

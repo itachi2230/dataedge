@@ -3,12 +3,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:backtest.Views"
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="420">
 
     <UserControl.Resources>
         <!-- Design system « Copilote » : futuriste / pro -->
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- Réduit une largeur mesurée (ActualWidth) de la marge passée en
+             paramètre : les tuiles de message et le bandeau de statut suivent
+             ainsi la largeur du panneau (430 px normal ou agrandi). -->
+        <local:WidthMinusConverter x:Key="WidthMinus"/>
         <LinearGradientBrush x:Key="HeaderGradient" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#132435" Offset="0"/>
             <GradientStop Color="#0D1723" Offset="1"/>
@@ -120,13 +125,10 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Orbe IA néon (icône robot vectorielle) -->
+                <!-- Orbe IA néon (icône robot vectorielle) — sans effet de blur :
+                     coût de rendu nul en mode logiciel -->
                 <Grid Grid.Column="0" Width="42" Height="42" VerticalAlignment="Center">
-                    <Ellipse Fill="{StaticResource OrbGradient}" Opacity="0.28" Margin="-6">
-                        <Ellipse.Effect>
-                            <DropShadowEffect BlurRadius="16" Color="{StaticResource AccentBlueColor}" ShadowDepth="0" Opacity="0.7"/>
-                        </Ellipse.Effect>
-                    </Ellipse>
+                    <Ellipse Fill="{StaticResource OrbGradient}" Opacity="0.28" Margin="-6"/>
                     <Ellipse Stroke="#3AD9F5" StrokeThickness="1.4"/>
                     <Path Data="M12,2 A2,2 0 0,1 14,4 V5 H10 V4 A2,2 0 0,1 12,2 M5,6 H19 A2,2 0 0,1 21,8 V16 A2,2 0 0,1 19,18 H5 A2,2 0 0,1 3,16 V8 A2,2 0 0,1 5,6 M8,9.6 A1.3,1.3 0 1,0 8,12.2 A1.3,1.3 0 0,0 8,9.6 M16,9.6 A1.3,1.3 0 1,0 16,12.2 A1.3,1.3 0 0,0 16,9.6 M9,14 H15 V15.4 H9 Z"
                           Fill="{StaticResource CyanNeon}" Width="19" Height="19"
@@ -172,7 +174,8 @@
                 <ItemsControl x:Name="ChatItemsControl">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Grid HorizontalAlignment="{Binding Alignment}" Margin="0,5" MaxWidth="330">
+                            <Grid HorizontalAlignment="{Binding Alignment}" Margin="0,5"
+                                  MaxWidth="{Binding ActualWidth, ElementName=ChatScrollViewer, Converter={StaticResource WidthMinus}, ConverterParameter=50}">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*"/>
                                     <RowDefinition Height="Auto"/>
@@ -193,17 +196,15 @@
                                         </Style>
                                     </Border.Style>
                                     <StackPanel>
-                                        <!-- Bandeau de statut live (réflexion + outils + chrono) :
-                                             visible uniquement pendant le travail de l'agent,
-                                             disparaît dès que la réponse finale commence. -->
+                                        <!-- Bandeau de statut live (réflexion + outils, sans
+                                             chrono) : visible uniquement pendant le travail
+                                             de l'agent, disparaît dès que la réponse finale
+                                             commence. -->
                                         <Border Background="#08131C" CornerRadius="8" Padding="9,6" Margin="0,0,0,7"
                                                 BorderBrush="#14384F" BorderThickness="1,0,0,0"
                                                 Visibility="{Binding HasStatus, Converter={StaticResource BoolToVis}}">
                                             <StackPanel Orientation="Horizontal">
                                                 <Ellipse Width="7" Height="7" Fill="{StaticResource CyanNeon}" VerticalAlignment="Top" Margin="0,4,8,0">
-                                                    <Ellipse.Effect>
-                                                        <DropShadowEffect BlurRadius="6" Color="{StaticResource AccentBlueColor}" ShadowDepth="0" Opacity="0.9"/>
-                                                    </Ellipse.Effect>
                                                     <Ellipse.Triggers>
                                                         <EventTrigger RoutedEvent="Loaded">
                                                             <BeginStoryboard Storyboard="{StaticResource StatusDotPulse}"/>
@@ -211,7 +212,8 @@
                                                     </Ellipse.Triggers>
                                                 </Ellipse>
                                                 <TextBlock FontStyle="Italic" FontSize="10.5" Foreground="#7FD8E8"
-                                                           Text="{Binding StatusText}" TextWrapping="Wrap" MaxWidth="240"
+                                                           Text="{Binding StatusText}" TextWrapping="Wrap"
+                                                           MaxWidth="{Binding ActualWidth, ElementName=ChatScrollViewer, Converter={StaticResource WidthMinus}, ConverterParameter=110}"
                                                            VerticalAlignment="Center" LineHeight="15"/>
                                             </StackPanel>
                                         </Border>

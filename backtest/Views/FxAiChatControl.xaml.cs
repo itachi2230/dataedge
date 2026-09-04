@@ -173,11 +173,10 @@ namespace backtest.Views
             }
         }
 
-        #region Bandeau de statut live (réflexion + outils + chrono)
+        #region Bandeau de statut live (réflexion + outils)
 
         private ChatMessage _statusMessage;
         private ChatMessage _activeAiMessage;
-        private DateTime _statusStart;
         private DateTime _toolStatusAt;
         private readonly System.Text.StringBuilder _reasoningTail = new System.Text.StringBuilder();
         private string _toolStatusLine;
@@ -185,13 +184,13 @@ namespace backtest.Views
 
         /// <summary>
         /// Démarre le suivi du statut pour la bulle en cours de génération :
-        /// chrono + dernier événement (raisonnement ou outil) rafraîchis 10x/s.
+        /// dernier événement (raisonnement ou outil) rafraîchi 10x/s. Aucun
+        /// chrono affiché : l'utilisateur ne doit pas percevoir la latence.
         /// </summary>
         private void StartStatusTracking(ChatMessage message)
         {
             StopStatusTracking();
             _statusMessage = message;
-            _statusStart = DateTime.Now;
             _reasoningTail.Clear();
             _toolStatusLine = null;
             _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
@@ -257,7 +256,6 @@ namespace backtest.Views
         {
             if (_statusMessage == null) return;
 
-            double elapsed = (DateTime.Now - _statusStart).TotalSeconds;
             string activity = null;
 
             // L'action d'outil masque la réflexion pendant 4 s après son émission.
@@ -271,9 +269,9 @@ namespace backtest.Views
                 activity = tail.Length > 160 ? "…" + tail.Substring(tail.Length - 160) : tail;
             }
 
-            _statusMessage.StatusText = activity == null
-                ? $"⏱ {elapsed:0.0}s — réflexion en cours…"
-                : $"⏱ {elapsed:0.0}s · {activity}";
+            // Aucun décompte de secondes : on ne montre jamais la latence,
+            // seulement l'activité en cours (raisonnement ou outil).
+            _statusMessage.StatusText = activity ?? "Réflexion en cours…";
         }
 
         #endregion
@@ -387,6 +385,34 @@ namespace backtest.Views
             {
                 SendMessage(textToResend);
             }
+        }
+    }
+
+    /// <summary>
+    /// Convertisseur de largeur : renvoie la largeur source (ex. ActualWidth du
+    /// ScrollViewer du chat) diminuée de la marge passée en paramètre. Sert à
+    /// rendre les tuiles de message et le bandeau de statut fluides : leur
+    /// largeur maximale suit celle du panneau (normal 430 px ou agrandi).
+    /// </summary>
+    public class WidthMinusConverter : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            if (value is double width &&
+                double.TryParse(parameter as string, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double margin))
+            {
+                double result = width - margin;
+                return result > 0 ? result : 0d;
+            }
+
+            // Source pas encore mesurée : aucune limite.
+            return double.NaN;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotSupportedException();
         }
     }
 }

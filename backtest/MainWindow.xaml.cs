@@ -572,7 +572,6 @@ namespace backtest
         private Views.FxAiChatControl _aiChat;
         private bool _aiAgentOpen;
         private bool _aiAgentExpanded;
-        private double _aiDrawerWidth = 430; // largeur normale du panneau (XAML)
 
         /// <summary>
         /// Ouvre/ferme le copilote IA sans quitter la vue courante : le panneau
@@ -603,36 +602,12 @@ namespace backtest
             }
 
             _aiAgentOpen = true;
+            // Affichage INSTANTANÉ : aucune animation (le rendu logiciel de
+            // l'app rend chaque animation coûteuse → l'ouverture doit être
+            // perceptible en une seule frame).
+            AiAgentDrawer.Opacity = 1;
             AiAgentDrawer.Visibility = Visibility.Visible;
-
-            // Offset de glisse dynamique : le panneau doit partir entièrement
-            // hors écran, même une fois agrandi (largeur > 430).
-            double slideOffset = _aiDrawerWidth + 60;
-            var slide = new DoubleAnimation
-            {
-                From = slideOffset,
-                To = 0,
-                Duration = TimeSpan.FromSeconds(0.38),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            var fadeIn = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromSeconds(0.3)
-            };
-            AiDrawerTransform.BeginAnimation(TranslateTransform.XProperty, slide);
-            AiAgentDrawer.BeginAnimation(OpacityProperty, fadeIn);
-
-            // Le bouton flottant s'efface pendant que le panneau est ouvert.
-            var fabFadeOut = new DoubleAnimation
-            {
-                From = 1,
-                To = 0,
-                Duration = TimeSpan.FromSeconds(0.15)
-            };
-            fabFadeOut.Completed += (s, e) => { if (_aiAgentOpen) BtnAiFab.Visibility = Visibility.Collapsed; };
-            BtnAiFab.BeginAnimation(OpacityProperty, fabFadeOut);
+            BtnAiFab.Visibility = Visibility.Collapsed;
         }
 
         private void HideAiAgent()
@@ -640,64 +615,27 @@ namespace backtest
             if (!_aiAgentOpen) return;
             _aiAgentOpen = false;
 
-            double slideOffset = _aiDrawerWidth + 60;
-            var slideOut = new DoubleAnimation
-            {
-                From = 0,
-                To = slideOffset,
-                Duration = TimeSpan.FromSeconds(0.3),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
-            slideOut.Completed += (s, e) =>
-            {
-                // Si l'utilisateur a rouvert pendant l'animation, on ne cache pas.
-                if (!_aiAgentOpen)
-                {
-                    AiAgentDrawer.Visibility = Visibility.Collapsed;
-
-                    // Le bouton flottant réapparaît (fondu) une fois le panneau parti.
-                    BtnAiFab.Visibility = Visibility.Visible;
-                    var fabFadeIn = new DoubleAnimation
-                    {
-                        From = 0,
-                        To = 1,
-                        Duration = TimeSpan.FromSeconds(0.2)
-                    };
-                    BtnAiFab.BeginAnimation(OpacityProperty, fabFadeIn);
-                }
-            };
-            var fadeOut = new DoubleAnimation
-            {
-                From = 1,
-                To = 0,
-                Duration = TimeSpan.FromSeconds(0.3)
-            };
-            AiDrawerTransform.BeginAnimation(TranslateTransform.XProperty, slideOut);
-            AiAgentDrawer.BeginAnimation(OpacityProperty, fadeOut);
+            // Fermeture INSTANTANÉE + retour immédiat du bouton flottant.
+            AiAgentDrawer.Visibility = Visibility.Collapsed;
+            BtnAiFab.Visibility = Visibility.Visible;
+            BtnAiFab.Opacity = 1;
         }
 
         /// <summary>
         /// Agrandit/réduit le panneau de discussion (bouton ⤢ du chat) : bascule
-        /// entre la largeur normale (430 px) et une largeur étendue (~60 % de la
-        /// vue, plafonnée) avec une animation de largeur.
+        /// entre la largeur normale (430 px) et une largeur étendue généreuse
+        /// (plafond 1000 px, bornée à la vue moins 90 px) — application
+        /// directe, sans animation.
         /// </summary>
         private void ToggleAiAgentSize()
         {
             double normalWidth = 430;
-            double expandedWidth = Math.Min(780, Math.Max(normalWidth + 150,
+            double expandedWidth = Math.Min(1000, Math.Max(normalWidth + 150,
                 (MainViewContainer.ActualWidth > 0 ? MainViewContainer.ActualWidth : this.ActualWidth) - 90));
 
             double targetWidth = _aiAgentExpanded ? normalWidth : expandedWidth;
             _aiAgentExpanded = !_aiAgentExpanded;
-            _aiDrawerWidth = targetWidth;
-
-            var widthAnim = new DoubleAnimation
-            {
-                To = targetWidth,
-                Duration = TimeSpan.FromSeconds(0.25),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            AiAgentDrawer.BeginAnimation(WidthProperty, widthAnim);
+            AiAgentDrawer.Width = targetWidth;
             _aiChat?.SetExpandedState(_aiAgentExpanded);
         }
 

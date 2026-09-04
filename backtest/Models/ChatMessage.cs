@@ -60,9 +60,10 @@ namespace backtest.Models
         private string _statusText;
 
         /// <summary>
-        /// Statut transitoire affiché dans le bandeau de la bulle IA (réflexion du
-        /// modèle, exécution d'outils, chrono). Null ou vide = bandeau masqué —
-        /// le bandeau disparaît dès que la réponse finale commence.
+        /// Statut transitoire affiché dans le bandeau de la bulle IA (réflexion
+        /// du modèle, exécution d'outils — sans décompte de secondes). Null ou
+        /// vide = bandeau masqué — le bandeau disparaît dès que la réponse
+        /// finale commence.
         /// </summary>
         public string StatusText
         {
