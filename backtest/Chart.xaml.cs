@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Globalization;
 using System.Linq;
 using backtest.services;
+using backtest.Services;
 using Newtonsoft.Json;
 using System.Threading;
 using Microsoft.Web.WebView2.Core;
@@ -35,7 +36,10 @@ namespace backtest
             InitializeComponent();
             LoadUserSettings();
 
-            _dataService = new Dataservice("https://fxdataedge.com/");
+            // On récupère l'URL du serveur depuis FxCloudService (config.txt),
+            // pour que le graphique utilise le même serveur que le reste de l'app
+            // (ex. http://localhost:8000 en dev, https://fxdataedge.com/ en prod)
+            _dataService = new Dataservice(FxCloudService.getServeur());
             _chartBridge = new ChartBridge(this);
 
             InitTimeframeButtons();

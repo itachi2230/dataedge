@@ -17,6 +17,7 @@ namespace backtest.Services
     public class FxCloudService
     {
         public static HttpClient _httpClient;
+        public static string defaultUrl = "https://fxdataedge.com/";
         private const string TokenFileName = "session.bin";
         private readonly string _localProfileCache = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
         private readonly string _configFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.txt");
@@ -73,10 +74,10 @@ namespace backtest.Services
             LoadTokens();
             if (!Directory.Exists(_localProfileCache)) Directory.CreateDirectory(_localProfileCache);
         }
-
+        public static string getServeur() { return defaultUrl; }
         private string LoadConfiguration()
         {
-            string defaultUrl = "https://fxdataedge.com/";
+            
             AppId = "FX_DATAEDGE";
 
             if (File.Exists(_configFilePath))
@@ -88,6 +89,7 @@ namespace backtest.Services
                     if (cleanLine.StartsWith("server=", StringComparison.OrdinalIgnoreCase))
                     {
                         string url = cleanLine.Substring(7).Trim();
+                        defaultUrl = url;
                         if (!string.IsNullOrEmpty(url)) defaultUrl = url.EndsWith("/") ? url : url + "/";
                     }
                     else if (cleanLine.StartsWith("app_id=", StringComparison.OrdinalIgnoreCase))
