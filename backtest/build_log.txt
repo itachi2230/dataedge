@@ -1,0 +1,1 @@
+  backtest -> c:\Users\ITACHI\repos\dataedge\backtest\bin\Debug\dataedge.exe

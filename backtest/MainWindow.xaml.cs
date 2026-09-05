@@ -512,39 +512,30 @@ namespace backtest
             statisticsControl.BeginAnimation(OpacityProperty, fadeIn);
         }
 
+        private EtudesControl etudesView;
+
         private void ShowEtude()
         {
-            // 1. Création du contrôle de statistiques
-            var etudew = new EtudesControl();
-
-            // 2. On remplace le contenu du conteneur central (ContentControl dans ton XAML)
-            MainViewContainer.Content = etudew;
-
-            // 3. Animation de fondu
-            DoubleAnimation fadeIn = new DoubleAnimation
+            // L'instance est créée UNE SEULE FOIS puis conservée en mémoire :
+            // les réouvertures du module sont instantanées (pas de re-parse XAML,
+            // pas de re-scan disque, pas d'animation ici).
+            if (etudesView == null)
             {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromSeconds(0.4),
-                EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
-            };
-            etudew.BeginAnimation(OpacityProperty, fadeIn);
+                etudesView = new EtudesControl();
+                MainViewContainer.Content = etudesView;
+            }
+            else
+            {
+                MainViewContainer.Content = etudesView;
+                // Rafraîchit l'arborescence (études créées/changées pendant l'absence).
+                etudesView.RefreshFromDashboard();
+            }
         }
         public void ShowDashboard()
         {
-            // 1. On remet la Grid originale (nommée DashboardView dans le XAML)
             MainViewContainer.Content = DashboardView;
 
-            // 2. Animation de fondu
-            DoubleAnimation fadeIn = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromSeconds(0.3)
-            };
-            DashboardView.BeginAnimation(OpacityProperty, fadeIn);
-
-            // 3. Rafraîchissement des données pour refléter les changements
+            // Rafraîchissement des données pour refléter les changements
             loadStrategies();
         }
 

@@ -1,6 +1,7 @@
-﻿using Microsoft.Win32;
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,24 +12,64 @@ using System.Windows.Media.Imaging;
 
 namespace backtest
 {
+    // ---------------------------------------------------------------------
+    // Nœud d'arborescence construit hors du thread UI (scan disque)
+    // ---------------------------------------------------------------------
+    internal class StudyNode
+    {
+        public string Name { get; set; }
+        public string Path { get; set; }
+        public bool IsDirectory { get; set; }
+        public List<StudyNode> Children { get; } = new List<StudyNode>();
+    }
+
     public partial class EtudesControl : UserControl
     {
         private const string StudiesRootPath = "etudes";
+
+        // Le nom utilisé par les URI pack:// est <AssemblyName> du .csproj ("dataedge"),
+        // pas le namespace C# ("backtest").
+        private const string AssemblyResource = "dataedge";
+        private const string ResourcePrefix = "resources/";
+
         private bool IsStudyModified = false;
         private string CurrentStudyPath = null;
-        private const string AssemblyName = "backtest";
-        
+
+        private int _treeRefreshVersion;
+        private string _searchFilter = "";
+        private CancellationTokenSource _loadCts;
+
+        // Icônes décodées une seule fois puis figées (thread-safe)
+        private static ImageSource _folderIcon;
+        private static ImageSource _fileIcon;
+
         public EtudesControl()
         {
             InitializeComponent();
             this.Unloaded += (s, e) => EnsureSavedState(CurrentStudyPath);
             InitializeStudiesModule();
-            
         }
 
         private void InitializeStudiesModule()
         {
-            if (!Directory.Exists(StudiesRootPath)) Directory.CreateDirectory(StudiesRootPath);
+            if (!Directory.Exists(StudiesRootPath))
+            {
+                try { Directory.CreateDirectory(StudiesRootPath); } catch { }
+            }
+            UpdateStatusInfo();
+            LoadStudiesTree();
+        }
+
+        // =================================================================
+        // RÉ-OUVERTURE DEPUIS LE DASHBOARD (l'instance est conservée en mémoire)
+        // =================================================================
+        public void RefreshFromDashboard()
+        {
+            if (IsStudyModified)
+            {
+                StudiesStatusText.Text = "Étude non enregistrée — l'arbre sera actualisé après la sauvegarde.";
+                return;
+            }
             LoadStudiesTree();
         }
 
@@ -47,6 +88,8 @@ namespace backtest
                     range.Save(fs, DataFormats.XamlPackage);
                 }
                 IsStudyModified = false;
+                StudiesStatusText.Text = "Enregistré : " + Path.GetFileName(packagePath);
+                UpdateStatusInfo();
             }
             catch (Exception ex) { MessageBox.Show("Erreur sauvegarde : " + ex.Message); }
         }
@@ -67,7 +110,16 @@ namespace backtest
                     ApplyImageSizingAndEvents();
                 }
             }
-            catch (Exception ex) { MessageBox.Show("Erreur chargement : " + ex.Message); }
+            catch (Exception ex)
+            {
+                CurrentStudyPath = null;
+                MessageBox.Show("Erreur chargement : " + ex.Message);
+            }
+            finally
+            {
+                UpdateEmptyPlaceholder();
+                UpdateStatusInfo();
+            }
         }
 
         public void ApplyImageSizingAndEvents()
@@ -80,13 +132,60 @@ namespace backtest
                     {
                         if (inline is InlineUIContainer container && container.Child is Image img)
                         {
-                            img.MaxWidth = 300; // Augmenté un peu pour la lisibilité
+                            img.MaxWidth = 300;
                             img.Stretch = Stretch.Uniform;
                             img.Cursor = Cursors.Hand;
                         }
                     }
                 }
             }
+        }
+// Placeholder de design : caché dès qu'un document contient du texte
+        private void UpdateEmptyPlaceholder()
+        {
+            if (EmptyPlaceholder == null || StudyContentRichTextBox == null) return;
+            try
+            {
+                TextRange range = new TextRange(StudyContentRichTextBox.Document.ContentStart, StudyContentRichTextBox.Document.ContentEnd);
+                EmptyPlaceholder.Visibility = range.Text.Length > 0 ? Visibility.Collapsed : Visibility.Visible;
+            }
+            catch { }
+        }
+
+        // Barre de statut : fichier courant, taille, caractères, état modifié
+        private void UpdateStatusInfo()
+        {
+            if (StudiesStatusText == null || StudyContentRichTextBox == null) return;
+            try
+            {
+                TextRange range = new TextRange(StudyContentRichTextBox.Document.ContentStart, StudyContentRichTextBox.Document.ContentEnd);
+                int charCount = range.Text.Length;
+
+                string info = "";
+                if (!string.IsNullOrEmpty(CurrentStudyPath) && File.Exists(CurrentStudyPath))
+                {
+                    long size = new FileInfo(CurrentStudyPath).Length;
+                    info += Path.GetFileName(CurrentStudyPath) + " · " + FormatBytes(size);
+                    if (charCount > 0) info += " · " + charCount + " caractères";
+                }
+                else if (charCount > 0)
+                {
+                    info += charCount + " caractères";
+                }
+
+                if (IsStudyModified) info += " · ● modifié";
+                if (string.IsNullOrEmpty(info)) info = "Prêt";
+
+                StudiesStatusText.Text = info;
+            }
+            catch { }
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return bytes + " o";
+            if (bytes < 1024 * 1024) return (bytes / 1024d).ToString("0.#") + " Ko";
+            return (bytes / (1024d * 1024d)).ToString("0.##") + " Mo";
         }
 
         // =================================================================
@@ -106,19 +205,17 @@ namespace backtest
                 }
             }
         }
-        //ZD9!R4m@82Lp
 
         public static BitmapSource CompressImage(BitmapSource source)
         {
-            // 1. Redimensionnement
-            double maxWidth = 1000; // On peut descendre à 1000px pour gagner encore plus de place
+            // 1. Redimensionnement (max 1000 px de large)
+            double maxWidth = 1000;
             double scale = source.PixelWidth > maxWidth ? maxWidth / source.PixelWidth : 1.0;
-
             TransformedBitmap resized = new TransformedBitmap(source, new ScaleTransform(scale, scale));
 
-            // 2. Encodage JPEG avec une compression un peu plus forte (70 au lieu de 80)
+            // 2. Encodage JPEG (qualité 70 : invisible à l'œil nu, ~30% plus léger)
             JpegBitmapEncoder encoder = new JpegBitmapEncoder();
-            encoder.QualityLevel = 70; // 70% est invisible à l'œil nu mais gagne 30% de poids vs 80%
+            encoder.QualityLevel = 70;
             encoder.Frames.Add(BitmapFrame.Create(resized));
 
             using (MemoryStream ms = new MemoryStream())
@@ -126,17 +223,17 @@ namespace backtest
                 encoder.Save(ms);
                 ms.Seek(0, SeekOrigin.Begin);
 
-                // 3. IMPORTANT : On crée l'image en forçant le chargement immédiat du flux compressé
+                // 3. On force la mise en mémoire du flux compressé puis on fige l'image
                 BitmapImage result = new BitmapImage();
                 result.BeginInit();
                 result.StreamSource = ms;
-                result.CacheOption = BitmapCacheOption.OnLoad; // Force la mise en mémoire du flux compressé
+                result.CacheOption = BitmapCacheOption.OnLoad;
                 result.EndInit();
                 result.Freeze();
-
                 return result;
             }
         }
+
         public void InsertImage(BitmapSource source)
         {
             var img = new Image
@@ -148,9 +245,9 @@ namespace backtest
             };
             new InlineUIContainer(img, StudyContentRichTextBox.CaretPosition);
             IsStudyModified = true;
+            UpdateStatusInfo();
         }
-
-        // =================================================================
+// =================================================================
         // 3. ACTIONS ET INTERFACE (FORMATAGE)
         // =================================================================
 
@@ -212,48 +309,184 @@ namespace backtest
                 }
             }
         }
-
+// =================================================================
+        // 4. TREEVIEW ET NAVIGATION (scan asynchrone)
         // =================================================================
-        // 4. TREEVIEW ET NAVIGATION
-        // =================================================================
 
-        private void LoadStudiesTree()
+        private void LoadStudiesTree(string filter = null)
         {
-            StudiesTreeView.Items.Clear();
-            var root = new TreeViewItem { Header = CreateHeaderContent("Analyses Local", "ROOT"), Tag = StudiesRootPath, IsExpanded = true };
-            PopulateTreeView(root, StudiesRootPath);
-            StudiesTreeView.Items.Add(root);
-        }
+            _treeRefreshVersion++;
+            int version = _treeRefreshVersion;
+            if (filter != null) _searchFilter = filter;
+            string activeFilter = _searchFilter;
 
-        private void PopulateTreeView(TreeViewItem parent, string path)
-        {
-            foreach (string dir in Directory.GetDirectories(path))
+            if (!Directory.Exists(StudiesRootPath))
             {
-                var item = new TreeViewItem { Header = CreateHeaderContent(Path.GetFileName(dir), "FOLDER"), Tag = dir };
-                parent.Items.Add(item);
-                PopulateTreeView(item, dir);
+                try { Directory.CreateDirectory(StudiesRootPath); } catch { }
             }
-            foreach (string f in Directory.GetFiles(path, "*.etude"))
-                parent.Items.Add(new TreeViewItem { Header = CreateHeaderContent(Path.GetFileNameWithoutExtension(f), "FILE"), Tag = f });
+
+            if (!HasStudyOpen())
+                StudiesStatusText.Text = "Chargement de la structure...";
+
+            Task.Run(() => ScanStudies(StudiesRootPath, activeFilter))
+                .ContinueWith(t =>
+                {
+                    // Résultat obsolète : un scan plus récent a été lancé entre-temps
+                    if (version != _treeRefreshVersion) return;
+                    if (t.IsFaulted)
+                    {
+                        if (!HasStudyOpen())
+                            StudiesStatusText.Text = "Erreur de lecture du dossier études.";
+                        return;
+                    }
+
+                    List<StudyNode> nodes = t.Result;
+                    StudiesTreeView.Items.Clear();
+
+                    var root = new TreeViewItem
+                    {
+                        Header = CreateHeaderContent("Analyses Local", "ROOT"),
+                        Tag = StudiesRootPath,
+                        IsExpanded = true
+                    };
+                    BuildTreeViewFromNodes(root, nodes);
+                    StudiesTreeView.Items.Add(root);
+
+                    int fileCount = CountFiles(nodes);
+                    StudiesCountText.Text = fileCount + " étude" + (fileCount > 1 ? "s" : "");
+
+                    if (!HasStudyOpen())
+                    {
+                        StudiesStatusText.Text = string.IsNullOrEmpty(activeFilter)
+                            ? "Prêt"
+                            : "Filtre actif : « " + activeFilter + " »";
+                    }
+                }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
-        private void StudiesTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+        private bool HasStudyOpen()
+        {
+            return !string.IsNullOrEmpty(CurrentStudyPath) && File.Exists(CurrentStudyPath);
+        }
+
+        // Scan récursif effectué HORS du thread UI
+        private static List<StudyNode> ScanStudies(string path, string filter)
+        {
+            var result = new List<StudyNode>();
+            string[] dirs, files;
+            try
+            {
+                dirs = Directory.GetDirectories(path);
+                files = Directory.GetFiles(path, "*.etude");
+            }
+            catch
+            {
+                return result;
+            }
+
+            Array.Sort(dirs, StringComparer.OrdinalIgnoreCase);
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+
+            foreach (string dir in dirs)
+            {
+                var node = new StudyNode { Name = Path.GetFileName(dir), Path = dir, IsDirectory = true };
+                node.Children.AddRange(ScanStudies(dir, filter));
+                if (MatchFilter(node.Name, filter) || node.Children.Count > 0)
+                    result.Add(node);
+            }
+            foreach (string f in files)
+            {
+                string name = Path.GetFileNameWithoutExtension(f);
+                if (MatchFilter(name, filter))
+                    result.Add(new StudyNode { Name = name, Path = f, IsDirectory = false });
+            }
+            return result;
+        }
+
+        private static bool MatchFilter(string name, string filter)
+        {
+            return string.IsNullOrWhiteSpace(filter) ||
+                   name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static int CountFiles(List<StudyNode> nodes)
+        {
+            int count = 0;
+            foreach (var n in nodes)
+            {
+                if (n.IsDirectory) count += CountFiles(n.Children);
+                else count++;
+            }
+            return count;
+        }
+
+        private void BuildTreeViewFromNodes(TreeViewItem parent, List<StudyNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                var item = new TreeViewItem
+                {
+                    Header = CreateHeaderContent(node.Name, node.IsDirectory ? "FOLDER" : "FILE"),
+                    Tag = node.Path
+                };
+                if (node.IsDirectory)
+                {
+                    item.IsExpanded = true;
+                    BuildTreeViewFromNodes(item, node.Children);
+                }
+                parent.Items.Add(item);
+            }
+        }
+private async void StudiesTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         {
             if (CurrentStudyPath != null) EnsureSavedState(CurrentStudyPath);
+
             if (StudiesTreeView.SelectedItem is TreeViewItem item && item.Tag is string path)
             {
                 if (File.Exists(path) && path.EndsWith(".etude"))
                 {
-                    LoadStudyFile(path);
-                    StudiesTitle.Text = $"ÉTUDE : {Path.GetFileNameWithoutExtension(path).ToUpper()}";
+                    StudiesTitle.Text = "ÉTUDE : " + Path.GetFileNameWithoutExtension(path).ToUpper();
+
+                    // Debounce : on annule le chargement précédent (navigation clavier rapide)
+                    _loadCts?.Cancel();
+                    _loadCts = new CancellationTokenSource();
+                    CancellationToken token = _loadCts.Token;
+
+                    try
+                    {
+                        await Task.Delay(300, token);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        return;
+                    }
+
+                    // Vérifie que la sélection n'a pas changé pendant le délai
+                    if (StudiesTreeView.SelectedItem is TreeViewItem current &&
+                        current.Tag is string currentPath &&
+                        string.Equals(currentPath, path, StringComparison.OrdinalIgnoreCase))
+                    {
+                        StudiesStatusText.Text = "Chargement de l'étude...";
+                        LoadStudyFile(path);
+                    }
                 }
                 else
                 {
                     CurrentStudyPath = null;
                     StudiesTitle.Text = "DOSSIER SÉLECTIONNÉ";
+                    UpdateStatusInfo();
                 }
             }
         }
+
+        private void StudiesSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            _searchFilter = StudiesSearchBox?.Text ?? "";
+            LoadStudiesTree(_searchFilter);
+        }
+// =================================================================
+        // 5. ACTIONS SUR LES FICHIERS / DOSSIERS
+        // =================================================================
 
         private void NewFolder_Click(object sender, RoutedEventArgs e)
         {
@@ -312,6 +545,8 @@ namespace backtest
                 LoadStudiesTree();
                 StudyContentRichTextBox.Document.Blocks.Clear();
                 CurrentStudyPath = null;
+                UpdateEmptyPlaceholder();
+                UpdateStatusInfo();
             }
         }
 
@@ -330,31 +565,30 @@ namespace backtest
             }
         }
 
+        // =================================================================
+        // 6. EXPORT PDF / IMPRESSION
+        // =================================================================
+
         private void ExportRTF_Click(object sender, RoutedEventArgs e)
         {
-            // 1. On prépare le document (copie pour ne pas modifier l'affichage actuel)
+            // Copie du document pour ne pas modifier l'affichage actuel
             FlowDocument docToPrint = CopyDocument(StudyContentRichTextBox.Document);
 
-            // 2. Configuration du PrintDialog
             PrintDialog printDialog = new PrintDialog();
-
-            // On peut soit forcer l'imprimante PDF, soit laisser l'utilisateur choisir
             if (printDialog.ShowDialog() == true)
             {
-                // Ajustement de la mise en page pour le papier
                 docToPrint.PageHeight = printDialog.PrintableAreaHeight;
                 docToPrint.PageWidth = printDialog.PrintableAreaWidth;
-                docToPrint.PagePadding = new Thickness(50); // Marges propres
+                docToPrint.PagePadding = new Thickness(50);
                 docToPrint.ColumnGap = 0;
                 docToPrint.ColumnWidth = printDialog.PrintableAreaWidth;
 
-                // On lance l'impression (si l'utilisateur choisit "Microsoft Print to PDF", il aura son fichier)
                 IDocumentPaginatorSource idpSource = docToPrint;
                 printDialog.PrintDocument(idpSource.DocumentPaginator, "Exportation Étude");
             }
         }
 
-        // Fonction utilitaire pour copier le document (évite les erreurs de thread)
+        // Copie le document par sérialisation (évite les erreurs de thread)
         private FlowDocument CopyDocument(FlowDocument source)
         {
             var copy = new FlowDocument();
@@ -367,24 +601,49 @@ namespace backtest
             }
             return copy;
         }
+// =================================================================
+        // 7. PRÉSENTATION DE L'ARBRE (icônes en cache)
+        // =================================================================
 
         private object CreateHeaderContent(string name, string type)
         {
             StackPanel sp = new StackPanel { Orientation = Orientation.Horizontal };
-            string iconName = type == "FILE" ? "file.png" : "folder.png";
-            Image img = CreateIconImage(iconName, 22);
+            Image img = CreateIconImage(type == "FILE");
             if (img != null) sp.Children.Add(img);
-            sp.Children.Add(new TextBlock { Text = name, Margin = new Thickness(5, 0, 0, 0), Foreground = Brushes.White });
+            sp.Children.Add(new TextBlock
+            {
+                Text = name,
+                Margin = new Thickness(5, 0, 0, 0),
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            });
             return sp;
         }
 
-        private Image CreateIconImage(string name, double size)
+        private static Image CreateIconImage(bool isFile)
         {
             try
             {
-                return new Image { Source = new BitmapImage(new Uri($"pack://application:,,,/{AssemblyName};component/Resources/{name}")), Width = size, Height = size };
+                ImageSource source = GetCachedIcon(isFile);
+                return source == null ? null : new Image { Source = source, Width = 16, Height = 16 };
             }
             catch { return null; }
+        }
+
+        private static ImageSource GetCachedIcon(bool isFile)
+        {
+            ImageSource icon = isFile ? _fileIcon : _folderIcon;
+            if (icon != null) return icon;
+
+            // L'URI pack:// doit matcher <AssemblyName> du .csproj ("dataedge")
+            // et le chemin réel des ressources ("resources/", en minuscules).
+            string iconName = isFile ? "file.png" : "folder.png";
+            var bmp = new BitmapImage(new Uri(
+                "pack://application:,,,/" + AssemblyResource + ";component/" + ResourcePrefix + iconName,
+                UriKind.Absolute));
+            bmp.Freeze();
+            if (isFile) _fileIcon = bmp; else _folderIcon = bmp;
+            return bmp;
         }
 
         private void BtnRetour_Click(object sender, RoutedEventArgs e)
@@ -392,6 +651,10 @@ namespace backtest
             EnsureSavedState(CurrentStudyPath);
             if (Application.Current.MainWindow is MainWindow mw) mw.ShowDashboard();
         }
+// =================================================================
+        // 8. MIGRATION DES ANCIENS FORMATS RTF → .ETUDE
+        // =================================================================
+
         private async void MigrateAndCleanupFiles()
         {
             string[] rtfFiles = Directory.GetFiles(StudiesRootPath, "*.rtf", SearchOption.AllDirectories);
@@ -399,15 +662,14 @@ namespace backtest
 
             MigrationOverlay.Visibility = Visibility.Visible;
             MigrationProgress.Maximum = rtfFiles.Length;
-            var filesToDelete = new System.Collections.Generic.List<string>();
+            var filesToDelete = new List<string>();
 
-            // On lance la migration dans un thread séparé
             await Task.Run(() =>
             {
                 foreach (string oldFilePath in rtfFiles)
                 {
-                    // On crée un thread STA pour chaque fichier afin de manipuler le RichTextBox sans bloquer l'UI
-                    var thread = new System.Threading.Thread(() =>
+                    // Thread STA obligatoire pour manipuler des objets WPF (Image, RichTextBox)
+                    var thread = new Thread(() =>
                     {
                         try
                         {
@@ -419,7 +681,7 @@ namespace backtest
                                 range.Load(fs, DataFormats.Rtf);
                             }
 
-                            // On compresse les images ici (dans ce thread séparé !)
+                            // Compression des images dans ce thread séparé
                             foreach (Block block in converterBuffer.Document.Blocks)
                             {
                                 if (block is Paragraph p)
@@ -448,15 +710,14 @@ namespace backtest
                         catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex.Message); }
                     });
 
-                    // Configurer le thread en STA est obligatoire pour manipuler des objets WPF (Image, RichTextBox)
-                    thread.SetApartmentState(System.Threading.ApartmentState.STA);
+                    thread.SetApartmentState(ApartmentState.STA);
                     thread.Start();
-                    thread.Join(); // On attend que ce fichier soit fini avant de passer au suivant
+                    thread.Join();
 
-                    // On met à jour la barre de progression sans bloquer
-                    Dispatcher.BeginInvoke(new Action(() => {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
                         MigrationProgress.Value += 1;
-                        MigrationStatus.Text = $"Migration : {Path.GetFileName(oldFilePath)}";
+                        MigrationStatus.Text = "Migration : " + Path.GetFileName(oldFilePath);
                     }));
                 }
             });
@@ -465,7 +726,7 @@ namespace backtest
             if (filesToDelete.Count > 0)
             {
                 var result = MessageBox.Show(
-                    $"{filesToDelete.Count} fichiers migrés. Supprimer les originaux ?",
+                    filesToDelete.Count + " fichiers migrés. Supprimer les originaux ?",
                     "Succès", MessageBoxButton.YesNo);
 
                 if (result == MessageBoxResult.Yes)
@@ -479,7 +740,17 @@ namespace backtest
 
             LoadStudiesTree();
         }
-        private void StudyContentRichTextBox_TextChanged(object sender, TextChangedEventArgs e) => IsStudyModified = true;
+// =================================================================
+        // 9. ÉVÉNEMENTS DIVERS
+        // =================================================================
+
+        private void StudyContentRichTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            IsStudyModified = true;
+            UpdateEmptyPlaceholder();
+            UpdateStatusInfo();
+        }
+
         private void SaveStudy_Click(object sender, RoutedEventArgs e) => EnsureSavedState(CurrentStudyPath);
         private void StudiesTreeView_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Delete) Delete_Click(sender, e); }
 
