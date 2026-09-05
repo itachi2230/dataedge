@@ -46,5 +46,17 @@ namespace backtest.Properties {
                 this["LastTimeframe"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool IsAgentEnabled {
+            get {
+                return ((bool)(this["IsAgentEnabled"]));
+            }
+            set {
+                this["IsAgentEnabled"] = value;
+            }
+        }
     }
 }

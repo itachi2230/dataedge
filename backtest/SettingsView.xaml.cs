@@ -92,6 +92,17 @@ namespace backtest
             CyberToast.BeginAnimation(UIElement.OpacityProperty, fadeOut);
         }
         private void BtnAppTab_Click(object sender, RoutedEventArgs e) => ShowAppPanel();
+        private void ChkAgentEnabled_Click(object sender, RoutedEventArgs e)
+        {
+            bool isEnabled = ChkAgentEnabled.IsChecked ?? true;
+            Properties.Settings.Default.IsAgentEnabled = isEnabled;
+            Properties.Settings.Default.Save();
+        
+            // Propager le changement immédiatement sur le bouton flottant du MainWindow
+            if (Application.Current.MainWindow is MainWindow mw)
+                mw.UpdateAgentFabVisibility();
+        }
+        
         private void BtnAccountTab_Click(object sender, RoutedEventArgs e) => ShowAccountPanel();
 
         public void ShowAppPanel()
@@ -100,6 +111,8 @@ namespace backtest
             UpdateTabVisuals(false);
             PanelApp.Visibility = Visibility.Visible;
             TxtPassword.Clear();
+            // Synchroniser le contrôle avec le paramètre persistant
+            ChkAgentEnabled.IsChecked = Properties.Settings.Default.IsAgentEnabled;
         }
 
         public void ShowAccountPanel()

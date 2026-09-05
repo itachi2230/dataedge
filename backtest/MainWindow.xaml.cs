@@ -38,6 +38,9 @@ namespace backtest
             InitializeComponent();
             currentWeekStart = GetStartOfWeek(DateTime.Now);
 
+            // Appliquer le paramètre d'activation de l'agent au démarrage
+            UpdateAgentFabVisibility();
+
             // Initialisation des données
             LoadNotesForCurrentWeek();
             LoadInvestingCalendar();
@@ -608,8 +611,28 @@ namespace backtest
 
             // Fermeture INSTANTANÉE + retour immédiat du bouton flottant.
             AiAgentDrawer.Visibility = Visibility.Collapsed;
-            BtnAiFab.Visibility = Visibility.Visible;
-            BtnAiFab.Opacity = 1;
+            UpdateAgentFabVisibility();
+        }
+
+        /// <summary>
+        /// Met à jour la visibilité du bouton flottant de l'agent (BtnAiFab)
+        /// en fonction du paramètre IsAgentEnabled et de l'état du panneau.
+        /// Appelée au démarrage et depuis SettingsView lors d'un changement en direct.
+        /// </summary>
+        public void UpdateAgentFabVisibility()
+        {
+            bool isEnabled = Properties.Settings.Default.IsAgentEnabled;
+
+            if (!isEnabled && _aiAgentOpen)
+            {
+                // L'agent est désactivé : on ferme le panneau s'il est ouvert
+                HideAiAgent();
+            }
+
+            // On ne montre le FAB que si l'agent est activé ET que le panneau est fermé
+            BtnAiFab.Visibility = (isEnabled && !_aiAgentOpen)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         /// <summary>

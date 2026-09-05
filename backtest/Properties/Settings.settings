@@ -8,5 +8,8 @@
     <Setting Name="LastTimeframe" Type="System.String" Scope="User">
       <Value Profile="(Default)">15m</Value>
     </Setting>
+    <Setting Name="IsAgentEnabled" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">True</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
