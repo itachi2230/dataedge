@@ -151,10 +151,12 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- Agrandir / fermer (mode panneau flottant) -->
+                <!-- Effacer / agrandir / fermer (mode panneau flottant) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="BtnClearChat" Style="{StaticResource GhostButton}" Content="🗑" FontSize="12" FontWeight="Bold"
+                            Click="BtnClearChat_Click" ToolTip="Effacer toute la discussion (serveur + agent)"/>
                     <Button x:Name="BtnExpand" Style="{StaticResource GhostButton}" Content="⤢" FontSize="12" FontWeight="Bold"
-                            Click="BtnExpand_Click" ToolTip="Agrandir la discussion"/>
+                            Margin="3,0,0,0" Click="BtnExpand_Click" ToolTip="Agrandir la discussion"/>
                     <Button Style="{StaticResource GhostButton}" Content="✕" FontSize="12" FontWeight="Bold" Margin="3,0,0,0"
                             Click="BtnClose_Click" ToolTip="Fermer le copilote"/>
                 </StackPanel>
@@ -275,9 +277,27 @@
 
                 <!-- Prompts rapides -->
                 <WrapPanel Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="0" Margin="0,0,0,8">
-                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Bilan" Tag="Fais un bilan de mon espace de trading et donne-moi trois priorités."/>
-                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Études" Tag="Liste mes études et résume le contenu principal de la plus récente."/>
-                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Analyser" Tag="Analyse mes trades récents et identifie les biais répétitifs."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Bilan"
+                            Tag="Fais un bilan de mon espace de trading et donne-moi trois priorités."
+                            ToolTip="Résumé global de vos performances, stratégies et trades, avec 3 priorités d'action."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Études"
+                            Tag="Liste mes études et résume le contenu principal de la plus récente."
+                            ToolTip="Lister vos études/notes et résumer leur contenu."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Analyser"
+                            Tag="Analyse mes trades récents et identifie les biais répétitifs."
+                            ToolTip="Analyser vos derniers trades et repérer les biais ou erreurs récurrentes."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Stratégies"
+                            Tag="Présente mes stratégies avec leurs statistiques et pointe 2 axes d'amélioration concrets."
+                            ToolTip="Vue d'ensemble de vos stratégies et leurs statistiques, avec des axes d'amélioration."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Journal"
+                            Tag="Analyse mon journal de trading récent : quels setups sont rentables, lesquels font perdre de l'argent ?"
+                            ToolTip="Comprendre quels setups de votre journal sont rentables et lesquels font perdre de l'argent."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Règles"
+                            Tag="Résume mes règles de trading et mes objectifs, puis propose 3 améliorations concrètes."
+                            ToolTip="Revoir vos règles de trading et objectifs, avec des améliorations concrètes."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Marché"
+                            Tag="Donne-moi un point rapide sur le marché : tendances des paires majeures et actualités importantes de la semaine."
+                            ToolTip="Point marché : tendances des paires majeures et actualités importantes de la semaine."/>
                 </WrapPanel>
 
                 <!-- Saisie avec halo au focus -->

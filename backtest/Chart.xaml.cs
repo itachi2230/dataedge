@@ -430,7 +430,8 @@ namespace backtest
             string symbolRequested = _currentSymbol;
 
             // Fichiers blocs (w/m/4h/d) : 10 ans déjà en mémoire => rien à précharger
-            if (tf == "w" || tf == "m" || tf == "4h" || tf == "d")
+            // 1m et 5m : trop lourds (60k+ bougies/an), le buffer d'une année suffit
+            if (tf == "w" || tf == "m" || tf == "4h" || tf == "d" || tf == "1m" || tf == "5m")
             {
                 await SafeExecuteJs("window._leftContextLoading = false;");
                 return;
@@ -699,8 +700,14 @@ namespace backtest
                             }
                             else if (pos.center.HasValue)
                             {
-                                // En mode normal : on conserve simplement la vue si le fichier chargé la couvre
-                                focusTime = pos.center.Value;
+                                // En mode normal : on met à jour _currentYear pour charger le BON fichier
+                                // qui contient cette année. Sans ça, un _currentYear périmé (ex. 2024 alors
+                                // que le centre visible est en 2023) charge le mauvais fichier.
+                                _currentYear = DateTimeOffset.FromUnixTimeSeconds(pos.center.Value).DateTime.Year;
+                                // focusTime volontairement NON transmis en mode normal :
+                                // on centre sur la dernière bougie (comportement identique au changement de paire)
+                                // car la conservation asymétrique de la vue donnait des proportions inutilisables
+                                // et la dernière bougie se retrouvait trop à droite / hors écran.
                             }
                         }
                     }

@@ -188,6 +188,43 @@ namespace backtest.Services
             return history;
         }
 
+        /// <summary>
+        /// Efface TOUT l'historique de conversation de l'utilisateur côté serveur
+        /// (DELETE api/ai/history). Le serveur supprime les tours persistés en base
+        /// (rôles 'user', 'model', 'function', 'context') : comme le contexte du
+        /// modèle LLM est reconstruit depuis cette base à chaque message, l'agent
+        /// repart effectivement de zéro — aucun échange précédent n'est rejoué au
+        /// modèle et l'identité utilisateur sera re-persistée au prochain message.
+        /// Retourne false si hors ligne, non connecté ou en cas d'erreur serveur.
+        /// </summary>
+        public async Task<bool> ClearChatHistoryAsync()
+        {
+            string status = await _cloudService.GetCloudStatusAsync(useCachedIfFresh: true);
+            if (status == "OFFLINE_NO_INTERNET" || status == "OFFLINE_SERVER_DOWN"
+                || status == "ONLINE_NO_ACCOUNT" || string.IsNullOrEmpty(_cloudService.CurrentToken))
+            {
+                return false;
+            }
+
+            try
+            {
+                var response = await _cloudService.SecureRequestAsync(() =>
+                    _cloudService.GetHttpClient().DeleteAsync("api/ai/history"));
+                if (response.IsSuccessStatusCode)
+                {
+                    return true;
+                }
+
+                FxCloudService.Log($"Effacement historique agent IA : HTTP {(int)response.StatusCode}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                FxCloudService.Log($"Effacement historique agent IA : {ex.Message}");
+                return false;
+            }
+        }
+
         private async Task<ToolTurnResult> SendTurnAsync(string prompt, string userContext, string sessionId, IReadOnlyList<AiToolDefinition> tools, List<AiToolResultPayload> toolResults, Action<string> onChunkReceived, Action<string> onStatusReceived = null)
         {
             var payload = new

@@ -137,7 +137,9 @@ Chart.xaml.cs                          chart_engine.js
     │                                        │  ├── replayState.allData = data
     │                                        │  ├── replayState.endReached = false
     │                                        │  └── timeScale.setVisibleLogicalRange()
-    │                                        │      (focusTime ? autour de focusTime : fin)
+    │                                        │      ├── Repère leftPhantoms=200 (1re bougie réelle)
+    │                                        │      ├── focusTime → from:200+centerIdx-150 to:200+centerIdx+50
+    │                                        │      └── sinon → from:200+dataLen-150 to:200+dataLen+50
 ```
 
 ### 2. Flux de Changement de Timeframe / Symbole
@@ -155,6 +157,7 @@ Timeframe_Click / Watchlist_SelectionChanged
     │        │   → _currentYear = année de la position  ← LE BON FICHIER
     │        │   → focusTime = position replay (recalage exact)
     │        └── Mode normal + centre visible
+    │            → _currentYear = année du centre       ← CORRIGÉ (était oublié → fichier erroné)
     │            → focusTime = centre (conserve la vue si couverte par le fichier)
     │
     └── LoadBacktestData(token, focusTime?)
@@ -507,7 +510,7 @@ jumpToReplayDate()
 applyJump(index, dateText)
   ├── currentIndex = index
   ├── candleSeries.setData(extended history)
-  └── scrollToPosition(0)
+  └── setVisibleLogicalRange(from:200+index-75, to:200+index+25)  ← CENTRÉ (plus de scrollToPosition(0))
 ```
 
 ---
@@ -645,6 +648,49 @@ Pendant le déplacement/redimensionnement :
 2. `LoadMoreData` met à jour `_currentYear` vers l'année réellement chargée (`targetYear`).
 3. `updateChartData` : calage au plus proche (0 si antérieur, fin si postérieur) au lieu du fallback aveugle.
 4. `setupBacktestData` : ne se cale plus jamais sur `applyJump(0)` par défaut (dernière bougie si pas de date cible).
+
+### Bug : Centrage cassé au changement de Timeframe et au Jump (non-replay + replay)
+
+**Symptôme** : 
+- Changement de timeframe en mode normal → la chart se retrouve collée à gauche (vue décentrée, proportions mauvaises).
+- Jump dans le backtest (saut à une date) → la chart se retrouve collée à droite, obligeant un drag manuel pour recentrer.
+
+**Cause racine** (2 bugs distincts) :
+
+1. **`updateChartData` mode non-replay** : La variable `realBase` était calculée comme `timeline.length - 2000` (= 200 + realData.length, index du 1er fantôme droit) au lieu de `200` (index de la 1re bougie réelle après les 200 fantômes gauches). Le `setVisibleLogicalRange({ from: realBase + centerIdx - 150, ... })` ciblait alors une position bien trop à droite dans le timeline étendu, produisant un centrage aléatoire.
+
+2. **`applyJump` et mode replay de `updateChartData`** : `window.chart.timeScale().scrollToPosition(0, false)` ne centre PAS la vue — elle colle la chart à la bordure droite (position 0 = extrême droite du timeline).
+
+**Solution** :
+1. Remplacer `realBase = timeline.length - 2000` par une constante `leftPhantoms = 200` (le nombre exact de bougies fantômes insérées avant les données réelles par `getExtendedTimeline`).
+2. Remplacer `scrollToPosition(0, false)` par `setVisibleLogicalRange` avec les valeurs :
+   - `from: leftPhantoms + index - 75` (75 bougies avant la position)
+   - `to: leftPhantoms + index + 25` (25 bougies après) → 100 bougies visibles, centrage stable.
+3. La même correction s'applique au mode replay de `updateChartData` (timeframe change en replay) et à `applyJump` (jump en backtest).
+
+### Bug : Centrage cassé au changement de Timeframe en mode normal (non-replay)
+
+**Symptôme** : En changeant de timeframe en mode normal, la chart se retrouvait collée à gauche (premières bougies visibles, proportions inutilisables), ou la dernière bougie était trop à droite.
+
+**Cause racine** (2 problèmes) :
+
+1. **`_currentYear` non mis à jour** : `focusTime` était mis à jour mais pas `_currentYear`. Si le centre visible était en 2023 mais que `_currentYear` valait 2024, le fichier 2024 du nouveau TF était chargé → le focusTime (2023) était avant la première bougie → `centerIdx = 0` → chart collée à gauche.
+
+2. **`focusTime` préservé** : Le focusTime du centre visible de l'ancien TF était transmis à `updateChartData`, qui centrait sur cette position passée. Si l'utilisateur regardait des données historiques, le nouveau TF centrait sur le passé → la dernière bougie (la plus récente) devenait invisible ou trop à droite.
+
+**Solution** :
+1. Mettre à jour `_currentYear` dans le bloc non-replay (pour charger le bon fichier).
+2. **Ne pas transmettre `focusTime`** en mode normal. Le JS centre alors sur la dernière bougie des nouvelles données, exactement comme au changement de paire où ça fonctionne parfaitement.
+```csharp
+_currentYear = DateTimeOffset.FromUnixTimeSeconds(pos.center.Value).DateTime.Year;
+// focusTime volontairement NON transmis : centrage sur la dernière bougie (comportement paire).
+```
+
+### Optimisation : Exclure 1m et 5m du préchargement de contexte gauche (replay)
+
+**Symptôme** : Au démarrage du replay ou après un changement de timeframe en replay 1m/5m, le téléchargement de l'année précédente prenait trop de temps (~60 000 bougies/fichier).
+
+**Solution** : Ajouter `"1m"` et `"5m"` à la liste d'exclusion dans `LoadPreviousYearForReplay` côté C#. Les timeframes à fichier bloc (w/m/4h/d) étaient déjà exclus. Le buffer d'une année de M1/M5 est déjà suffisamment dense pour ne pas nécessiter de préchargement gauche.
 
 ### Bug : Rechargements en boucle en fin d'historique (4h / défilement gauche)
 

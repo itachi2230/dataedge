@@ -245,6 +245,7 @@ POST /api/ai/chat                         → Chat IA authentifié, réponse str
                                           → Déclare les tools du fournisseur LLM (OpenRouter ou Gemini), émet `tool_call`, reçoit `tool_result` et poursuit la boucle agent
                                           → Interrupteurs admin : 503 si agent désactivé, 429 si quota utilisateur dépassé (software_config)
 GET  /api/ai/history?limit=...            → Historique de conversation IA (affichage client, sans rappel Gemini)
+DELETE /api/ai/history                     → Efface tout l'historique IA de l'utilisateur (bouton 🗑 du chat : serveur + mémoire du modèle remise à zéro)
 POST /api/cloud/sync-file                 → Upload fichier
 POST /api/cloud/file-info                 → Vérification hash
 GET  /api/cloud/list?app_id=...           → Liste fichiers distants

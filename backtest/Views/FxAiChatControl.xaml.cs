@@ -374,6 +374,65 @@ namespace backtest.Views
             }
         }
 
+        /// <summary>
+        /// Efface toute la discussion : l'affichage local est vidé ET l'historique
+        /// persisté côté serveur est supprimé (DELETE /api/ai/history). Comme le
+        /// contexte du modèle LLM est reconstruit depuis la base à chaque message,
+        /// effacer la table revient à remettre la "mémoire" de l'agent à zéro :
+        /// il ne rejoue plus aucun échange précédent et l'identité de l'utilisateur
+        /// sera re-persistée au prochain message.
+        /// </summary>
+        private async void BtnClearChat_Click(object sender, RoutedEventArgs e)
+        {
+            // Ne jamais effacer pendant qu'une réponse est en cours de génération.
+            if (_activeAiMessage != null)
+            {
+                MessageBox.Show("Attendez la fin de la réponse de l'agent avant d'effacer la discussion.",
+                    "Effacer la discussion", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                "Effacer toute la conversation ?\n\nCette action supprime définitivement l'historique sur le serveur : l'agent repartira de zéro et ne gardera aucun souvenir des échanges précédents.",
+                "Effacer la discussion", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            BtnClearChat.IsEnabled = false;
+            TxtInput.IsEnabled = false;
+            BtnSend.IsEnabled = false;
+
+            try
+            {
+                bool cleared = await Task.Run(() => _aiService.ClearChatHistoryAsync());
+
+                // Réinitialise l'affichage local : la conversation serveur est
+                // supprimée, on repart sur le message d'accueil propre.
+                Messages.Clear();
+                Messages.Add(new ChatMessage
+                {
+                    Sender = "AI",
+                    Text = cleared
+                        ? "Discussion effacée. L'historique a été supprimé sur le serveur : l'agent repart de zéro, sans aucun souvenir des échanges précédents."
+                        : "La discussion locale a été effacée, mais le serveur n'a pas pu être contacté (hors ligne ou non connecté). La conversation pourrait réapparaître à la prochaine ouverture du chat.",
+                    Timestamp = DateTime.Now
+                });
+                ScrollToBottom();
+            }
+            catch (Exception ex)
+            {
+                FxCloudService.Log($"Effacement historique agent IA : {ex.Message}");
+                MessageBox.Show($"Impossible d'effacer l'historique : {ex.Message}", "Effacer la discussion",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                BtnClearChat.IsEnabled = true;
+                TxtInput.IsEnabled = true;
+                BtnSend.IsEnabled = true;
+                TxtInput.Focus();
+            }
+        }
+
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)

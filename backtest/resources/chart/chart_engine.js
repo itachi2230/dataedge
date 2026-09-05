@@ -229,28 +229,44 @@ window.updateChartData = function(data, symbol = "Default", focusTime = null) {
         }
 
         const history = data.slice(0, window.replayState.currentIndex + 1);
-        window.candleSeries.setData(getExtendedTimeline(history));
-        window.chart.timeScale().scrollToPosition(0, false);
+        const timeline = getExtendedTimeline(history);
+        window.candleSeries.setData(timeline);
+        
+        // Centrer la vue sur la position replay courante au lieu de scrollToPosition(0)
+        const leftPhantoms = 200;
+        const centerIdx = window.replayState.currentIndex;
+        window.chart.timeScale().setVisibleLogicalRange({
+            from: leftPhantoms + centerIdx - 75,  // ~75 bougies avant
+            to: leftPhantoms + centerIdx + 25,     // ~25 bougies après (bonne proportion)
+        });
     } 
     else {
         const timeline = getExtendedTimeline(data);
         window.candleSeries.setData(timeline);
     
         if (data.length > 0) {
-            const lastRealIndex = timeline.length - 2000;
+            // Index de la première bougie réelle dans le timeline étendu (200 fantômes à gauche)
+            const leftPhantoms = 200;
+            
             if (focusTime) {
                 const centerIdx = data.findIndex(d => d.time >= focusTime);
                 if (centerIdx !== -1) {
-                    const realBase = timeline.length - 2000;
                     window.chart.timeScale().setVisibleLogicalRange({
-                        from: realBase + centerIdx - 150, 
-                        to: realBase + centerIdx + 50,    
+                        from: leftPhantoms + centerIdx - 150, 
+                        to: leftPhantoms + centerIdx + 50,    
+                    });
+                } else {
+                    // fallback : centrer sur la dernière bougie si focusTime introuvable
+                    window.chart.timeScale().setVisibleLogicalRange({
+                        from: leftPhantoms + data.length - 150, 
+                        to: leftPhantoms + data.length + 50,    
                     });
                 }
             } else {
+                // Centrer sur la fin des données réelles
                 window.chart.timeScale().setVisibleLogicalRange({
-                    from: lastRealIndex - 150, 
-                    to: lastRealIndex + 50,    
+                    from: leftPhantoms + data.length - 150, 
+                    to: leftPhantoms + data.length + 50,    
                 });
             }
         }
@@ -469,8 +485,15 @@ window.setupBacktestData = function(newData, year) {
 function applyJump(index, dateText) {
     window.replayState.currentIndex = index;
     const history = window.replayState.allData.slice(0, index + 1);
-    window.candleSeries.setData(getExtendedTimeline(history));
-    window.chart.timeScale().scrollToPosition(0, false);
+    const timeline = getExtendedTimeline(history);
+    window.candleSeries.setData(timeline);
+    
+    // Centrer la vue sur la position du jump (100 bougies visibles)
+    const leftPhantoms = 200;
+    window.chart.timeScale().setVisibleLogicalRange({
+        from: leftPhantoms + index - 75,
+        to: leftPhantoms + index + 25,
+    });
     
     setTimeout(() => {
         window.isProcessingData = false;
