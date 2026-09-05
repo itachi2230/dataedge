@@ -97,7 +97,24 @@ window.initChart = function() {
     
 };
 
-window.updateChartData = function(data, symbol = "Default") {
+window.getReplayPosition = function() {
+    if (!window.replayState || !window.replayState.isActive) return null;
+    if (!window.replayState.allData || window.replayState.allData.length === 0) return null;
+    if (window.replayState.currentIndex < 0 || window.replayState.currentIndex >= window.replayState.allData.length) return null;
+    return window.replayState.allData[window.replayState.currentIndex].time;
+};
+
+window.getVisibleCenterTime = function() {
+    if (!window.chart) return null;
+    const range = window.chart.timeScale().getVisibleRange();
+    if (!range) return null;
+    const from = typeof range.from === 'number' ? range.from : null;
+    const to = typeof range.to === 'number' ? range.to : null;
+    if (from === null || to === null || to < from) return null;
+    return Math.floor((from + to) / 2);
+};
+
+window.updateChartData = function(data, symbol = "Default", focusTime = null) {
     if (!window.candleSeries) window.initChart(); 
 
     window.currentSymbol = symbol;
@@ -110,13 +127,27 @@ window.updateChartData = function(data, symbol = "Default") {
     }
 
     window.replayState.allData = data; 
+    window.replayState.endReached = false;
 
     if (window.replayState.isActive) {
         if (currentTime) {
-            const newIndex = data.findIndex(d => d.time >= currentTime);
-            window.replayState.currentIndex = (newIndex !== -1) ? newIndex : data.length - 1;
+            let newIndex = data.findIndex(d => d.time >= currentTime);
+            if (newIndex === -1) {
+                // currentTime est plus récent que la dernière bougie => on se cale à la fin
+                // (au lieu du fallback aveugle qui ramenait au mauvais endroit)
+                if (data.length > 0 && currentTime < data[0].time) newIndex = 0;
+                else newIndex = data.length - 1;
+            }
+            window.replayState.currentIndex = newIndex;
         } else {
             window.replayState.currentIndex = data.length - 1;
+        }
+
+        // Synchronise le champ date du replay si vide (permet à setupBacktestData de se recaler correctement)
+        const dateInput = document.getElementById('replay-date-input');
+        if (dateInput && !dateInput.value && data.length > 0) {
+            const c = data[window.replayState.currentIndex];
+            if (c) dateInput.value = (typeof c.time === 'string' ? c.time : new Date(c.time * 1000).toISOString().split('T')[0]);
         }
 
         const history = data.slice(0, window.replayState.currentIndex + 1);
@@ -129,10 +160,21 @@ window.updateChartData = function(data, symbol = "Default") {
     
         if (data.length > 0) {
             const lastRealIndex = timeline.length - 2000;
-            window.chart.timeScale().setVisibleLogicalRange({
-                from: lastRealIndex - 150, 
-                to: lastRealIndex + 50,    
-            });
+            if (focusTime) {
+                const centerIdx = data.findIndex(d => d.time >= focusTime);
+                if (centerIdx !== -1) {
+                    const realBase = timeline.length - 2000;
+                    window.chart.timeScale().setVisibleLogicalRange({
+                        from: realBase + centerIdx - 150, 
+                        to: realBase + centerIdx + 50,    
+                    });
+                }
+            } else {
+                window.chart.timeScale().setVisibleLogicalRange({
+                    from: lastRealIndex - 150, 
+                    to: lastRealIndex + 50,    
+                });
+            }
         }
     }
 
@@ -159,6 +201,7 @@ window.setupLazyLoading = function() {
         if (!bridge) return;
 
         if (range.from <= data[3].time) {
+            if (window.replayState.endReached) return;
             window.isProcessingData = true;
             await bridge.loadPreviousYear(data[3].time);
         } 
@@ -170,7 +213,8 @@ window.replayState = {
     isPlaying: false,
     currentIndex: 0,
     speed: 1,
-    allData: []
+    allData: [],
+    endReached: false
 };
 
 window.toggleReplayUI = function() {
@@ -189,6 +233,22 @@ window.toggleReplayUI = function() {
 
     window.replayState.isActive = true;
     btn.classList.add('active');
+
+    // Aligne la position de replay sur la zone visible avant d'activer :
+    // si l'utilisateur regardait un endroit précis, on y démarre (sinon dernière bougie),
+    // au lieu de démarrer systématiquement à l'index 0 du buffer.
+    if (window.replayState.allData && window.replayState.allData.length > 0) {
+        const visibleCenter = window.getVisibleCenterTime();
+        if (visibleCenter !== null) {
+            const idx = window.replayState.allData.findIndex(d => d.time >= visibleCenter);
+            window.replayState.currentIndex = (idx !== -1) ? idx : window.replayState.allData.length - 1;
+        } else {
+            window.replayState.currentIndex = window.replayState.allData.length - 1;
+        }
+    } else {
+        window.replayState.currentIndex = 0;
+    }
+    window.replayState.endReached = false;
     
     const html = `
         <div id="replay-dashboard" style="display: flex; align-items: center; padding: 4px 10px; gap: 8px;">
@@ -218,6 +278,13 @@ window.toggleReplayUI = function() {
     
     document.getElementById('chart-container').insertAdjacentHTML('beforeend', html);
     makeDraggable(document.getElementById('replay-dashboard'), document.getElementById('replay-header'));
+
+    // Pré-remplit la date du champ avec la position courante du replay
+    const dateInput = document.getElementById('replay-date-input');
+    if (dateInput && window.replayState.allData && window.replayState.allData.length > 0) {
+        const c = window.replayState.allData[window.replayState.currentIndex];
+        if (c) dateInput.value = (typeof c.time === 'string' ? c.time : new Date(c.time * 1000).toISOString().split('T')[0]);
+    }
 };
 
 function makeDraggable(elmnt, handle) {
@@ -277,24 +344,37 @@ window.jumpToReplayDate = async function() {
         return dDate >= dateInput;
     });
 
-    if (index === -1 || index === 0) {
+    if (index === -1) {
+        // La date demandée est au-delà des données chargées : on charge l'année cible
         const bridge = window.chrome.webview.hostObjects.chartService;
         if (bridge) {
             await bridge.LoadYearForBacktest(targetYear);
             return;
         }
     }
-    applyJump(index, dateInput);
+    applyJump(index !== -1 ? index : 0, dateInput);
 };
 
 window.setupBacktestData = function(newData, year) {
     window.replayState.allData = newData;
+    window.replayState.endReached = false;
+    if (!newData || newData.length === 0) {
+        window.isProcessingData = false;
+        return;
+    }
     const dateInput = document.getElementById('replay-date-input').value;
-    const newIndex = window.replayState.allData.findIndex(d => {
-        const dDate = typeof d.time === 'string' ? d.time : new Date(d.time * 1000).toISOString().split('T')[0];
-        return dDate >= dateInput;
-    });
-    applyJump(newIndex !== -1 ? newIndex : 0, dateInput);
+    let newIndex;
+    if (dateInput) {
+        newIndex = window.replayState.allData.findIndex(d => {
+            const dDate = typeof d.time === 'string' ? d.time : new Date(d.time * 1000).toISOString().split('T')[0];
+            return dDate >= dateInput;
+        });
+        newIndex = newIndex !== -1 ? newIndex : 0;
+    } else {
+        // Pas de date cible : on se cale sur la dernière bougie (jamais le début par défaut)
+        newIndex = window.replayState.allData.length - 1;
+    }
+    applyJump(newIndex, dateInput);
 };
 
 function applyJump(index, dateText) {
@@ -315,10 +395,23 @@ function applyJump(index, dateText) {
 }
 
 window.appendOrPrependData = function(newData, year) {
-    const combined = [...window.replayState.allData, ...newData];
+    const oldData = window.replayState.allData || [];
+    const combined = [...oldData, ...newData];
     const uniqueMap = new Map();
     combined.forEach(item => uniqueMap.set(item.time, item));
     const sortedUnique = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
+
+    // Détection de non-croissance : si rien de nouveau, on marque la fin d'historique
+    // pour arrêter les rechargements en boucle (ex. bloc 4h déjà entièrement en mémoire)
+    if (sortedUnique.length === oldData.length) {
+        window.replayState.endReached = true;
+        window.isProcessingData = false;
+        if (oldData.length > 0) {
+            window.cyberLog('Fin de l\'historique atteinte (' + year + ')', true);
+        }
+        return;
+    }
+    window.replayState.endReached = false;
     window.replayState.allData = sortedUnique;
 
     if (window.replayState.isActive) {
@@ -340,8 +433,16 @@ window.togglePlayReplay = function() {
 function runReplayLoop() {
     if(!window.replayState.isPlaying || !window.replayState.isActive) return;
     
+    // Fin de l'historique atteinte : on arrête proprement le play
+    if (window.replayState.endReached && window.replayState.currentIndex >= window.replayState.allData.length - 1) {
+        window.replayState.isPlaying = false;
+        const btn = document.getElementById('btn-play-pause');
+        if(btn) btn.innerText = "▶";
+        return;
+    }
+
     const threshold = 50; 
-    if (window.replayState.currentIndex >= window.replayState.allData.length - threshold && !window.isProcessingData) {
+    if (window.replayState.currentIndex >= window.replayState.allData.length - threshold && !window.isProcessingData && !window.replayState.endReached) {
         const lastCandle = window.replayState.allData[window.replayState.allData.length - 1];
         if (lastCandle) {
             window.isProcessingData = true;
@@ -485,9 +586,20 @@ function getExtendedTimeline(realData) {
 
 window.prependChartData = function(newData) {
     const currentData = window.candleSeries.data().filter(d => d.close !== undefined);
+    if (!newData || newData.length === 0) {
+        window.replayState.endReached = true;
+        window.isProcessingData = false;
+        return;
+    }
     const combined = [...newData, ...currentData];
     const uniqueMap = new Map();
     combined.forEach(item => uniqueMap.set(item.time, item));
+    // Non-croissance (rechargement du même bloc 4h/D) : on marque la fin et on ne re-rend pas
+    if (uniqueMap.size === currentData.length) {
+        window.replayState.endReached = true;
+        window.isProcessingData = false;
+        return;
+    }
     const finalData = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
     window.candleSeries.setData(getExtendedTimeline(finalData));
     window.isProcessingData = false;

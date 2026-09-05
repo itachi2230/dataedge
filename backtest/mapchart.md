@@ -54,6 +54,7 @@ Le module **Chart** de DataEdge est un composant WPF (`Chart.xaml` / `Chart.xaml
 │  │  chart_engine.js (Moteur principal)              │    │
 │  │  - initChart() → création chart + series         │    │
 │  │  - updateChartData() → setData avec extended TL │    │
+│  │  - getReplayPosition()/getVisibleCenterTime()   │    │
 │  │  - Replay state machine (play/pause/step/jump)   │    │
 │  │  - setupLazyLoading → chargement infini          │    │
 │  │  - captureChart() → screenshot → C#              │    │
@@ -127,11 +128,14 @@ Chart.xaml.cs                          chart_engine.js
     │    ├── GetMarketDataAsync() ──API──►    │
     │    ├── ParseCsvToCandles()              │
     │    └── ExecuteScriptAsync(              │
-    │        updateChartData(json, symbol))   │
-    │                                        │  updateChartData(data, symbol)
+    │        updateChartData(json, symbol[,  │
+    │        focusTime]))                     │
+    │                                        │  updateChartData(data, symbol, focusTime|null)
     │                                        │  ├── candleSeries.setData(extended)
     │                                        │  ├── replayState.allData = data
+    │                                        │  ├── replayState.endReached = false
     │                                        │  └── timeScale.setVisibleLogicalRange()
+    │                                        │      (focusTime ? autour de focusTime : fin)
 ```
 
 ### 2. Flux de Changement de Timeframe / Symbole
@@ -142,8 +146,21 @@ Timeframe_Click / Watchlist_SelectionChanged
     ├── _ctsGlobal?.Cancel()      ← Annule requête précédente
     ├── _ctsGlobal = new CTS()
     ├── _currentTF / _currentSymbol mis à jour
-    └── LoadBacktestData(token)
-         └── (même flux que ci-dessus)
+    │
+    ├── Timeframe_Click uniquement :
+    │   └── Interroge le JS (getReplayPosition() / getVisibleCenterTime())
+    │        ├── Replay actif + position connue
+    │        │   → _currentYear = année de la position  ← LE BON FICHIER
+    │        │   → focusTime = position replay (recalage exact)
+    │        └── Mode normal + centre visible
+    │            → focusTime = centre (conserve la vue si couverte par le fichier)
+    │
+    └── LoadBacktestData(token, focusTime?)
+         └── updateChartData(json, symbol, focusTime)
+
+RÉGLE ANTI-REBOND : l'année du fichier à charger est décidée par la POSITION
+(timestamp) courante côté JS, plus jamais par le simple _currentYear qui pouvait
+être périmé après un replay avancé sur plusieurs années.
 ```
 
 ### 3. Flux de Chargement Infini (Lazy Loading)
@@ -153,6 +170,7 @@ chart_engine.js : subscribeVisibleTimeRangeChange
     │
     │  Quand range.from ≤ data[3].time :
     │  → bridge.loadPreviousYear(data[3].time)
+    │  (ignoré si replayState.endReached === true)
     │
     ▼
 ChartBridge.cs → loadPreviousYear(long timestamp)
@@ -160,10 +178,18 @@ ChartBridge.cs → loadPreviousYear(long timestamp)
     ▼
 Chart.xaml.cs → LoadMoreData(timestamp, isPrevious=true)
     ├── Détermine année cible (GetFileToRequest)
+    ├── _currentYear = année réellement chargée (targetYear)
     ├── GetMarketDataAsync()
     ├── ParseCsvToCandles()
     └── ExecuteScriptAsync(prependChartData(json))
+         └── Anti-rebond : si uniqueMap.size === currentData.length
+             (même bloc 4h/D redemandé) → endReached = true, pas de setData
 ```
+
+La fin d'historique est détectée des DEUX côtés (avant et après) :
+- Côté C# : `_endOfDataReached = true` si fichier introuvable / vide (les deux directions)
+- Côté JS : `replayState.endReached = true` si `appendOrPrependData` / `prependChartData`
+  ne produisent aucune nouvelle bougie
 
 ---
 
@@ -374,8 +400,24 @@ window.replayState = {
     isPlaying: false,       // Lecture automatique
     currentIndex: 0,        // Index bougie courante
     speed: 1,               // Vitesse (1, 5, 10)
-    allData: []             // Toutes les bougies chargées
+    allData: [],            // Toutes les bougies chargées
+    endReached: false       // Fin d'historique (anti rechargement en boucle)
 };
+```
+
+### Helpers de Position (utilisés pour le changement de TF)
+
+```javascript
+window.getReplayPosition()
+  ├── null si replay inactif / buffer vide / index hors bornes
+  └── timestamp (seconds) de la bougie courante du replay
+
+window.getVisibleCenterTime()
+  ├── null si pas de chart / pas de range visible
+  └── timestamp (seconds) du centre de la vue (peut être une bougie fantôme)
+
+Timeframe_Click (C#) interroge ces 2 helpers + replayState.isActive
+  └── via un seul ExecuteScriptAsync retournant { replay, center, active }
 ```
 
 ### Fonctionnalités
@@ -392,7 +434,11 @@ window.replayState = {
 ```
 toggleReplayUI()
   ├── Si dashboard existe → le supprime + désactive replay
-  └── Sinon → crée dashboard + active replay
+  └── Sinon →
+      ├── Aligne currentIndex sur le centre visible
+      │   (findIndex ≥ getVisibleCenterTime, sinon dernière bougie)
+      ├── endReached = false
+      └── Crée dashboard + pré-remplit replay-date-input avec la position
 
 stepReplay(direction)
   ├── currentIndex += speed * direction (borné [0, allData.length-1])
@@ -400,10 +446,19 @@ stepReplay(direction)
   └── candleSeries.setData(getExtendedTimeline(partialData))
 
 runReplayLoop()
+  ├── Si endReached && currentIndex ⩾ allData.length-1
+  │   → isPlaying = false (arrêt propre, plus de boucle de rechargement)
+  ├── Si à -50 bougies de la fin (et pas endReached)
+  │   → bridge.loadNextYear(lastCandle.time)
   ├── stepReplay(1)
   ├── checkLastSetupStatus(currentCandle)
   │     (vérifie TP/SL pour lastActiveSetup)
   └── setTimeout(runReplayLoop, 500)
+
+jumpToReplayDate()
+  ├── findIndex(d.time ≥ dateInput)
+  ├── index === -1 → LoadYearForBacktest(targetYear)   ← uniquement si hors données
+  └── sinon applyJump(index, dateInput)
 
 applyJump(index, dateText)
   ├── currentIndex = index
@@ -529,7 +584,42 @@ Pendant le déplacement/redimensionnement :
 
 ## Erreurs Connues et Résolution
 
-### Bug : Outils de dessin ne se finalisent pas en 1 clic (comportement "path")
+### Bug : Saut du graphique au changement de Timeframe (replay / année défilée)
+
+**Symptôme** : En replay H4 (bloc 10 ans en mémoire), passer à un TF inférieur (H1, M15) faisait sauter le graphique à l'endroit où le backtest avait commencé (ou en fin de l'année précédente après avoir défilé plusieurs années).
+
+**Cause racine** : Le fichier à charger était choisi par `_currentYear`, qui pouvait être périmé :
+- sur un replay 4h (bloc complet), aucun `LoadYearForBacktest` n'était déclenché → `_currentYear` restait sur l'année courante de démarrage ;
+- sur un replay 1h avançant d'année en année, `_currentYear` n'était jamais mis à jour vers l'année réellement chargée ;
+- côté JS, `findIndex(d.time >= currentTime)` retournait -1 et tombait en fallback aveugle sur `data.length - 1`.
+
+**Solution** :
+1. `Timeframe_Click` interroge maintenant le JS (`getReplayPosition()` / `getVisibleCenterTime()`) AVANT de charger :
+   - en replay, `_currentYear` est mis à jour à l'année de la position → le bon fichier du nouveau TF est chargé ;
+   - le `focusTime` est transmis à `updateChartData(data, symbol, focusTime)` pour recalibrer la vue.
+2. `LoadMoreData` met à jour `_currentYear` vers l'année réellement chargée (`targetYear`).
+3. `updateChartData` : calage au plus proche (0 si antérieur, fin si postérieur) au lieu du fallback aveugle.
+4. `setupBacktestData` : ne se cale plus jamais sur `applyJump(0)` par défaut (dernière bougie si pas de date cible).
+
+### Bug : Rechargements en boucle en fin d'historique (4h / défilement gauche)
+
+**Symptôme** : À la fin d'un replay 4h ou en touchant le bord gauche d'un bloc 4h, le même fichier était re-téléchargé continuellement (boucle de `loadNextYear` toutes les 500 ms / micro-sauts à gauche).
+
+**Cause racine** : Aucune détection de non-croissance : `appendOrPrependData` et `prependChartData` re-rendaient les mêmes données sans jamais signaler la fin d'historique ; `_endOfDataReached` n'était posé que pour la direction arrière.
+
+**Solution** : Détection dans `appendOrPrependData` (replay) et `prependChartData` (normal) :
+- `replayState.endReached = true` quand aucune bougie nouvelle n'est ajoutée ;
+- `runReplayLoop` arrête proprement le play à la fin ;
+- `setupLazyLoading` ignore les déclenchements quand `endReached` ;
+- côté C# `_endOfDataReached` est posé dans les deux directions.
+
+### Bug : Démarrage du replay au tout début du buffer
+
+**Symptôme** : Activer le replay puis appuyer sur ▶ ramenait le graphique aux 1-2 premières bougies du buffer (index 0).
+
+**Cause racine** : `currentIndex` n'était jamais aligné sur la bougie visible à l'activation du replay.
+
+**Solution** : `toggleReplayUI()` aligne `currentIndex` sur le centre visible (via `getVisibleCenterTime()`) ou la dernière bougie, et pré-remplit la date du dashboard.
 
 **Symptôme** : Après sélection d'un outil à 1 clic (long_pos, short_pos, horz_line, etc.), cliquer sur le graphique ne place pas le dessin. Le mode reste actif et chaque clic ajoute un point sans jamais finaliser.
 

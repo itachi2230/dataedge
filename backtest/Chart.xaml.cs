@@ -262,7 +262,7 @@ namespace backtest
                 if (result.success)
                 {
                     var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
-                    if (candles != null)
+                    if (candles != null && candles.Count > 0)
                     {
                         _currentYear = year;
                         string json = JsonConvert.SerializeObject(candles);
@@ -287,7 +287,7 @@ namespace backtest
                 await ToggleLoader(false);
             }
         }
-        public async Task LoadBacktestData(CancellationToken ct)
+        public async Task LoadBacktestData(CancellationToken ct, long? focusTime = null)
         {
             if (ChartBrowser?.CoreWebView2 == null) return;
 
@@ -312,7 +312,10 @@ namespace backtest
                         string json = JsonConvert.SerializeObject(candles);
 
                         await Dispatcher.InvokeAsync(async () => {
-                            await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}');");
+                            if (focusTime.HasValue)
+                                await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}', {focusTime.Value});");
+                            else
+                                await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}');");
                         });
 
                         SetStatus($"{_currentSymbol} OK ({fileToRequest})", "#00FF7F");
@@ -328,8 +331,12 @@ namespace backtest
             catch (Exception ex) { SetStatus("Erreur: " + ex.Message, "#FF4B4B"); }
             finally
             {
-                //e bloc finally s'exécute QUOI QU'IL ARRIVE (Succès, Annulation, ou Erreur)
+                // Ce bloc finally s'exécute QUOI QU'IL ARRIVE (Succès, Annulation, ou Erreur)
                 await ToggleLoader(false);
+                // On ne relâche le verrou JS que si cette requête est toujours la plus récente
+                // (évite d'écraser le drapeau posé par une nouvelle requête après annulation)
+                if (ct == _ctsGlobal?.Token)
+                    await SafeExecuteJs("window.isProcessingData = false;");
             }
         }
         public async Task LoadMoreData(long referenceTimestamp, bool isPrevious = true)
@@ -338,18 +345,19 @@ namespace backtest
 
             if (_ctsGlobal == null) _ctsGlobal = new CancellationTokenSource();
             _isLoadingMore = true;
-            ;
             await ToggleLoader(true, "");
             try
             {
                 DateTime refDate = DateTimeOffset.FromUnixTimeSeconds(referenceTimestamp).DateTime;
                 _currentYear = refDate.Year;
-                string targetYear;
                 string tf = _currentTF.ToLower();
 
+                string targetYear;
+                int yearLoaded;
                 if (isPrevious)
                 {
                     // En arrière : On prend l'année de la première bougie
+                    yearLoaded = refDate.Year - 1;
                     switch (tf)
                     {
                         case "1m":
@@ -357,19 +365,18 @@ namespace backtest
                         case "15m":
                         case "30m":
                         case "1h":
-                            targetYear = GetFileToRequest(refDate.Year-1, _currentTF);
+                            targetYear = GetFileToRequest(yearLoaded, _currentTF);
                             break;
                         default:
                             targetYear = GetFileToRequest(refDate.Year, _currentTF);
                             break;
 
                     }
-                    
                 }
                 else
                 {
-                   
-                    targetYear = GetFileToRequest(refDate.Year+1, _currentTF);
+                    yearLoaded = refDate.Year + 1;
+                    targetYear = GetFileToRequest(yearLoaded, _currentTF);
                 }
 
                 SetStatus($"RECHERCHE {targetYear}...", "#FFB900");
@@ -381,8 +388,9 @@ namespace backtest
                     var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
                     if (candles != null && candles.Count > 0)
                     {
-                        // On met à jour l'année courante avec l'année réelle demandée
-                       
+                        // On retire l'année de référence seulement si le fichier chargé est un fichier annuel.
+                        // (en pratique on se cale sur l'année cible ; pour les blocs 4h/D on garde refDate)
+                        _currentYear = targetYear.All(char.IsDigit) ? int.Parse(targetYear) : refDate.Year;
                         string json = JsonConvert.SerializeObject(candles);
 
                         if (isPrevious)
@@ -399,14 +407,15 @@ namespace backtest
                     }
                 }
 
-                if (isPrevious) _endOfDataReached = true;
+                // Fin d'historique des DEUX côtés (avant : plus de fichier antérieur, après : plus de fichier postérieur)
+                _endOfDataReached = true;
                 SetStatus(isPrevious ? "DÉBUT DE L'HISTORIQUE" : "FIN DES DONNÉES", "#FF4B4B");
             }
             catch (Exception ex)
             {
                 await SafeExecuteJs($"window.cyberLog('Erreur LoadMore: {ex.Message.Replace("'", "\\'")}');");
             }
-            finally { _isLoadingMore = false; await ToggleLoader(false); }
+            finally { _isLoadingMore = false; await SafeExecuteJs("window.isProcessingData = false;"); await ToggleLoader(false); }
         }
         private string GetFileToRequest(int year, string timeframe)
         {
@@ -581,7 +590,40 @@ namespace backtest
 
                 _currentTF = btn.Tag.ToString().ToLower();
                 InitTimeframeButtons();
-                await LoadBacktestData(_ctsGlobal.Token);
+
+                // On récupère la position réelle (replay ou centre visible) côté JS :
+                // c'est elle qui détermine le fichier du nouveau TF à charger et la vue à conserver.
+                long? focusTime = null;
+                try
+                {
+                    string posJson = await ChartBrowser.ExecuteScriptAsync(
+                        "(function(){ return { replay: (typeof window.getReplayPosition === 'function') ? window.getReplayPosition() : null, center: (typeof window.getVisibleCenterTime === 'function') ? window.getVisibleCenterTime() : null, active: (window.replayState && window.replayState.isActive) ? true : false }; })()");
+
+                    if (!string.IsNullOrWhiteSpace(posJson))
+                    {
+                        var pos = JsonConvert.DeserializeObject<ReplayPositionInfo>(posJson);
+                        if (pos != null)
+                        {
+                            if (pos.active && pos.replay.HasValue)
+                            {
+                                // En replay : on charge le fichier de l'année de la position courante
+                                _currentYear = DateTimeOffset.FromUnixTimeSeconds(pos.replay.Value).DateTime.Year;
+                                focusTime = pos.replay.Value;
+                            }
+                            else if (pos.center.HasValue)
+                            {
+                                // En mode normal : on conserve simplement la vue si le fichier chargé la couvre
+                                focusTime = pos.center.Value;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Garde-fou : en cas d'erreur JS on garde le comportement par défaut
+                }
+
+                await LoadBacktestData(_ctsGlobal.Token, focusTime);
             }
         }
         private async void BtnCaptureHtf_Click(object sender, RoutedEventArgs e)
@@ -639,5 +681,15 @@ namespace backtest
         public string Name { get; set; }
         public string Value { get; set; }
         public bool IsActive { get; set; }
+    }
+
+    /// <summary>
+    /// Résultat de l'interrogation JS (Timeframe_Click) pour connaître la position réelle courante.
+    /// </summary>
+    public class ReplayPositionInfo
+    {
+        public long? replay { get; set; }
+        public long? center { get; set; }
+        public bool active { get; set; }
     }
 }
