@@ -114,6 +114,83 @@ window.getVisibleCenterTime = function() {
     return Math.floor((from + to) / 2);
 };
 
+// ── Contexte gauche (replay) ──────────────────────────────────────────
+// Précharge silencieusement l'année précédente quand le buffer commence
+// dans la même année que la position replay (vide à gauche en début d'année)
+// ou quand l'utilisateur scrolle jusqu'au bord gauche du buffer.
+window._leftContextTimer = null;
+window._leftContextLoading = false;
+window._leftEndReached = false;
+window._lastLeftEdgeFire = 0;
+
+function candleYear(t) {
+    if (t === null || t === undefined) return null;
+    if (typeof t === 'string') return parseInt(t.split('-')[0], 10);
+    return new Date(t * 1000).getFullYear();
+}
+
+window.resetLeftContextState = function() {
+    window._leftContextLoading = false;
+    window._leftEndReached = false;
+    window._lastLeftEdgeFire = 0;
+};
+
+window.scheduleLeftContextCheck = function(delay) {
+    if (window._leftContextTimer !== null) clearTimeout(window._leftContextTimer);
+    window._leftContextTimer = setTimeout(function() {
+        window._leftContextTimer = null;
+        window.ensureLeftContext();
+    }, delay || 700);
+};
+
+window.ensureLeftContext = function() {
+    if (!window.replayState || !window.replayState.isActive) return;
+    if (window._leftEndReached) return;
+
+    const all = window.replayState.allData;
+    if (!all || all.length === 0) return;
+
+    const posCandle = all[window.replayState.currentIndex];
+    const firstCandle = all[0];
+    if (!posCandle || !firstCandle) return;
+
+    // Cas principal : la 1re bougie du buffer est dans la même année (ou une année
+    // plus récente) que la position replay => l'année précédente manque à gauche.
+    const missingPreviousYear = candleYear(firstCandle.time) >= candleYear(posCandle.time);
+
+    // Cas secondaire : l'utilisateur a scrollé jusqu'au bord gauche du buffer pendant
+    // que le replay est en pause (200 bougies fantômes avant les vraies données).
+    let nearLeftEdge = false;
+    if (!missingPreviousYear && !window.replayState.isPlaying && window.chart &&
+        typeof window.chart.timeScale().getVisibleLogicalRange === 'function') {
+        const range = window.chart.timeScale().getVisibleLogicalRange();
+        nearLeftEdge = range !== null && range.from <= 205;
+    }
+
+    if (!missingPreviousYear && !nearLeftEdge) return;
+
+    // Cooldown pour le cas "scroll au bord gauche" (évite de chaîner trop vite)
+    if (!missingPreviousYear) {
+        const now = Date.now();
+        if (now - (window._lastLeftEdgeFire || 0) < 4000) {
+            window.scheduleLeftContextCheck(2000);
+            return;
+        }
+        window._lastLeftEdgeFire = now;
+    }
+
+    if (window.isProcessingData || window._leftContextLoading) {
+        window.scheduleLeftContextCheck(2000);
+        return;
+    }
+
+    const bridge = window.chrome.webview.hostObjects.chartService;
+    if (!bridge) return;
+
+    window._leftContextLoading = true;
+    bridge.LoadPreviousYearForReplay(firstCandle.time);
+};
+
 window.updateChartData = function(data, symbol = "Default", focusTime = null) {
     if (!window.candleSeries) window.initChart(); 
 
@@ -128,6 +205,7 @@ window.updateChartData = function(data, symbol = "Default", focusTime = null) {
 
     window.replayState.allData = data; 
     window.replayState.endReached = false;
+    window.resetLeftContextState();
 
     if (window.replayState.isActive) {
         if (currentTime) {
@@ -188,6 +266,9 @@ window.updateChartData = function(data, symbol = "Default", focusTime = null) {
     setTimeout(() => {
         window.chart.priceScale('right').applyOptions({ autoScale: false });
     }, 500);        
+
+    // Préchargement silencieux du contexte gauche (replay début d'année / changement de TF)
+    window.scheduleLeftContextCheck();
 };
 
 window.setupLazyLoading = function() {
@@ -249,6 +330,7 @@ window.toggleReplayUI = function() {
         window.replayState.currentIndex = 0;
     }
     window.replayState.endReached = false;
+    window.resetLeftContextState();
     
     const html = `
         <div id="replay-dashboard" style="display: flex; align-items: center; padding: 4px 10px; gap: 8px;">
@@ -285,6 +367,9 @@ window.toggleReplayUI = function() {
         const c = window.replayState.allData[window.replayState.currentIndex];
         if (c) dateInput.value = (typeof c.time === 'string' ? c.time : new Date(c.time * 1000).toISOString().split('T')[0]);
     }
+
+    // Précharge le contexte gauche (dernière année manquante) après activation du replay
+    window.scheduleLeftContextCheck(500);
 };
 
 function makeDraggable(elmnt, handle) {
@@ -330,6 +415,9 @@ window.stepReplay = function(direction) {
 
     const partialData = window.replayState.allData.slice(0, window.replayState.currentIndex + 1);
     window.candleSeries.setData(getExtendedTimeline(partialData));
+
+    // Anti-rebond : ne se déclenche que ~700 ms après la dernière action (jamais pendant le play continu)
+    window.scheduleLeftContextCheck();
 };
 
 window.jumpToReplayDate = async function() {
@@ -358,6 +446,7 @@ window.jumpToReplayDate = async function() {
 window.setupBacktestData = function(newData, year) {
     window.replayState.allData = newData;
     window.replayState.endReached = false;
+    window.resetLeftContextState();
     if (!newData || newData.length === 0) {
         window.isProcessingData = false;
         return;
@@ -392,6 +481,9 @@ function applyJump(index, dateText) {
         window.chart.priceScale('right').applyOptions({ autoScale: false });
         if (typeof window.updateScaleButtonsUI === 'function') window.updateScaleButtonsUI();
     }, 200);
+
+    // Précharge le contexte gauche si le jump atterrit en début de buffer/d'année
+    window.scheduleLeftContextCheck();
 }
 
 window.appendOrPrependData = function(newData, year) {
@@ -421,6 +513,83 @@ window.appendOrPrependData = function(newData, year) {
         window.candleSeries.setData(getExtendedTimeline(sortedUnique));
     }
     window.isProcessingData = false; 
+};
+
+// Fusionne des bougies ANTÉRIEURES au buffer de replay sans déplacer la position
+// courante (index conservé, vue logique décalée du nombre de bougies insérées).
+window.mergePrecedingData = function(newData, symbol) {
+    window._leftContextLoading = false;
+
+    // Données obsolètes (symbole changé entre-temps) : on les ignore
+    if (symbol && window.currentSymbol && symbol !== window.currentSymbol) {
+        window.isProcessingData = false;
+        return;
+    }
+    if (!window.replayState || !window.replayState.isActive) {
+        window.isProcessingData = false;
+        return;
+    }
+
+    const oldData = window.replayState.allData || [];
+    if (!newData || newData.length === 0 || oldData.length === 0) {
+        window.isProcessingData = false;
+        return;
+    }
+
+    const firstOldTime = oldData[0].time;
+    const lastNewTime = newData[newData.length - 1].time;
+
+    // Rien d'antérieur au buffer actuel => fin de l'historique côté gauche
+    if (lastNewTime >= firstOldTime) {
+        window._leftEndReached = true;
+        window.isProcessingData = false;
+        return;
+    }
+
+    const oldIndex = window.replayState.currentIndex;
+    const oldTime = (oldIndex >= 0 && oldIndex < oldData.length) ? oldData[oldIndex].time : null;
+    const oldVisibleRange = (window.chart && window.chart.timeScale()) ? window.chart.timeScale().getVisibleLogicalRange() : null;
+
+    const combined = [...newData, ...oldData];
+    const uniqueMap = new Map();
+    combined.forEach(item => uniqueMap.set(item.time, item));
+    const sortedUnique = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
+
+    if (sortedUnique.length === oldData.length) {
+        // Aucune bougie nouvelle (rechargement du même bloc) : fin de l'historique gauche
+        window._leftEndReached = true;
+        window.isProcessingData = false;
+        return;
+    }
+
+    window._leftEndReached = false;
+    window.replayState.endReached = false;
+    window.replayState.allData = sortedUnique;
+
+    // On recale l'index replay sur la MÊME bougie (delta = nombre de bougies insérées)
+    let delta = 0;
+    if (oldTime !== null) {
+        const newIndex = sortedUnique.findIndex(d => d.time >= oldTime);
+        window.replayState.currentIndex = (newIndex !== -1) ? newIndex : sortedUnique.length - 1;
+        delta = window.replayState.currentIndex - oldIndex;
+    }
+
+    // En replay, on n'affiche que le passé jusqu'à la position courante (jamais le futur)
+    const history = sortedUnique.slice(0, window.replayState.currentIndex + 1);
+    window.candleSeries.setData(getExtendedTimeline(history));
+
+    // Conservation de la vue : la range logique est décalée du même nombre de bougies
+    if (oldVisibleRange && window.chart && delta !== 0) {
+        window.chart.timeScale().setVisibleLogicalRange({
+            from: oldVisibleRange.from + delta,
+            to: oldVisibleRange.to + delta
+        });
+    }
+
+    window.isProcessingData = false;
+
+    // On re-teste (chaînage possible si la position est redevenue sur le bord gauche)
+    window.scheduleLeftContextCheck(700);
 };
 
 window.togglePlayReplay = function() {

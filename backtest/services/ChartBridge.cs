@@ -44,6 +44,14 @@ namespace backtest.services
                     await _chartInstance.LoadMoreData(lastVisibleTimestamp, false);
             });
         }
+        public void LoadPreviousYearForReplay(long firstVisibleTimestamp)
+        {
+            Application.Current.Dispatcher.Invoke(async () =>
+            {
+                if (_chartInstance != null)
+                    await _chartInstance.LoadPreviousYearForReplay(firstVisibleTimestamp);
+            });
+        }
         public void ExitReplayMode()
         {
             // On appelle la méthode de sortie sur l'instance de Chart

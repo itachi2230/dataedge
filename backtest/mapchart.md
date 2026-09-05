@@ -59,6 +59,8 @@ Le module **Chart** de DataEdge est un composant WPF (`Chart.xaml` / `Chart.xaml
 │  │  - setupLazyLoading → chargement infini          │    │
 │  │  - captureChart() → screenshot → C#              │    │
 │  │  - getExtendedTimeline() → bougies fantômes      │    │
+│  │  - ensureLeftContext/mergePrecedingData →       │    │
+│  │      contexte gauche replay (année précédente)   │    │
 │  │  - Gestion thème, grille, échelle (P/L/A)        │    │
 │  └─────────────────────────────────────────────────┘    │
 │                                                          │
@@ -190,6 +192,48 @@ La fin d'historique est détectée des DEUX côtés (avant et après) :
 - Côté C# : `_endOfDataReached = true` si fichier introuvable / vide (les deux directions)
 - Côté JS : `replayState.endReached = true` si `appendOrPrependData` / `prependChartData`
   ne produisent aucune nouvelle bougie
+
+### 4. Préchargement du Contexte Gauche (Replay)
+
+Quand le replay démarre en début d'année (ou après un changement de timeframe),
+le buffer ne contient que l'année de la position : il y a du vide à gauche tant
+que l'année précédente n'est pas chargée. Un **préchargement silencieux** est
+déclenché en arrière-plan pour combler ce vide SANS latence (l'année cible
+s'affiche immédiatement, l'année précédente arrive ensuite sans saut visuel).
+
+```
+chart_engine.js → ensureLeftContext()
+    │  (déclenché via scheduleLeftContextCheck() après updateChartData /
+    │   applyJump / toggleReplayUI / stepReplay — anti-rebond ~700 ms)
+    │
+    ├── Buffer commence dans la MÊME année que la position replay
+    │   → bridge.LoadPreviousYearForReplay(firstCandle.time)
+    │
+    └── Replay en pause + utilisateur scrollé au bord gauche du buffer
+        → idem (cooldown 4 s pour ne pas chaîner sans limite)
+
+▼
+ChartBridge.cs → LoadPreviousYearForReplay(long timestamp)
+
+▼
+Chart.xaml.cs → LoadPreviousYearForReplay(timestamp)
+    ├── Ignore les TF blocs (w / m / 4h / d : déjà 10 ans en mémoire)
+    ├── _isPrefetching (verrou dédié, silencieux : aucun ToggleLoader)
+    ├── GetMarketDataAsync(année − 1)  (cache local → API)
+    └── ExecuteScriptAsync(mergePrecedingData(json, symbol))
+
+▼
+chart_engine.js → mergePrecedingData(newData, symbol)
+    ├── Fusionne UNIQUEMENT des bougies antérieures (Map + tri, dédoublonnage)
+    ├── Recale replayState.currentIndex sur la MÊME bougie (delta = nb ajouté)
+    └── Préserve la vue : setVisibleLogicalRange(from + delta, to + delta)
+          → aucun saut visuel, position replay intacte
+
+Drapeaux dédiés (côté JS) :
+- window._leftContextLoading : préchargement en cours
+- window._leftEndReached     : aucune année antérieure disponible (stoppe les retries)
+- resetLeftContextState()    : réarmé à chaque nouveau chargement d'année/TF
+```
 
 ---
 
@@ -480,6 +524,7 @@ ChartBridge est un objet COM exposé au WebView2 via `AddHostObjectToScript("cha
 | `bridge.LoadYearForBacktest(year)` | `LoadYearForBacktest(int)` | Charge année spécifique pour replay |
 | `bridge.loadPreviousYear(timestamp)` | `loadPreviousYear(long)` | Charge année précédente (lazy load) |
 | `bridge.loadNextYear(timestamp)` | `loadNextYear(long)` | Charge année suivante |
+| `bridge.LoadPreviousYearForReplay(timestamp)` | `LoadPreviousYearForReplay(long)` | Précharge silencieusement l'année précédente (replay, TF annuels) |
 | `bridge.ExitReplayMode()` | `ExitReplayMode()` | Sort du mode replay |
 | `bridge.OnTradeSetupCompleted(json)` | `OnTradeSetupCompleted(string)` | Trade détecté → peuple formulaire |
 | `bridge.SaveChartScreenshot(type, base64)` | `SaveChartScreenshot(string, string)` | Sauvegarde screenshot PNG |

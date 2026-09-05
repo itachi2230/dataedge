@@ -28,6 +28,7 @@ namespace backtest
         private bool _isLoadingMore = false;
         private Strategie _strategie;
         private bool _endOfDataReached = false;
+        private bool _isPrefetching = false;
 
         private CancellationTokenSource _ctsGlobal;
 
@@ -416,6 +417,92 @@ namespace backtest
                 await SafeExecuteJs($"window.cyberLog('Erreur LoadMore: {ex.Message.Replace("'", "\\'")}');");
             }
             finally { _isLoadingMore = false; await SafeExecuteJs("window.isProcessingData = false;"); await ToggleLoader(false); }
+        }
+        /// <summary>
+        /// Précharge silencieusement l'année précédente en arrière-plan pendant un replay
+        /// (TF annuels uniquement) pour éviter le vide à gauche en début d'année ou après
+        /// un changement de timeframe. La fusion côté JS (mergePrecedingData) ne déplace
+        /// ni la position replay ni la vue.
+        /// </summary>
+        public async Task LoadPreviousYearForReplay(long referenceTimestamp)
+        {
+            string tf = _currentTF.ToLower();
+            string symbolRequested = _currentSymbol;
+
+            // Fichiers blocs (w/m/4h/d) : 10 ans déjà en mémoire => rien à précharger
+            if (tf == "w" || tf == "m" || tf == "4h" || tf == "d")
+            {
+                await SafeExecuteJs("window._leftContextLoading = false;");
+                return;
+            }
+
+            if (_ctsGlobal == null) _ctsGlobal = new CancellationTokenSource();
+
+            DateTime refDate = DateTimeOffset.FromUnixTimeSeconds(referenceTimestamp).DateTime;
+            int prevYear = refDate.Year - 1;
+            if (prevYear < 2000)
+            {
+                await SafeExecuteJs("window._leftContextLoading = false; window._leftEndReached = true;");
+                return;
+            }
+
+            if (_isPrefetching)
+            {
+                await SafeExecuteJs("window._leftContextLoading = false;");
+                return;
+            }
+
+            // Un autre chargement (lazy load / suite replay) est en cours : on réessaiera dans 1,5 s
+            if (_isLoadingMore)
+            {
+                await SafeExecuteJs("window._leftContextLoading = false; window.scheduleLeftContextCheck(1500);");
+                return;
+            }
+
+            _isPrefetching = true;
+            try
+            {
+                string targetYear = GetFileToRequest(prevYear, _currentTF);
+
+                var result = await _dataService.GetMarketDataAsync(symbolRequested, _currentTF, targetYear, _ctsGlobal.Token);
+
+                // Annulé (ex. changement de TF/symbole) : on laisse le nouveau chargement gérer le contexte
+                if (_ctsGlobal.Token.IsCancellationRequested)
+                {
+                    await SafeExecuteJs("window._leftContextLoading = false;");
+                    return;
+                }
+
+                if (result.success)
+                {
+                    var candles = await Task.Run(() => ParseCsvToCandles(result.filePath));
+                    if (candles != null && candles.Count > 0)
+                    {
+                        string json = JsonConvert.SerializeObject(candles);
+                        await SafeExecuteJs($"mergePrecedingData({json}, '{symbolRequested}');");
+                        _endOfDataReached = false;
+                        SetStatus($"{_currentSymbol} {tf.ToUpper()} (+{targetYear})", "#00FF7F");
+                        return;
+                    }
+                }
+
+                // Plus aucun fichier antérieur disponible : on stoppe les tentatives
+                _endOfDataReached = true;
+                SetStatus("DÉBUT DE L'HISTORIQUE", "#FF4B4B");
+                await SafeExecuteJs("window._leftEndReached = true; window.isProcessingData = false; window._leftContextLoading = false;");
+            }
+            catch (OperationCanceledException)
+            {
+                await SafeExecuteJs("window._leftContextLoading = false;");
+            }
+            catch (Exception ex)
+            {
+                await SafeExecuteJs($"window.cyberLog('Erreur préchargement: {ex.Message.Replace("'", "\\'")}', true); window._leftContextLoading = false;");
+            }
+            finally
+            {
+                _isPrefetching = false;
+            }
         }
         private string GetFileToRequest(int year, string timeframe)
         {
