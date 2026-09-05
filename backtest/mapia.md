@@ -10,7 +10,7 @@ L'agent IA de DataEdge est un **copilote de trading intégré** au logiciel WPF.
 - **Discuter** de ses performances, stratégies, trades et études en langage naturel.
 - **Agir sur son espace local** via des *function calls* (tools) : lire le workspace, créer/supprimer des stratégies, ajouter des trades au journal, lire/chercher/créer/remplir/supprimer des études.
 
-Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY` / `GEMINI_API_KEY` ne quittent jamais le backend). Le fournisseur est choisi par le paramètre `ai_provider` de `fxglobal/config/services.yaml` : **`openrouter`** (défaut — API compatible OpenAI, modèle `openrouter_model`, ex. `z-ai/glm-5.3-flash` : ~10x moins cher que Gemini Flash, function calling testé) ou **`gemini`** (API `generativelanguage.googleapis.com`). Les deux implémentent `AiChatProviderInterface` et émettent le même protocole de chunks : le client ne change pas.
+Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY` / `GEMINI_API_KEY` ne quittent jamais le backend). Le fournisseur est choisi dans la table **`ai_settings`** (pilotable au dashboard `/admin/ai`) : **`openrouter`** (défaut — API compatible OpenAI, modèle `open_router_model`, ex. `z-ai/glm-5.3-flash` : ~10x moins cher que Gemini Flash, function calling testé) ou **`gemini`** (API `generativelanguage.googleapis.com`). Le paramètre `ai_provider` de `fxglobal/config/services.yaml` sert de valeur par défaut à la première exécution. Les deux implémentent `AiChatProviderInterface` et émettent le même protocole de chunks : le client ne change pas.
 
 ```
 ┌───────────────────────────────┐        ┌─────────────────────────────────────┐        ┌──────────────────────────┐
@@ -260,22 +260,36 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 
 | Élément | Détail |
 |---|---|
-| **Constructeur** | `__construct(AIChatMessageRepository, string $openRouterApiKey, string $openRouterModel, string $openRouterReasoningEffort = 'low')` — paramètres bindés depuis `config/services.yaml` |
+| **Constructeur** | `__construct(AIChatMessageRepository, AISettingsRepository, AIUserSessionRepository, string $openRouterApiKey, string $openRouterModel, string $openRouterReasoningEffort = 'low')` — paramètres bindés depuis `config/services.yaml` (repositories autowirés) |
+| **Config pilotable (dashboard `/admin/ai`)** | Depuis la migration `Version20260905120000.php`, la table **`ai_settings`** (une seule ligne auto-créée) pilote : `provider` (`openrouter`/`gemini`), `openRouterModel`, `reasoningEffort`, `historyLimit`, `enableSessionCaching` + `sessionTimeoutMinutes`, `enableProviderPinning` + `preferredProvider`, `enableWebSearch`, `maxOutputTokens`. `AIChatController` lit cette table pour choisir le fournisseur primaire/repli ; les valeurs `config/services.yaml` restent les défauts |
+| **Prompt Caching — `session_id`** | Si `enableSessionCaching` : un UUID stable par conversation utilisateur (table **`ai_user_session`**) est envoyé dans le payload (`session_id`) → ~50-70% d'économie sur les tokens d'entrée. Le UUID est régénéré à l'expiration (`sessionTimeoutMinutes`, défaut 30 min d'inactivité) |
+| **Provider pinning** | Si `enableProviderPinning` : payload `provider: {order: [<preferredProvider>], allow_fallbacks: false}` → épingle un sous-hébergeur unique (ex `z-ai`) pour ne pas annuler le cache de prompt par le dispatch |
 | **Latence — effort de raisonnement** | Payload OpenRouter : `reasoning: {effort: <openrouter_reasoning_effort>}` (défaut **`low`** — premier token quasi immédiat pour un copilote de chat ; `''`/`'none'` = champ omis). Supporté par GLM 5.3 Flash et DeepSeek V4 Flash (vérifié API) |
-| **Latence — fenêtre d'historique** | `HISTORY_LIMIT = 24` : fenêtre **rejouée au modèle** (distincte de l'affichage client qui reste à 40) → prefill plus court/moins cher à chaque tour d'outil |
+| **Latence — fenêtre d'historique** | `historyLimit` (défaut 24, réglable 4-100 au dashboard) : fenêtre **rejouée au modèle** (distincte de l'affichage client qui reste à 40) → prefill plus court/moins cher à chaque tour d'outil |
 | **Réflexion diffusée** | `EMIT_REASONING = true` : les fragments `delta.reasoning` (ou `reasoning_content` selon le fournisseur) sont émis au client sous forme de chunks **`{"reasoning": "..."}`** — protocole inchangé pour le reste (un type de chunk de plus) ; jamais mélangés au texte |
 | **Chaîne de repli** | `FALLBACK_MODELS = ['deepseek/deepseek-v4-flash-0731', 'z-ai/glm-5.2:free']` sur 429/402/5xx, repli silencieux. Sur 429/5xx : le plugin `:online` est **abandonné d'abord sur le même modèle** (il aggrave la charge), puis modèle suivant — avec **backoff croissant** (`RETRY_BACKOFF_MS = 800` × n : 0.8/1.6/2.4 s) car les pools saturés se libèrent vite. Chaîne épuisée → **messages neutres DataEdge** (jamais de mention du fournisseur ni de code HTTP côté client ; le détail technique va dans le log serveur) : 429 = « Le serveur IA de DataEdge est momentanément saturé… », 402 = « Le service IA de DataEdge est temporairement indisponible… » |
 | **Messages d'erreur neutres** | Toutes les chaînes `{"error": ...}` émises au client (connexion impossible, flux inactif, erreur API, interruption) parlent du « serveur IA de DataEdge » — l'utilisateur ne doit jamais voir le nom d'un fournisseur tiers ; `error_log('[AIChat][openrouter|gemini] …')` conserve le détail pour l'administrateur |
-| **Veille marché** | `ENABLE_WEB_SEARCH = true` : suffixe `:online` (plugin web OpenRouter) si l'intention touche au présent ; retente sans le plugin en cas de refus HTTP 4xx (combinaison tools + web) |
+| **Veille marché** | `enableWebSearch` (défaut true) : suffixe `:online` (plugin web OpenRouter) si l'intention touche au présent ; retente sans le plugin en cas de refus HTTP 4xx (combinaison tools + web) |
 | **Garde-fous réseau** | `CONNECT_TIMEOUT=10`, `STALL_TIMEOUT=45` (flux sans octet → coupure), `MAX_STREAM_TIME=600`, pings SSE `{"ping":true}` toutes les ~10 s pendant les silences, coupure si le client se déconnecte |
 
+### `src/Controller/AIAdminController.php` + `templates/admin/ai/dashboard.html.twig` — Dashboard admin de pilotage coût
+
+| Route | Nom | Description |
+|---|---|---|
+| **GET** `/admin/ai/dashboard` | `admin_ai_dashboard` | Vue de pilotage coût (protégée `ROLE_ADMIN` via `security.yaml` `^/admin`) : fournisseur, modèle, effort de raisonnement, sliding window, session caching + timeout, provider pinning + provider préféré, web search, `maxOutputTokens`, stats (sessions actives, messages du jour) |
+| **POST** `/admin/ai/settings/update` | `admin_ai_settings_update` | Écrit la ligne unique `ai_settings` (checkboxes : présentes dans le POST = cochées ; sliders bornés par les setters de l'entité) |
+| **POST** `/admin/ai/sessions/clear` | `admin_ai_sessions_clear` | Purge `ai_user_session` expirées (au-delà du timeout) |
+| **GET** `/admin/ai/api/stats` | `admin_ai_api_stats` | JSON de stats + config courante (rafraîchissement AJAX) |
+
+> ✨ **Optimisations de coût activées** : (1) `session_id` persistant par utilisateur → Prompt Caching OpenRouter (~50-70% d'économie sur les tokens d'entrée) ; (2) provider pinning → même sous-hébergeur pour ne pas invalider le cache ; (3) `historyLimit` + `maxOutputTokens` réglables ; (4) web search désactivable (le plugin `:online` est la feature la plus chère).
 ### Migration & config
 
 | Fichier | Rôle |
 |---|---|
 | `migrations/Version20260714022623.php` | Crée la table `aichat_message` + FK `user_id` |
 | `migrations/Version20260904100000.php` | Ajoute sur `software_config` : `ai_chat_enabled` (défaut 1, kill switch agent IA), `ai_quota_enabled` (défaut 0, quota par utilisateur) et `ai_daily_quota` (défaut 30 messages/jour) |
-| `config/services.yaml` | `gemini_api_key: '%env(GEMINI_API_KEY)%'` → bindé sur `$geminiApiKey` ; **fournisseur IA** : `ai_provider` (`openrouter` défaut / `gemini`), `openrouter_api_key` (`%env(OPENROUTER_API_KEY)%`), `openrouter_model` (`z-ai/glm-5.3-flash`) et `openrouter_reasoning_effort` (`low`) bindés sur le constructeur d'`OpenRouterService` |
+| `migrations/Version20260905120000.php` | Crée les tables `ai_settings` (config globale de l'IA) et `ai_user_session` (sessions pour le Prompt Caching) |
+| `config/services.yaml` | `gemini_api_key: '%env(GEMINI_API_KEY)%'` → bindé sur `$geminiApiKey` ; `openrouter_api_key`, `openrouter_model`, `openrouter_reasoning_effort` bindés sur le constructeur d'`OpenRouterService` |
 | `.env` | Contient `GEMINI_API_KEY` (clé remise via la variable d'environnement) |
 | `config/packages/security.yaml` | Firewall `api` (`jwt`) sur `^/api` ; `api/ai/chat` est donc protégé par JWT |
 

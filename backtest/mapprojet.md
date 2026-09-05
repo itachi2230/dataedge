@@ -251,6 +251,10 @@ GET  /api/cloud/list?app_id=...           → Liste fichiers distants
 GET  /api/cloud/download?app_id=...       → Download fichier
 GET  /api/public/data/fetch?pair=&tf=&year= → Données CSV historiques
 GET  /api/public/data/pairs               → Liste paires disponibles
+GET  /admin/software/dashboard            → Back-office software (builds, notifs, quota IA)
+GET  /admin/ai/dashboard                  → Back-office IA : config coût (toggles + sliders)
+POST /admin/ai/settings/update            → Sauvegarde ai_settings
+POST /admin/ai/sessions/clear             → Purge sessions cache expirées
 ```
 
 ---
@@ -265,8 +269,11 @@ GET  /api/public/data/pairs               → Liste paires disponibles
 | `FxCloudService.cs` | Service cloud : auth, sync, profil, handshake, crash reporting |
 | `services/AgentWorkspaceService.cs` | Expose le contexte local et les tools IA de lecture/mutation confirmée |
 | `fxglobal/src/Controller/AIChatController.php` | Endpoint IA : route `POST /api/ai/chat`, streaming SSE, persistance BDD |
+| `fxglobal/src/Controller/AIAdminController.php` | Back-office `/admin/ai/**` : config coût de l'agent IA (fournisseur, modèle, sliding window, cache, pinning, web search) + stats |
+| `fxglobal/src/Entity/AISettings.php` | Config globale de l'IA (table `ai_settings`, une ligne pilotée au dashboard admin) |
+| `fxglobal/src/Entity/AIUserSession.php` | Sessions de Prompt Caching par utilisateur (`ai_user_session`, UUID stable régénéré à l'expiration) |
 | `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclare les fonctions et convertit ses `functionCall` en `tool_call` |
-| `fxglobal/src/Service/OpenRouterService.php` | Fournisseur LLM OpenRouter (compatible OpenAI) : streaming SSE, function calling, chaîne de repli de modèles, plugin web `:online` |
+| `fxglobal/src/Service/OpenRouterService.php` | Fournisseur LLM OpenRouter (compatible OpenAI) : streaming SSE, function calling, chaîne de repli de modèles, plugin web `:online`, **Prompt Caching `session_id` + provider pinning** pilotés par `ai_settings` |
 | `Dataservice.cs` | Récupération données marché depuis API Symfony, cache CSV local |
 | `ChartBridge.cs` | Pont C#↔JS pour le WebView2 du graphique (dessins, captures) |
 | `StatisticsControl.xaml.cs` | Contrôle statistiques d'une stratégie (DataGrid + vues) |
