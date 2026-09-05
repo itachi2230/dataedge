@@ -22,12 +22,28 @@ namespace backtest.Services
         {
             return new List<AiToolDefinition>
             {
-                new AiToolDefinition("get_workspace_snapshot", "Lire l'état du workspace : habitudes du jour, stratégies et leurs statistiques, trades récents et catalogue d'études. À utiliser dès qu'une question porte sur les données de l'utilisateur.", false),
+                new AiToolDefinition("get_workspace_snapshot", "Lire l'état du workspace : stratégies et leurs statistiques, trades récents et catalogue d'études. À utiliser dès qu'une question porte sur les données de l'utilisateur.", false),
                 new AiToolDefinition("get_strategy_details", "Lire les trades, statistiques et configurations d'une stratégie précise.", false,
                     new AiToolParameter("strategy_name", "string", "Nom exact de la stratégie à inspecter.")),
                 new AiToolDefinition("search_trades", "Rechercher dans le journal et le backtest par paire, résultat ou stratégie.", false,
                     new AiToolParameter("query", "string", "Texte à rechercher : paire (ex: EURUSD), nom de stratégie ou résultat (WIN/TP/SL). Chaîne vide pour tout lister.", false)),
-                new AiToolDefinition("get_study_catalog", "Lister les études et notes disponibles dans l'espace local.", false),
+                new AiToolDefinition("get_study_catalog", "Lister les études et notes disponibles : nom, dossier, taille, dernière modification. À appeler avant de lire ou modifier une étude dont tu ne connais pas le chemin exact.", false),
+                new AiToolDefinition("read_study", "Lire le contenu textuel d'une étude ou d'une note (les images ne sont jamais envoyées, elles sont signalées par des marqueurs [image]).", false,
+                    new AiToolParameter("name", "string", "Titre ou chemin de l'étude, ex: 'ICT Basics' ou 'etudes/SMC/ICT Basics'."),
+                    new AiToolParameter("max_chars", "number", "Nombre maximum de caractères renvoyés (défaut 8000).", false)),
+                new AiToolDefinition("search_studies", "Rechercher un texte dans toutes les études et renvoyer les extraits correspondants.", false,
+                    new AiToolParameter("query", "string", "Texte à rechercher dans le contenu des études."),
+                    new AiToolParameter("max_results", "number", "Nombre maximum d'études renvoyées (défaut 8).", false)),
+                new AiToolDefinition("create_study", "Créer une nouvelle étude dans le module Études, éventuellement dans un sous-dossier, et la remplir avec un contenu initial. Aucune confirmation n'est demandée pour la création.", false,
+                    new AiToolParameter("name", "string", "Titre de la nouvelle étude (sans extension)."),
+                    new AiToolParameter("folder", "string", "Sous-dossier optionnel du module Études, ex: 'SMC'. Créé si absent.", false),
+                    new AiToolParameter("content", "string", "Contenu initial en markdown léger : # titres, **gras**, *italique*, __souligné__, - listes. Mise en forme avancée : [color=red]text[/color] (couleur : nom ou #RRGGBB), [size=18]text[/size] (taille). Les emojis sont autorisés s'ils apportent du sens (📈📉🎯⚠️✅) mais à utiliser avec modération.", false)),
+                new AiToolDefinition("write_study", "Modifier le contenu d'une étude existante : remplacer, ajouter à la fin ou insérer au début. Les images existantes sont préservées.", true,
+                    new AiToolParameter("name", "string", "Titre ou chemin de l'étude à modifier."),
+                    new AiToolParameter("content", "string", "Contenu à écrire en markdown léger : # titres, **gras**, *italique*, __souligné__, - listes. Mise en forme avancée : [color=red]text[/color] (couleur : nom ou #RRGGBB), [size=18]text[/size] (taille). Emojis autorisés avec modération."),
+                    new AiToolParameter("mode", "string", "replace (défaut) pour remplacer tout, append pour ajouter à la fin, prepend pour insérer au début.", false)),
+                new AiToolDefinition("delete_study", "Supprimer définitivement une étude et son fichier local (action définitive).", true,
+                    new AiToolParameter("name", "string", "Titre ou chemin de l'étude à supprimer.")),
                 new AiToolDefinition("create_strategy", "Créer une stratégie dans DataEdge.", true,
                     new AiToolParameter("name", "string", "Nom unique de la nouvelle stratégie."),
                     new AiToolParameter("description", "string", "Description de la stratégie.", false)),
@@ -42,12 +58,7 @@ namespace backtest.Services
                     new AiToolParameter("exit", "string", "Date/heure de sortie, ex: 2026-09-03 16:45.", false),
                     new AiToolParameter("rr", "number", "Ratio risque/rendement, ex: 2.5.", false),
                     new AiToolParameter("profit", "number", "Profit en devise du compte (négatif si perte).", false),
-                    new AiToolParameter("description", "string", "Notes sur le trade (setup, contexte...).", false)),
-                new AiToolDefinition("add_habit", "Ajouter une habitude de trading à suivre.", true,
-                    new AiToolParameter("name", "string", "Intitulé de l'habitude.")),
-                new AiToolDefinition("mark_habit", "Marquer une habitude comme faite ou non faite aujourd'hui.", true,
-                    new AiToolParameter("name", "string", "Intitulé exact de l'habitude."),
-                    new AiToolParameter("is_checked", "boolean", "true si l'habitude est faite aujourd'hui, sinon false."))
+                    new AiToolParameter("description", "string", "Notes sur le trade (setup, contexte...).", false))
             };
         }
 
@@ -71,7 +82,7 @@ namespace backtest.Services
         /// Contexte MINIMAL du premier message d'une conversation : l'identité de
         /// l'utilisateur uniquement. Le serveur la persiste (role 'context') et la
         /// rejoue ensuite depuis l'historique BDD. Les données du workspace
-        /// (stratégies, trades, habitudes, études) ne sont plus injectées
+        /// (stratégies, trades, études) ne sont plus injectées
         /// automatiquement : le modèle les lit à la demande via les tools — le
         /// payload et le prefill Gemini restent minimaux.
         /// </summary>
@@ -95,11 +106,8 @@ namespace backtest.Services
             var strategies = utils.getStrategies();
             var trades = strategies.SelectMany(strategy => strategy.GetJournal().Select(trade => new { strategy = strategy.Nom, trade }))
                 .ToList();
-            var habits = new HabitsManager();
             var snapshot = new
             {
-                habits = habits.Habits.Select(h => h.Name).ToList(),
-                habits_today = habits.DailyHabitStates.Select(h => new { name = h.HabitName, completed = h.IsChecked }).ToList(),
                 strategies = strategies.Select(strategy => new
                 {
                     name = strategy.Nom,
@@ -109,7 +117,7 @@ namespace backtest.Services
                     statistics = strategy.GetStatistics()
                 }).ToList(),
                 recent_trades = trades.OrderByDescending(item => item.trade.DateEntree).Take(25).Select(ToTradeSummary).ToList(),
-                studies = GetStudyCatalog()
+                studies = AgentStudiesService.GetRelativePaths()
             };
             return JsonSerializer.Serialize(snapshot);
         }
@@ -146,17 +154,23 @@ namespace backtest.Services
                     case "search_trades":
                         return SearchTrades(call.Arguments);
                     case "get_study_catalog":
-                        return AiToolResult.Success(JsonSerializer.Serialize(GetStudyCatalog()));
+                        return AiToolResult.Success(AgentStudiesService.GetCatalog());
+                    case "read_study":
+                        return AgentStudiesService.Read(call.Arguments);
+                    case "search_studies":
+                        return AgentStudiesService.Search(call.Arguments);
+                    case "create_study":
+                        return AgentStudiesService.Create(call.Arguments);
+                    case "write_study":
+                        return AgentStudiesService.Write(call.Arguments);
+                    case "delete_study":
+                        return AgentStudiesService.Delete(call.Arguments);
                     case "create_strategy":
                         return CreateStrategy(call.Arguments);
                     case "delete_strategy":
                         return DeleteStrategy(call.Arguments);
                     case "add_journal_trade":
                         return AddJournalTrade(call.Arguments);
-                    case "add_habit":
-                        return AddHabit(call.Arguments);
-                    case "mark_habit":
-                        return MarkHabit(call.Arguments);
                     default:
                         return AiToolResult.Error("Outil non implémenté.");
                 }
@@ -196,15 +210,6 @@ namespace backtest.Services
                     || trade.Result.ToString().IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
                 .Select(ToTradeSummary)).Take(200).ToList();
             return AiToolResult.Success(JsonSerializer.Serialize(results));
-        }
-
-        private AiToolResult AddHabit(JsonElement arguments)
-        {
-            string name = GetString(arguments, "name");
-            if (string.IsNullOrWhiteSpace(name)) return AiToolResult.Error("Le nom de l'habitude est obligatoire.");
-            var manager = new HabitsManager();
-            manager.AddHabit(name);
-            return AiToolResult.Success($"Habitude ajoutée: {name}");
         }
 
         private AiToolResult CreateStrategy(JsonElement arguments)
@@ -247,15 +252,6 @@ namespace backtest.Services
             return AiToolResult.Success($"Trade ajouté au journal de {strategy.Nom}.");
         }
 
-        private AiToolResult MarkHabit(JsonElement arguments)
-        {
-            string name = GetString(arguments, "name");
-            bool isChecked = GetBool(arguments, "is_checked");
-            var manager = new HabitsManager();
-            manager.UpdateHabitState(name, isChecked);
-            return AiToolResult.Success($"Habitude {(isChecked ? "validée" : "dévalidée")}: {name}");
-        }
-
         private static object ToTradeSummary(dynamic item)
         {
             return new
@@ -282,19 +278,6 @@ namespace backtest.Services
                 exit = trade.DateSortie, order_type = trade.TypeOrdre.ToString(), rr = trade.RR,
                 profit = trade.Profit, description = trade.description, custom_fields = trade.ChampsPersonnalises
             };
-        }
-
-        private static List<string> GetStudyCatalog()
-        {
-            var studies = new List<string>();
-            AddFiles(studies, "etudes", "*.etude");
-            AddFiles(studies, "Notes", "*.etude");
-            return studies;
-        }
-
-        private static void AddFiles(List<string> target, string folder, string pattern)
-        {
-            if (Directory.Exists(folder)) target.AddRange(Directory.GetFiles(folder, pattern, SearchOption.AllDirectories));
         }
 
         private static string GetString(JsonElement arguments, string property)

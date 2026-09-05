@@ -321,11 +321,14 @@ namespace backtest.Services
                 case "get_strategy_details": return "Analyse de la stratégie";
                 case "search_trades": return "Recherche dans le journal";
                 case "get_study_catalog": return "Parcours des études";
+                case "read_study": return "Lecture de l'étude";
+                case "search_studies": return "Recherche dans les études";
+                case "create_study": return "Création de l'étude";
+                case "write_study": return "Écriture de l'étude";
+                case "delete_study": return "Suppression de l'étude";
                 case "create_strategy": return "Création de la stratégie";
                 case "delete_strategy": return "Suppression de la stratégie";
                 case "add_journal_trade": return "Ajout du trade au journal";
-                case "add_habit": return "Ajout de l'habitude";
-                case "mark_habit": return "Mise à jour de l'habitude";
                 default: return toolName;
             }
         }

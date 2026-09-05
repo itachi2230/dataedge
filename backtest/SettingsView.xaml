@@ -56,7 +56,7 @@
 
                             <StackPanel x:Name="PanelApp" Visibility="Visible">
                                 <TextBlock Text="CONFIGURATION SYSTÈME" Foreground="White" FontSize="24" Margin="0,0,0,10" FontWeight="Bold"/>
-                                <TextBlock Text="Personnalisez votre expérience locale FxHabit." Foreground="Gray" FontSize="12" Margin="0,0,0,40"/>
+                                <TextBlock Text="Personnalisez votre expérience locale DataEdge." Foreground="Gray" FontSize="12" Margin="0,0,0,40"/>
                                 <CheckBox Content="Lancer au démarrage de Windows" Foreground="White" Margin="0,10"/>
                                 <CheckBox Content="Activer les alertes sonores" IsChecked="True" Foreground="White" Margin="0,10"/>
                                 <TextBlock Text="Langue de l'interface" Foreground="Gray" Margin="0,20,0,10" FontSize="11" FontWeight="Bold"/>

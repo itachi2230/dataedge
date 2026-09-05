@@ -215,7 +215,7 @@
     </Compile>
     <Compile Include="FirstLaunchManager.cs" />
     <Compile Include="FxCloudService.cs" />
-    <Compile Include="HabitsManager.cs" />
+    <Compile Include="services\AgentStudiesService.cs" />
     <Compile Include="InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>

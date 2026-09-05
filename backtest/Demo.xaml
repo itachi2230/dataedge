@@ -213,7 +213,7 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- SLIDE 2 : Planning & Habits -->
+                <!-- SLIDE 2 : Planning & Études -->
                 <Grid x:Name="Slide2" Opacity="0" Visibility="Collapsed">
                     <Grid.RenderTransform>
                         <TranslateTransform Y="30"/>
@@ -237,7 +237,7 @@
                                    HorizontalAlignment="Center"
                                    TextAlignment="Center"
                                    LineHeight="36"/>
-                        <TextBlock Text="en avance et contrôlez vos habitudes" 
+                        <TextBlock Text="en avance et vos études de marché" 
                                    Foreground="#00BFFF" 
                                    FontSize="28" 
                                    FontWeight="Black"

@@ -7,8 +7,8 @@
 
 L'agent IA de DataEdge est un **copilote de trading intégré** au logiciel WPF. Il permet à l'utilisateur de :
 
-- **Discuter** de ses performances, stratégies, trades et habitudes en langage naturel.
-- **Agir sur son espace local** via des *function calls* (tools) : lire le workspace, créer/supprimer des stratégies, ajouter des trades au journal, gérer les habitudes.
+- **Discuter** de ses performances, stratégies, trades et études en langage naturel.
+- **Agir sur son espace local** via des *function calls* (tools) : lire le workspace, créer/supprimer des stratégies, ajouter des trades au journal, lire/chercher/créer/remplir/supprimer des études.
 
 Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY` / `GEMINI_API_KEY` ne quittent jamais le backend). Le fournisseur est choisi par le paramètre `ai_provider` de `fxglobal/config/services.yaml` : **`openrouter`** (défaut — API compatible OpenAI, modèle `openrouter_model`, ex. `z-ai/glm-5.3-flash` : ~10x moins cher que Gemini Flash, function calling testé) ou **`gemini`** (API `generativelanguage.googleapis.com`). Les deux implémentent `AiChatProviderInterface` et émettent le même protocole de chunks : le client ne change pas.
 
@@ -171,16 +171,29 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 
 | Fonction | Rôle |
 |---|---|
-| `GetToolDefinitions()` | Retourne la liste des 9 tools déclarés au modèle, avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
+| `GetToolDefinitions()` | Retourne la liste des 13 tools déclarés au modèle, avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
 | `RequiresConfirmation(toolName)` | Indique si un tool nécessite une confirmation utilisateur (tool inconnu → `true` par sécurité) |
 | `BuildIdentityContextAsync()` | Sérialise en JSON l'**identité seule** (profil cloud via `GetProfileCachedAsync`, cache 5 min) — envoyée au premier tour, persistée role=`context` côté serveur |
-| `BuildWorkspaceSnapshotAsync()` | Sérialise le **résumé workspace** (habitudes du jour, stratégies + stats, 25 derniers trades, catalogue d'études) — renvoyé uniquement quand le modèle appelle `get_workspace_snapshot` |
+| `BuildWorkspaceSnapshotAsync()` | Sérialise le **résumé workspace** (stratégies + stats, 25 derniers trades, chemins des études) — renvoyé uniquement quand le modèle appelle `get_workspace_snapshot` |
 | `ExecuteAsync(call, confirmMutation)` | Dispatch par `switch` vers l'implémentation de chaque outil ; gère la **confirmation** pour les outils marqués `requiresConfirmation` ; log + `AiToolResult.Error` sur exception |
-| Coercition des arguments | `GetString` / `GetBool` / `GetNumber` tolèrent tous les ValueKind JSON (nombre, booléen, chaîne) — évite les exceptions quand Gemini envoie `rr`/`profit` en number ou `is_checked` en boolean |
-| Outils lecture | `GetStrategyDetails`, `SearchTrades`, `GetStudyCatalog` |
-| Outils mutation | `CreateStrategy`, `DeleteStrategy`, `AddJournalTrade`, `AddHabit`, `MarkHabit` |
+| Coercition des arguments | `GetString` / `GetBool` / `GetNumber` tolèrent tous les ValueKind JSON (nombre, booléen, chaîne) — évite les exceptions quand le modèle envoie `rr`/`profit` en number |
+| Outils lecture | `GetStrategyDetails`, `SearchTrades`, `AgentStudiesService` (`GetCatalog`, `Read`, `Search`) |
+| Outils mutation | `CreateStrategy`, `DeleteStrategy`, `AddJournalTrade`, `AgentStudiesService` (`Create`, `Write`, `Delete`) |
 
-> ℹ️ Depuis l'optimisation du payload : le client n'envoie plus que l'**identité** (profil) — persistée une fois par conversation (role `context`) et rejouée depuis l'historique BDD. Les données du workspace (stratégies, trades, habitudes, études) ne sont plus jamais injectées automatiquement : le modèle les lit à la demande via `get_workspace_snapshot` et les autres tools.
+> ℹ️ Depuis l'optimisation du payload : le client n'envoie plus que l'**identité** (profil) — persistée une fois par conversation (role `context`) et rejouée depuis l'historique BDD. Les données du workspace (stratégies, trades, études) ne sont plus jamais injectées automatiquement : le modèle les lit à la demande via `get_workspace_snapshot` et les autres tools.
+
+### `services/AgentStudiesService.cs` — Tools IA « études »
+
+| Fonction | Rôle |
+|---|---|
+| `GetCatalog()` | Liste compacte des études/notes (`etudes/` + `Notes/`) : nom, chemin relatif, dossier, taille, date — aucun fichier lu |
+| `Read(args)` | Extrait le **contenu textuel** d'une étude (XamlPackage), images remplacées par `[image]` ; troncature `max_chars` (défaut 8000, plafond 24000) ; cache par date de modification |
+| `Search(args)` | Recherche plein texte dans toutes les études, extraits contextuels (`max_results`, défaut 8) |
+| `Create(args)` | Crée une étude dans `etudes/` (sous-dossier optionnel) et la remplit d'un contenu markdown initial |
+| `Write(args)` | Écrit dans une étude existante : `replace` / `append` / `prepend` ; les images existantes sont conservées |
+| `Delete(args)` | Supprime définitivement le fichier d'une étude |
+| Extraction | Parcours du FlowDocument (Run, Bold/Italic/Underline, listes, tableaux, `[image]`) sur thread **STA** (obligatoire WPF), via `RichTextService` |
+| Écriture | Convertit un **markdown léger** (`#`, `##`, `###`, `**gras**`, `*italique*`, `__souligné__`, `-`/`1.` listes) **+ mise en forme avancée** (`[color=...]...[/color]` couleur nom ou #RRGGBB, `[size=...]...[/size]` police) en FlowDocument puis sauvegarde XamlPackage. Couleur claire par défaut (fond sombre). Les blocs sont créés directement dans le document cible (jamais de reparenting inter-documents). Emojis autorisés avec modération. |
 
 ### Modèles dédiés
 
@@ -283,21 +296,24 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 
 | Tool | Type | Paramètres (type) | Requiert confirmation * | Implémentation C# |
 |---|---|---|---|---|
-| `get_workspace_snapshot` | Lecture | — | non | `BuildContextAsync()` |
+| `get_workspace_snapshot` | Lecture | — | non | `BuildWorkspaceSnapshotAsync()` |
 | `get_strategy_details` | Lecture | `strategy_name` (string) | non | `GetStrategyDetails(arguments)` |
 | `search_trades` | Lecture | `query` (string, optionnel) | non | `SearchTrades(arguments)` |
-| `get_study_catalog` | Lecture | — | non | `GetStudyCatalog()` |
+| `get_study_catalog` | Lecture | — | non | `AgentStudiesService.GetCatalog()` |
+| `read_study` | Lecture | `name` (string), `max_chars` (number, optionnel) | non | `AgentStudiesService.Read(arguments)` |
+| `search_studies` | Lecture | `query` (string), `max_results` (number, optionnel) | non | `AgentStudiesService.Search(arguments)` |
+| `create_study` | Mutation | `name` (string), `folder` (string, optionnel), `content` (string markdown, optionnel) | **non** (création directe) | `AgentStudiesService.Create(arguments)` |
+| `write_study` | Mutation | `name` (string), `content` (string markdown), `mode` (string : replace/append/prepend) | **oui** | `AgentStudiesService.Write(arguments)` |
+| `delete_study` | Mutation | `name` (string) | **oui** | `AgentStudiesService.Delete(arguments)` |
 | `create_strategy` | Mutation | `name` (string), `description` (string, optionnel) | **oui** | `CreateStrategy(arguments)` |
 | `delete_strategy` | Mutation | `name` (string) | **oui** | `DeleteStrategy(arguments)` |
 | `add_journal_trade` | Mutation | `strategy_name` (string), `pair` (string), `result` (string : TP/SL/TR/BE/PARTIAL), `order_type` (string : BUY/SELL), `entry` (string date), `exit` (string date), `rr` (number), `profit` (number), `description` (string) | **oui** | `AddJournalTrade(arguments)` |
-| `add_habit` | Mutation | `name` (string) | **oui** | `AddHabit(arguments)` |
-| `mark_habit` | Mutation | `name` (string), `is_checked` (boolean) | **oui** | `MarkHabit(arguments)` |
 
 ### Règles de sécurité actuelles (importantes à connaître)
 
 Dans `FxAiChatControl.HandleToolCallAsync` :
 
-- **Tous les tools marqués `requires_confirmation: true`** (soit `create_strategy`, `delete_strategy`, `add_journal_trade`, `add_habit`, `mark_habit`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**.
+- **Tous les tools marqués `requires_confirmation: true`** (soit `create_study`, `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `add_journal_trade`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, catalogues...) ne demandent aucune confirmation.
 - **Refus** → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` est renvoyé au modèle en `is_error: true` : l'agent est informé et peut reformuler au lieu de réessayer en boucle.
 - **Outils inconnus** → `RequiresConfirmation()` retourne `true` par sécurité (confirmation demandée).
 - **Exceptions d'exécution** → interceptées par `ExecuteSafelyAsync` côté `FxAiAgentService` : l'outil plante sans casser la boucle, le message d'erreur est transmis au modèle qui peut se corriger.

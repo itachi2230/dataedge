@@ -64,7 +64,6 @@ backtest/
 │   ├── strategie.cs      → Classe Strategie, Trade, PerformanceStat, AdvancedStats, utils
 │   ├── CalculStatistics.cs → Structure Statistics (stats globales)
 │   ├── FirstLaunchManager.cs → Détection premier lancement
-│   ├── HabitsManager.cs   → Gestionnaire d'habitudes (sérialisation binaire)
 │   └── NetworkUtils.cs    → Récupération indices Fear & Greed (API CNN + alternative.me)
 │
 ├── 📄 Services
@@ -73,6 +72,7 @@ backtest/
 │   │   ├── ChartBridge.cs     → Bridge C# ↔ JavaScript (WebView2 graphique)
 │   │   ├── Dataservice.cs     → Récupération données marché (API Symfony, cache CSV)
 │   │   ├── AgentWorkspaceService.cs → Contexte utilisateur et exécution contrôlée des tools IA
+│   │   ├── AgentStudiesService.cs   → Tools IA « études » (lecture/recherche/création/écriture/suppression .etude, extraction texte sans images)
 │   │   ├── PdfExportService.cs → Génération d’un rapport PDF moderne et structuré de la stratégie
 │   │   └── RichTextService.cs → Service Rich Text (sauvegarde/chargement XamlPackage)
 │   └── RichTextService.cs     → Service Rich Text (sauvegarde/chargement XamlPackage)
@@ -274,9 +274,9 @@ GET  /api/public/data/pairs               → Liste paires disponibles
 | `SettingsView.xaml.cs` | Gestion compte cloud, profil, paramètres app |
 | `EtudesView.xaml.cs` | Éditeur d'études (format .etude, arborescence, formatage riche) |
 | `NetworkUtils.cs` | Indices Fear & Greed (CNN US + alternative.me Crypto) |
-| `HabitsManager.cs` | Gestionnaire d'habitudes quotidiennes (sérialisation binaire) |
 | `TradeVisualizerControl.xaml.cs` | Affiche screenshots trades (HTF/LTF) avec cache et download |
 | `RichTextService.cs` | Sauvegarde/chargement RichTextBox en format XamlPackage (.etude) |
+| `services/AgentStudiesService.cs` | Tools IA études : catalogue, lecture texte (sans images), recherche, création/écriture (markdown → .etude), suppression |
 | `App.xaml.cs` | Entry point, gestionnaire exceptions global, crash reporter |
 | `backtesteur.xaml.cs` | Fenêtre backtest/replay (chart + stratégie) |
 

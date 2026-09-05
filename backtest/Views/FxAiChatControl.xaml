@@ -276,7 +276,7 @@
                 <!-- Prompts rapides -->
                 <WrapPanel Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="0" Margin="0,0,0,8">
                     <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Bilan" Tag="Fais un bilan de mon espace de trading et donne-moi trois priorités."/>
-                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Mes règles" Tag="Résume mes habitudes, mes règles et les écarts récents."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Études" Tag="Liste mes études et résume le contenu principal de la plus récente."/>
                     <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Analyser" Tag="Analyse mes trades récents et identifie les biais répétitifs."/>
                 </WrapPanel>
 

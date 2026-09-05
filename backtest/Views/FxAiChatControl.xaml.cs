@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -311,13 +313,16 @@ namespace backtest.Views
         private async Task<AiToolResult> HandleToolCallAsync(AiToolCall call)
         {
             // Toute action déclarée requires_confirmation (création/suppression de stratégie,
-            // ajout de trade, habitudes...) passe par une validation explicite de l'utilisateur.
+            // ajout de trade, écriture/suppression d'étude...) passe par une
+            // validation explicite de l'utilisateur. La création d'étude, elle, n'en
+            // nécessite pas (requires_confirmation = false).
             bool allowed = true;
             if (_workspaceService.RequiresConfirmation(call.Name))
             {
+                string summary = SummarizeToolCall(call);
                 allowed = (bool)Dispatcher.Invoke(new Func<bool>(() =>
                     MessageBox.Show(
-                        $"L'agent souhaite effectuer l'action '{call.Name}'.\n\nArguments : {call.Arguments}\n\nAutoriser cette modification ?",
+                        $"L'agent souhaite effectuer l'action '{call.Name}'.\n\n{summary}\n\nAutoriser cette modification ?",
                         "Confirmation requise", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes));
             }
 
@@ -325,6 +330,32 @@ namespace backtest.Views
                 return AiToolResult.Error("Action refusée ou annulée par l'utilisateur.");
 
             return await _workspaceService.ExecuteAsync(call, requestedCall => Task.FromResult(true));
+        }
+
+        /// <summary>
+        /// Résume un appel d'outil en une courte description lisible (quelques
+        /// valeurs clés) — évite de noyer l'utilisateur sous un dump JSON géant
+        /// lorsque le contenu d'une étude est volumineux.
+        /// </summary>
+        private static string SummarizeToolCall(AiToolCall call)
+        {
+            try
+            {
+                var parts = new List<string>();
+                foreach (var property in call.Arguments.EnumerateObject())
+                {
+                    string value = property.Value.ValueKind == JsonValueKind.String
+                        ? property.Value.GetString() ?? string.Empty
+                        : property.Value.GetRawText();
+                    if (value.Length > 120) value = value.Substring(0, 120) + "…";
+                    parts.Add($"— {property.Name} : {value}");
+                }
+                return string.Join("\n", parts);
+            }
+            catch
+            {
+                return call.Arguments.ToString();
+            }
         }
         private void ScrollToBottom()
         {
