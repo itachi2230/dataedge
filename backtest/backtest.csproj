@@ -234,6 +234,7 @@
     <Compile Include="services\PdfExportService.cs" />
     <Compile Include="Models\ChatMessage.cs" />
     <Compile Include="Models\AiAgentError.cs" />
+    <Compile Include="services\ReplayPositionStore.cs" />
     <Compile Include="SettingsView.xaml.cs">
       <DependentUpon>SettingsView.xaml</DependentUpon>
     </Compile>

@@ -70,6 +70,7 @@ backtest/
 │   ├── services/
 │   │   ├── FxCloudService.cs  → Service cloud (auth, sync, profil, support, crash reports)
 │   │   ├── ChartBridge.cs     → Bridge C# ↔ JavaScript (WebView2 graphique)
+│   │   ├── ReplayPositionStore.cs → Persistance JSON de la dernière position replay par paire/timeframe
 │   │   ├── Dataservice.cs     → Récupération données marché (API Symfony, cache CSV)
 │   │   ├── AgentWorkspaceService.cs → Contexte utilisateur et exécution contrôlée des tools IA
 │   │   ├── AgentStudiesService.cs   → Tools IA « études » (lecture/recherche/création/écriture/suppression .etude, extraction texte sans images)
@@ -276,7 +277,7 @@ POST /admin/ai/sessions/clear             → Purge sessions cache expirées
 | `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclare les fonctions et convertit ses `functionCall` en `tool_call` |
 | `fxglobal/src/Service/OpenRouterService.php` | Fournisseur LLM OpenRouter (compatible OpenAI) : streaming SSE, function calling, chaîne de repli de modèles, plugin web `:online`, **Prompt Caching `session_id` + provider pinning** pilotés par `ai_settings` |
 | `Dataservice.cs` | Récupération données marché depuis API Symfony, cache CSV local |
-| `ChartBridge.cs` | Pont C#↔JS pour le WebView2 du graphique (dessins, captures) |
+| `ChartBridge.cs` | Pont C#↔JS pour le WebView2 du graphique (dessins, captures, save/load replay positions) |
 | `StatisticsControl.xaml.cs` | Contrôle statistiques d'une stratégie (DataGrid + vues) |
 | `StatisticsView.xaml.cs` | Visualisation OxyPlot (courbe équité, winrate, sessions, audit) |
 | `SettingsView.xaml.cs` | Gestion compte cloud, profil, paramètres app |
@@ -284,6 +285,7 @@ POST /admin/ai/sessions/clear             → Purge sessions cache expirées
 | `NetworkUtils.cs` | Indices Fear & Greed (CNN US + alternative.me Crypto) |
 | `TradeVisualizerControl.xaml.cs` | Affiche screenshots trades (HTF/LTF) avec cache et download |
 | `RichTextService.cs` | Sauvegarde/chargement RichTextBox en format XamlPackage (.etude) |
+| `services/ReplayPositionStore.cs` | Persistance JSON de la dernière position de replay (timestamp UNIX) par stratégie+paire+timeframe, dans %LOCALAPPDATA%/DataEdge/replay_positions.json |
 | `services/AgentStudiesService.cs` | Tools IA études : catalogue, lecture texte (sans images), recherche, création/écriture (markdown → .etude), suppression |
 | `App.xaml.cs` | Entry point, gestionnaire exceptions global, crash reporter |
 | `backtesteur.xaml.cs` | Fenêtre backtest/replay (chart + stratégie) |

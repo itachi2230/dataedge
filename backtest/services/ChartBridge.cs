@@ -3,6 +3,7 @@ using System.Windows;
 using System.Runtime.InteropServices; 
 using Newtonsoft.Json;
 using System.IO;
+using backtest.Services;
 
 namespace backtest.services
 {
@@ -14,6 +15,28 @@ namespace backtest.services
         public ChartBridge(Chart instance)
         {
             _chartInstance = instance;
+        }
+
+        /// <summary>
+        /// Sauvegarde la position de replay pour une stratégie/paire/timeframe.
+        /// Appelé depuis JS quand l'utilisateur quitte le mode replay.
+        /// </summary>
+        public void SaveReplayPosition(string symbol, string timeframe, long timestamp)
+        {
+            var strategy = _chartInstance.StrategyName;
+            ReplayPositionStore.Set(strategy, symbol, timeframe, timestamp);
+        }
+
+        /// <summary>
+        /// Retourne le timestamp UNIX de la dernière position replay sauvegardée
+        /// pour la stratégie/paire/timeframe courante, ou 0 si aucun replay n'a été fait.
+        /// Appelé depuis JS au démarrage du replay.
+        /// </summary>
+        public long GetReplayPositionTimestamp(string symbol, string timeframe)
+        {
+            var strategy = _chartInstance.StrategyName;
+            var pos = ReplayPositionStore.Get(strategy, symbol, timeframe);
+            return pos.HasValue ? pos.Value : 0;
         }
 
         public void OnSetupCreated(string jsonDrawing)

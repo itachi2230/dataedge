@@ -24,7 +24,18 @@ namespace backtest
         {
             InitializeComponent();
             this.st = st;
-            receveur.Children.Add(new Chart(st));
+            var chart = new Chart(st);
+            receveur.Children.Add(chart);
+            
+            // Sauvegarde la position replay à la fermeture de la fenêtre
+            this.Closing += async (s, e) =>
+            {
+                try
+                {
+                    await chart.SafeExecuteJs("saveReplayPosition(true);");
+                }
+                catch { }
+            };
         }
         protected override void OnSourceInitialized(EventArgs e)
         {

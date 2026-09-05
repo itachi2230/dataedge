@@ -30,6 +30,11 @@ namespace backtest
         private bool _endOfDataReached = false;
         private bool _isPrefetching = false;
 
+        /// <summary>
+        /// Retourne le nom de la stratégie courante, ou "default" si pas de stratégie (chart seul).
+        /// </summary>
+        public string StrategyName => _strategie?.Nom ?? "default";
+
         private CancellationTokenSource _ctsGlobal;
 
         public Chart()
@@ -49,6 +54,16 @@ namespace backtest
             _ctsGlobal = new CancellationTokenSource();
             TypeOrdreComboBox.ItemsSource = Enum.GetValues(typeof(TypeOrdre));
             ResultComboBox.ItemsSource = Enum.GetValues(typeof(Resultat));
+            
+            // Sauvegarde la position replay quand le contrôle est déchargé (tab switch, close fenêtre)
+            this.Unloaded += async (s, e) =>
+            {
+                try
+                {
+                    await SafeExecuteJs("saveReplayPosition(true);");
+                }
+                catch { }
+            };
         }
         public Chart(Strategie strategie) : this() // Appelle d'abord le constructeur par défaut
         {
@@ -238,7 +253,7 @@ namespace backtest
         }   
 
         // Méthode utilitaire pour exécuter du JS sans crash
-        private async Task SafeExecuteJs(string script)
+        public async Task SafeExecuteJs(string script)
         {
             if (ChartBrowser != null && ChartBrowser.CoreWebView2 != null)
             {
@@ -314,9 +329,9 @@ namespace backtest
 
                         await Dispatcher.InvokeAsync(async () => {
                             if (focusTime.HasValue)
-                                await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}', {focusTime.Value});");
+                                await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}', {focusTime.Value}, '{_currentTF}');");
                             else
-                                await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}');");
+                                await SafeExecuteJs($"updateChartData({json}, '{_currentSymbol}', null, '{_currentTF}');");
                         });
 
                         SetStatus($"{_currentSymbol} OK ({fileToRequest})", "#00FF7F");
@@ -325,7 +340,7 @@ namespace backtest
                     }
                 }
 
-                await SafeExecuteJs($"updateChartData([], '{_currentSymbol}');");
+                await SafeExecuteJs($"updateChartData([], '{_currentSymbol}', null, '{_currentTF}');");
                 SetStatus("Aucune donnée", "#FF4B4B");
             }
             catch (OperationCanceledException) { }
@@ -673,6 +688,8 @@ namespace backtest
             if (sender is Button btn && btn.Tag != null)
             {
                 await SafeExecuteJs("window.isProcessingData = true;");
+                // Sauvegarde la position replay avant de changer de timeframe
+                await SafeExecuteJs("saveReplayPosition(true);");
                 _ctsGlobal?.Cancel();
                 _ctsGlobal = new CancellationTokenSource();
 
@@ -739,6 +756,9 @@ namespace backtest
             if (WatchlistItems.SelectedItem is WatchlistSymbol selected)
             {
                 _currentYear = DateTime.Now.Year;
+
+                // Sauvegarde la position replay avant de changer de paire
+                await SafeExecuteJs("saveReplayPosition(true);");
 
                 _ctsGlobal?.Cancel();
                 _ctsGlobal = new CancellationTokenSource();

@@ -4,6 +4,23 @@ window.isDarkMode = true;
 window.isGridVisible = true;
 window.isProcessingData = false;
 window.currentSymbol = "Default";
+window._lastSaveTime = 0;
+
+// Sauvegarde la position replay courante via le bridge C#.
+// force=true ignore le throttling de 2s (pour les sauvegardes explicites).
+window.saveReplayPosition = function(force = false) {
+    if (!window.replayState || !window.replayState.isActive) return;
+    if (!window.replayState.allData || window.replayState.allData.length === 0) return;
+    const now = Date.now();
+    if (!force && now - (window._lastSaveTime || 0) < 2000) return; // throttle ~2s
+    window._lastSaveTime = now;
+    const currentCandle = window.replayState.allData[window.replayState.currentIndex];
+    if (!currentCandle) return;
+    const bridge = window.chrome.webview.hostObjects.chartService;
+    if (!bridge) return;
+    const tf = window.currentTimeframe || "15m";
+    bridge.SaveReplayPosition(window.currentSymbol, tf, currentCandle.time);
+};
 
 const themes = {
     dark: { bg: '#131722', text: '#d1d4dc', grid: '#2a2e39', up: '#00FFFF', down: '#FF007F' },
@@ -191,10 +208,11 @@ window.ensureLeftContext = function() {
     bridge.LoadPreviousYearForReplay(firstCandle.time);
 };
 
-window.updateChartData = function(data, symbol = "Default", focusTime = null) {
+window.updateChartData = function(data, symbol = "Default", focusTime = null, timeframe = null) {
     if (!window.candleSeries) window.initChart(); 
 
     window.currentSymbol = symbol;
+    if (timeframe) window.currentTimeframe = timeframe;
     window.isProcessingData = true;
     
     let currentTime = null;
@@ -314,20 +332,24 @@ window.replayState = {
     endReached: false
 };
 
-window.toggleReplayUI = function() {
+window.toggleReplayUI = async function() {
     let dashboard = document.getElementById('replay-dashboard');
     const btn = document.getElementById('btn-replay-mode');
+    const bridge = window.chrome.webview.hostObjects.chartService;
     
     if (dashboard) {
+        // ── EXIT REPLAY : sauvegarde la position avant de quitter ──
+        window.saveReplayPosition(true);
+        
         dashboard.remove();
         btn.classList.remove('active');
         window.replayState.isActive = false;
         if(window.replayState.allData.length > 0) window.candleSeries.setData(window.replayState.allData);
-        const bridge = window.chrome.webview.hostObjects.chartService;
         if (bridge) bridge.ExitReplayMode(); 
         return;
     }
 
+    // ── ENTER REPLAY : vérifie s'il y a une position sauvegardée ──
     window.replayState.isActive = true;
     btn.classList.add('active');
 
@@ -336,17 +358,39 @@ window.toggleReplayUI = function() {
     // au lieu de démarrer systématiquement à l'index 0 du buffer.
     if (window.replayState.allData && window.replayState.allData.length > 0) {
         const visibleCenter = window.getVisibleCenterTime();
-        if (visibleCenter !== null) {
-            const idx = window.replayState.allData.findIndex(d => d.time >= visibleCenter);
-            window.replayState.currentIndex = (idx !== -1) ? idx : window.replayState.allData.length - 1;
-        } else {
-            window.replayState.currentIndex = window.replayState.allData.length - 1;
+        let startIndex = null;
+        
+        // Vérifie si une position replay a été sauvegardée pour cette paire/timeframe
+        if (bridge && window.currentTimeframe) {
+            var savedTimestamp = await bridge.GetReplayPositionTimestamp(window.currentSymbol, window.currentTimeframe);
+            if (savedTimestamp > 0) {
+                var savedIdx = window.replayState.allData.findIndex(d => d.time >= savedTimestamp);
+                // N'utilise la position sauvegardée que si elle est dans les données chargées
+                if (savedIdx !== -1) {
+                    startIndex = savedIdx;
+                }
+            }
         }
+        
+        // Pas de position sauvegardée ou introuvable : utilise le centre visible
+        if (startIndex === null) {
+            if (visibleCenter !== null) {
+                const idx = window.replayState.allData.findIndex(d => d.time >= visibleCenter);
+                startIndex = (idx !== -1) ? idx : window.replayState.allData.length - 1;
+            } else {
+                startIndex = window.replayState.allData.length - 1;
+            }
+        }
+        
+        window.replayState.currentIndex = startIndex;
     } else {
         window.replayState.currentIndex = 0;
     }
     window.replayState.endReached = false;
     window.resetLeftContextState();
+    
+    // Filtre les données pour ne montrer que jusqu'à la position courante (pas de bougies futures)
+    applyJump(window.replayState.currentIndex);
     
     const html = `
         <div id="replay-dashboard" style="display: flex; align-items: center; padding: 4px 10px; gap: 8px;">
@@ -377,11 +421,35 @@ window.toggleReplayUI = function() {
     document.getElementById('chart-container').insertAdjacentHTML('beforeend', html);
     makeDraggable(document.getElementById('replay-dashboard'), document.getElementById('replay-header'));
 
+    // Empêche le double-clic sur la toolbar replay de se propager au graphique (zoom)
+    const dash = document.getElementById('replay-dashboard');
+    if (dash) {
+        dash.addEventListener('dblclick', function(e) {
+            e.stopPropagation();
+        });
+    }
+
     // Pré-remplit la date du champ avec la position courante du replay
     const dateInput = document.getElementById('replay-date-input');
     if (dateInput && window.replayState.allData && window.replayState.allData.length > 0) {
         const c = window.replayState.allData[window.replayState.currentIndex];
         if (c) dateInput.value = (typeof c.time === 'string' ? c.time : new Date(c.time * 1000).toISOString().split('T')[0]);
+    }
+
+    // Si on a utilisé une position sauvegardée, centre la vue sur cette position
+    // (car le visibleCenter peut être différent de la position sauvegardée)
+    if (bridge && window.currentTimeframe && window.replayState.allData && window.replayState.allData.length > 0) {
+        var checkTimestamp = await bridge.GetReplayPositionTimestamp(window.currentSymbol, window.currentTimeframe);
+        if (checkTimestamp > 0) {
+            var checkIdx = window.replayState.allData.findIndex(d => d.time >= checkTimestamp);
+            if (checkIdx !== -1 && checkIdx === window.replayState.currentIndex) {
+                const leftPhantoms = 200;
+                window.chart.timeScale().setVisibleLogicalRange({
+                    from: leftPhantoms + checkIdx - 75,
+                    to: leftPhantoms + checkIdx + 25,
+                });
+            }
+        }
     }
 
     // Précharge le contexte gauche (dernière année manquante) après activation du replay
@@ -431,6 +499,9 @@ window.stepReplay = function(direction) {
 
     const partialData = window.replayState.allData.slice(0, window.replayState.currentIndex + 1);
     window.candleSeries.setData(getExtendedTimeline(partialData));
+
+    // Sauvegarde la position après un pas manuel
+    window.saveReplayPosition(true);
 
     // Anti-rebond : ne se déclenche que ~700 ms après la dernière action (jamais pendant le play continu)
     window.scheduleLeftContextCheck();
@@ -494,6 +565,9 @@ function applyJump(index, dateText) {
         from: leftPhantoms + index - 75,
         to: leftPhantoms + index + 25,
     });
+    
+    // Sauvegarde la position après un jump (saut vers date, activation replay, etc.)
+    window.saveReplayPosition(true);
     
     setTimeout(() => {
         window.isProcessingData = false;
@@ -646,6 +720,9 @@ function runReplayLoop() {
     window.stepReplay(1);
     const currentCandle = window.replayState.allData[window.replayState.currentIndex];
     if (currentCandle) checkLastSetupStatus(currentCandle);
+    
+    // Sauvegarde automatique pendant le play (throttled à ~2s dans saveReplayPosition)
+    window.saveReplayPosition();
     
     setTimeout(runReplayLoop, 500); 
 }
