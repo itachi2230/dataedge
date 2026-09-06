@@ -686,16 +686,187 @@ namespace backtest.Services
         }
 
         /// <summary>
+        /// Dictionnaire manuel des noms de couleurs nommées (HTML / CSS / WPF).
+        /// Utilisé en PRIORITÉ devant ColorConverter pour garantir que des noms
+        /// comme "gold", "coral", "indianred" fonctionnent toujours, même si le
+        /// convertisseur système échoue pour une raison quelconque.
+        /// </summary>
+        private static readonly Dictionary<string, Color> _namedColors = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Gris / Neutres
+            ["black"] = Color.FromRgb(0, 0, 0),
+            ["silver"] = Color.FromRgb(192, 192, 192),
+            ["gray"] = Color.FromRgb(128, 128, 128),
+            ["grey"] = Color.FromRgb(128, 128, 128),
+            ["white"] = Color.FromRgb(255, 255, 255),
+            ["dimgray"] = Color.FromRgb(105, 105, 105),
+            ["dimgrey"] = Color.FromRgb(105, 105, 105),
+            ["darkgray"] = Color.FromRgb(169, 169, 169),
+            ["darkgrey"] = Color.FromRgb(169, 169, 169),
+            ["lightgray"] = Color.FromRgb(211, 211, 211),
+            ["lightgrey"] = Color.FromRgb(211, 211, 211),
+            ["gainsboro"] = Color.FromRgb(220, 220, 220),
+            ["slategray"] = Color.FromRgb(112, 128, 144),
+            ["slategrey"] = Color.FromRgb(112, 128, 144),
+            ["darkslategray"] = Color.FromRgb(47, 79, 79),
+            ["darkslategrey"] = Color.FromRgb(47, 79, 79),
+            ["lightslategray"] = Color.FromRgb(119, 136, 153),
+            ["lightslategrey"] = Color.FromRgb(119, 136, 153),
+
+            // Rouges / Roses
+            ["red"] = Color.FromRgb(255, 0, 0),
+            ["darkred"] = Color.FromRgb(139, 0, 0),
+            ["firebrick"] = Color.FromRgb(178, 34, 34),
+            ["crimson"] = Color.FromRgb(220, 20, 60),
+            ["indianred"] = Color.FromRgb(205, 92, 92),
+            ["lightcoral"] = Color.FromRgb(240, 128, 128),
+            ["salmon"] = Color.FromRgb(250, 128, 114),
+            ["darksalmon"] = Color.FromRgb(233, 150, 122),
+            ["lightsalmon"] = Color.FromRgb(255, 160, 122),
+            ["pink"] = Color.FromRgb(255, 192, 203),
+            ["lightpink"] = Color.FromRgb(255, 182, 193),
+            ["hotpink"] = Color.FromRgb(255, 105, 180),
+            ["deeppink"] = Color.FromRgb(255, 20, 147),
+            ["palevioletred"] = Color.FromRgb(219, 112, 147),
+            ["mediumvioletred"] = Color.FromRgb(199, 21, 133),
+
+            // Oranges / Jaunes / Beiges
+            ["gold"] = Color.FromRgb(255, 215, 0),
+            ["orange"] = Color.FromRgb(255, 165, 0),
+            ["darkorange"] = Color.FromRgb(255, 140, 0),
+            ["orangered"] = Color.FromRgb(255, 69, 0),
+            ["coral"] = Color.FromRgb(255, 127, 80),
+            ["tomato"] = Color.FromRgb(255, 99, 71),
+            ["yellow"] = Color.FromRgb(255, 255, 0),
+            ["lightyellow"] = Color.FromRgb(255, 255, 224),
+            ["lemonchiffon"] = Color.FromRgb(255, 250, 205),
+            ["lightgoldenrodyellow"] = Color.FromRgb(250, 250, 210),
+            ["papayawhip"] = Color.FromRgb(255, 239, 213),
+            ["moccasin"] = Color.FromRgb(255, 228, 181),
+            ["peachpuff"] = Color.FromRgb(255, 218, 185),
+            ["palegoldenrod"] = Color.FromRgb(238, 232, 170),
+            ["khaki"] = Color.FromRgb(240, 230, 140),
+            ["darkkhaki"] = Color.FromRgb(189, 183, 107),
+            ["goldenrod"] = Color.FromRgb(218, 165, 32),
+            ["darkgoldenrod"] = Color.FromRgb(184, 134, 11),
+            ["peru"] = Color.FromRgb(205, 133, 63),
+            ["burlywood"] = Color.FromRgb(222, 184, 135),
+            ["tan"] = Color.FromRgb(210, 180, 140),
+            ["wheat"] = Color.FromRgb(245, 222, 179),
+            ["sandybrown"] = Color.FromRgb(244, 164, 96),
+            ["bisque"] = Color.FromRgb(255, 228, 196),
+            ["blanchedalmond"] = Color.FromRgb(255, 235, 205),
+            ["cornsilk"] = Color.FromRgb(255, 248, 220),
+
+            // Bruns
+            ["brown"] = Color.FromRgb(165, 42, 42),
+            ["saddlebrown"] = Color.FromRgb(139, 69, 19),
+            ["sienna"] = Color.FromRgb(160, 82, 45),
+            ["chocolate"] = Color.FromRgb(210, 105, 30),
+            ["maroon"] = Color.FromRgb(128, 0, 0),
+            ["rosybrown"] = Color.FromRgb(188, 143, 143),
+
+            // Verts
+            ["green"] = Color.FromRgb(0, 128, 0),
+            ["darkgreen"] = Color.FromRgb(0, 100, 0),
+            ["forestgreen"] = Color.FromRgb(34, 139, 34),
+            ["seagreen"] = Color.FromRgb(46, 139, 87),
+            ["mediumseagreen"] = Color.FromRgb(60, 179, 113),
+            ["lime"] = Color.FromRgb(0, 255, 0),
+            ["limegreen"] = Color.FromRgb(50, 205, 50),
+            ["lightgreen"] = Color.FromRgb(144, 238, 144),
+            ["palegreen"] = Color.FromRgb(152, 251, 152),
+            ["springgreen"] = Color.FromRgb(0, 255, 127),
+            ["mediumspringgreen"] = Color.FromRgb(0, 250, 154),
+            ["lawngreen"] = Color.FromRgb(124, 252, 0),
+            ["chartreuse"] = Color.FromRgb(127, 255, 0),
+            ["greenyellow"] = Color.FromRgb(173, 255, 47),
+            ["yellowgreen"] = Color.FromRgb(154, 205, 50),
+            ["olive"] = Color.FromRgb(128, 128, 0),
+            ["olivedrab"] = Color.FromRgb(107, 142, 35),
+            ["darkolivegreen"] = Color.FromRgb(85, 107, 47),
+            ["teal"] = Color.FromRgb(0, 128, 128),
+            ["darkcyan"] = Color.FromRgb(0, 139, 139),
+            ["aquamarine"] = Color.FromRgb(127, 255, 212),
+            ["mediumaquamarine"] = Color.FromRgb(102, 205, 170),
+            ["lightseagreen"] = Color.FromRgb(32, 178, 170),
+            ["darkseagreen"] = Color.FromRgb(143, 188, 143),
+            ["honeydew"] = Color.FromRgb(240, 255, 240),
+
+            // Bleus / Cyans
+            ["blue"] = Color.FromRgb(0, 0, 255),
+            ["darkblue"] = Color.FromRgb(0, 0, 139),
+            ["mediumblue"] = Color.FromRgb(0, 0, 205),
+            ["royalblue"] = Color.FromRgb(65, 105, 225),
+            ["navy"] = Color.FromRgb(0, 0, 128),
+            ["midnightblue"] = Color.FromRgb(25, 25, 112),
+            ["dodgerblue"] = Color.FromRgb(30, 144, 255),
+            ["deepskyblue"] = Color.FromRgb(0, 191, 255),
+            ["lightskyblue"] = Color.FromRgb(135, 206, 250),
+            ["skyblue"] = Color.FromRgb(135, 206, 235),
+            ["lightblue"] = Color.FromRgb(173, 216, 230),
+            ["powderblue"] = Color.FromRgb(176, 224, 230),
+            ["paleturquoise"] = Color.FromRgb(175, 238, 238),
+            ["lightcyan"] = Color.FromRgb(224, 255, 255),
+            ["cyan"] = Color.FromRgb(0, 255, 255),
+            ["aqua"] = Color.FromRgb(0, 255, 255),
+            ["turquoise"] = Color.FromRgb(64, 224, 208),
+            ["mediumturquoise"] = Color.FromRgb(72, 209, 204),
+            ["darkturquoise"] = Color.FromRgb(0, 206, 209),
+            ["cadetblue"] = Color.FromRgb(95, 158, 160),
+            ["steelblue"] = Color.FromRgb(70, 130, 180),
+            ["lightsteelblue"] = Color.FromRgb(176, 196, 222),
+            ["slateblue"] = Color.FromRgb(106, 90, 205),
+            ["mediumslateblue"] = Color.FromRgb(123, 104, 238),
+            ["darkslateblue"] = Color.FromRgb(72, 61, 139),
+
+            // Violets / Magentas / Pourpres
+            ["purple"] = Color.FromRgb(128, 0, 128),
+            ["darkmagenta"] = Color.FromRgb(139, 0, 139),
+            ["magenta"] = Color.FromRgb(255, 0, 255),
+            ["fuchsia"] = Color.FromRgb(255, 0, 255),
+            ["mediumpurple"] = Color.FromRgb(147, 112, 219),
+            ["blueviolet"] = Color.FromRgb(138, 43, 226),
+            ["indigo"] = Color.FromRgb(75, 0, 130),
+            ["darkviolet"] = Color.FromRgb(148, 0, 211),
+            ["darkorchid"] = Color.FromRgb(153, 50, 204),
+            ["mediumorchid"] = Color.FromRgb(186, 85, 211),
+            ["orchid"] = Color.FromRgb(218, 112, 214),
+            ["violet"] = Color.FromRgb(238, 130, 238),
+            ["plum"] = Color.FromRgb(221, 160, 221),
+            ["thistle"] = Color.FromRgb(216, 191, 216),
+            ["lavender"] = Color.FromRgb(230, 230, 250),
+
+            // Couleurs trading / spé
+            ["win"] = Color.FromRgb(0, 230, 118),
+            ["loss"] = Color.FromRgb(255, 82, 82),
+            ["profit"] = Color.FromRgb(0, 230, 118),
+            ["neutral"] = Color.FromRgb(255, 193, 7),
+            ["warning"] = Color.FromRgb(255, 193, 7),
+            ["info"] = Color.FromRgb(0, 191, 255),
+            ["bullish"] = Color.FromRgb(38, 166, 154),
+            ["bearish"] = Color.FromRgb(239, 83, 80),
+        };
+
+        /// <summary>
         /// Convertit un nom de couleur ou un code hex (#RRGGBB) en pinceau.
-        /// Reconnait les noms courants ; retombe sur le pinceau clair par défaut
-        /// si la valeur est invalide.
+        /// Utilise d'abord le dictionnaire manuel des noms nommés (robuste,
+        /// fonctionne toujours), puis tente ColorConverter pour les formats
+        /// hex (#RRGGBB, #AARRGGBB) et les noms non listés. Retombe sur le
+        /// pinceau clair par défaut (#EEEEEE) si tout échoue.
         /// </summary>
         private static SolidColorBrush ParseColor(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return GetDefaultTextBrush();
             try
             {
-                value = value.Trim();
+                value = value.Trim().ToLowerInvariant();
+
+                // 1. Dictionnaire manuel (couvre gold, silver, coral, etc.)
+                if (_namedColors.TryGetValue(value, out Color named))
+                    return new SolidColorBrush(named);
+
+                // 2. Hex ou format WPF (#RRGGBB, #AARRGGBB, sc#, ContextColor)
                 var color = (Color)ColorConverter.ConvertFromString(value);
                 return new SolidColorBrush(color);
             }
