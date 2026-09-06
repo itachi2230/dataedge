@@ -223,7 +223,7 @@
                 <ItemsControl x:Name="ChatItemsControl">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Grid HorizontalAlignment="{Binding Alignment}" Margin="0,5"
+                            <Grid HorizontalAlignment="{Binding Alignment}" Margin="0,5" Focusable="True"
                                   MaxWidth="{Binding ActualWidth, ElementName=ChatScrollViewer, Converter={StaticResource WidthMinus}, ConverterParameter=50}">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*"/>
@@ -267,7 +267,12 @@
                                             </StackPanel>
                                         </Border>
 
-                                        <TextBlock FontSize="12.5" Foreground="#EAF2F8" LineHeight="18" Text="{Binding Text}" TextWrapping="Wrap"/>
+                                        <TextBox FontSize="12.5" Foreground="#EAF2F8" Text="{Binding Text}" TextWrapping="Wrap" IsReadOnly="True"
+                                                 Background="Transparent" BorderThickness="0" Padding="2,0" Margin="0"
+                                                 IsTabStop="True" Focusable="True"
+                                                 IsInactiveSelectionHighlightEnabled="True"
+                                                 SelectionBrush="#33BFFF" SelectionOpacity="0.4"
+                                                 PreviewMouseLeftButtonDown="TextBox_SelectFocus"/>
                                         <TextBlock FontSize="8.5" Foreground="#5A6B7A" HorizontalAlignment="Right" Margin="0,5,0,0" Text="{Binding Timestamp, StringFormat=HH:mm}"/>
                                     </StackPanel>
                                 </Border>

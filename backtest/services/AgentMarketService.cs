@@ -354,15 +354,23 @@ namespace backtest.Services
         private static async Task<List<CalEvent>> FetchDukascopyCalendarAsync(DateTime from, DateTime to) { return null; }
 
         // =========================================================================
-        // 2) FED WATCH (CME)
+        // 2) FED WATCH (CME + YAHOO FINANCE FALLBACK)
         // =========================================================================
         public static async Task<AiToolResult> GetFedWatch(JsonElement arguments)
         {
             string meeting = GetString(arguments, "meeting", "next").Trim().ToLowerInvariant();
             string cached = GetCached("fedwatch_" + meeting);
             if (cached != null) return AiToolResult.Success(cached);
+
+            // Niveau 1 : CME FedWatch direct
             var cme = await FetchCmeFedWatchAsync();
             if (cme != null) { string s = BuildFedWatchPayload(cme, meeting); SetCache("fedwatch_" + meeting, s, CacheFedWatch); return AiToolResult.Success(s); }
+
+            // Niveau 2 : Yahoo Finance Fed Funds futures → calcul des probabilités
+            var yahoo = await FetchYahooFedWatchAsync();
+            if (yahoo != null) { string s = BuildFedWatchPayload(yahoo, meeting); SetCache("fedwatch_" + meeting, s, CacheFedWatch); return AiToolResult.Success(s); }
+
+            // Niveau 3 : Fallback calendrier FOMC
             string fallback = JsonSerializer.Serialize(await BuildFedWatchFallbackAsync());
             SetCache("fedwatch_" + meeting, fallback, CacheFedWatch);
             return AiToolResult.Success(fallback);
@@ -414,14 +422,9 @@ namespace backtest.Services
         private static void ExtractPeriodProbabilities(JsonElement period, List<KeyValuePair<string, string>> probabilities)
         {
             if (period.TryGetProperty("rates", out var rates) && rates.ValueKind == JsonValueKind.Array && period.TryGetProperty("probs", out var probs) && probs.ValueKind == JsonValueKind.Array)
-            {
-                for (int i = 0; i < rates.GetArrayLength() && i < probs.GetArrayLength(); i++)
-                    probabilities.Add(new KeyValuePair<string, string>(GetString(rates[i], ""), GetString(probs[i], "")));
-                return;
-            }
+            { for (int i = 0; i < rates.GetArrayLength() && i < probs.GetArrayLength(); i++) probabilities.Add(new KeyValuePair<string, string>(GetString(rates[i], ""), GetString(probs[i], ""))); return; }
             if (period.TryGetProperty("probPerGap", out var gaps) && gaps.ValueKind == JsonValueKind.Array)
-                foreach (var gap in gaps.EnumerateArray())
-                { var r = GetString(gap, "rate"); var p = GetString(gap, "prob"); if (!string.IsNullOrEmpty(r) && !string.IsNullOrEmpty(p)) probabilities.Add(new KeyValuePair<string, string>(r, p)); }
+                foreach (var gap in gaps.EnumerateArray()) { var r = GetString(gap, "rate"); var p = GetString(gap, "prob"); if (!string.IsNullOrEmpty(r) && !string.IsNullOrEmpty(p)) probabilities.Add(new KeyValuePair<string, string>(r, p)); }
         }
 
         private sealed class FedMeeting { public string meeting; public List<object> probabilities = new List<object>(); public object most_likely; }
@@ -445,7 +448,82 @@ namespace backtest.Services
             if (norm == "ALL" || string.IsNullOrEmpty(norm)) selected = all;
             else if (norm == "NEXT") selected = all.Take(1).ToList();
             else { var match = all.FirstOrDefault(m => m.meeting.ToUpperInvariant().Replace("-", "").Contains(norm.Replace("-", "")) || norm.Replace("-", "").Contains(m.meeting.ToUpperInvariant().Replace("-", ""))); selected = match != null ? (object)match : (object)all.Take(1).ToList(); }
-            return JsonSerializer.Serialize(new { source = "CME FedWatch Tool", as_of = cme.TradeDate, note = "Probabilites du marche (Fed Funds futures) - CME Group.", meetings = selected });
+            return JsonSerializer.Serialize(new { source = "FedWatch (CME Group)", as_of = cme.TradeDate, note = "Probabilites du marche (Fed Funds futures) - CME Group / Yahoo Finance.", method = "CME FedWatch API", meetings = selected });
+        }
+
+        // Yahoo Finance FedWatch : calcule les probabilites depuis les Fed Funds futures (ZQ=F)
+        private static async Task<CmeFedWatch> FetchYahooFedWatchAsync()
+        {
+            try
+            {
+                double currentRate = await FetchCurrentFedFundsRateAsync();
+                if (currentRate <= 0) currentRate = 4.375;
+                double? impliedRate = null; DateTime contractDate = DateTime.UtcNow;
+                foreach (var sym in new[] { "ZQ=F", "ZQQ26.CBT", "ZQV26.CBT" })
+                {
+                    var r = await FetchAsync($"https://query1.finance.yahoo.com/v8/finance/chart/{Uri.EscapeDataString(sym)}?interval=1d&range=5d", 15, null, 500000);
+                    if (r == null || r.Status != 200) continue;
+                    using (var doc = JsonDocument.Parse(r.Content))
+                    {
+                        if (!doc.RootElement.TryGetProperty("chart", out var c) || !c.TryGetProperty("result", out var res) || res.ValueKind != JsonValueKind.Array || res.GetArrayLength() == 0) continue;
+                        var meta = res[0].TryGetProperty("meta", out var m) ? m : default;
+                        if (meta.ValueKind != JsonValueKind.Object) continue;
+                        double price = GetDoubleProp(meta, "regularMarketPrice", double.NaN);
+                        if (double.IsNaN(price) || price <= 0) continue;
+                        impliedRate = 100.0 - price;
+                        long mt = GetLongProp(meta, "regularMarketTime", 0);
+                        if (mt > 0) contractDate = DateTimeOffset.FromUnixTimeSeconds(mt).UtcDateTime;
+                        break;
+                    }
+                }
+                if (impliedRate == null)
+                {
+                    var r = await FetchAsync("https://query1.finance.yahoo.com/v8/finance/chart/ZQ%3DF?interval=1d&range=5d", 15, null, 500000);
+                    if (r != null && r.Status == 200) using (var doc = JsonDocument.Parse(r.Content)) { if (doc.RootElement.TryGetProperty("chart", out var c) && c.TryGetProperty("result", out var res) && res.ValueKind == JsonValueKind.Array && res.GetArrayLength() > 0 && res[0].TryGetProperty("indicators", out var ind) && ind.TryGetProperty("quote", out var q) && q.ValueKind == JsonValueKind.Array && q.GetArrayLength() > 0 && q[0].TryGetProperty("close", out var cl) && cl.ValueKind == JsonValueKind.Array && cl.GetArrayLength() > 0) { double last = cl[cl.GetArrayLength() - 1].GetDouble(); if (last > 0) impliedRate = 100.0 - last; } }
+                }
+                if (impliedRate == null) return null;
+                return BuildCmeFromYahoo(currentRate, impliedRate.Value, contractDate);
+            }
+            catch { return null; }
+        }
+
+        private static async Task<double> FetchCurrentFedFundsRateAsync()
+        {
+            var config = GetApiConfig();
+            if (config.ContainsKey("fredApiKey"))
+            {
+                var r = await FetchAsync($"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key={config["fredApiKey"]}&sort_order=desc&limit=1&file_type=json", 15, null, 200000);
+                if (r != null && r.Status == 200) try { using (var doc = JsonDocument.Parse(r.Content)) { if (doc.RootElement.TryGetProperty("observations", out var obs) && obs.ValueKind == JsonValueKind.Array && obs.GetArrayLength() > 0) { double rate; if (double.TryParse(obs[0].GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out rate) && rate > 0) return rate; } } } catch { }
+            }
+            var r2 = await FetchAsync("https://query1.finance.yahoo.com/v8/finance/chart/DFF?interval=1d&range=5d", 15, null, 500000);
+            if (r2 != null && r2.Status == 200) try { using (var doc = JsonDocument.Parse(r2.Content)) { if (doc.RootElement.TryGetProperty("chart", out var c) && c.TryGetProperty("result", out var res) && res.ValueKind == JsonValueKind.Array && res.GetArrayLength() > 0) { var meta = res[0].TryGetProperty("meta", out var m) ? m : default; if (meta.ValueKind == JsonValueKind.Object) { double p = GetDoubleProp(meta, "regularMarketPrice", double.NaN); if (!double.IsNaN(p) && p > 0) return p; } } } } catch { }
+            return -1;
+        }
+
+        private static CmeFedWatch BuildCmeFromYahoo(double currentRate, double impliedRate, DateTime contractDate)
+        {
+            var cme = new CmeFedWatch { TradeDate = contractDate.ToString("yyyy-MM-dd") };
+            string period = GetNextFomcPeriod(0);
+            var gp = new CmePeriod { Period = period };
+            double diff = currentRate - impliedRate, absDiff = Math.Abs(diff);
+            bool cut = diff > 0;
+            double pc25 = 0, pc50 = 0, pnc = 0, ph25 = 0;
+            if (absDiff >= 0.20) { if (cut) { pc25 = Math.Min(95, (absDiff / 0.25) * 80); pc50 = Math.Max(0, pc25 - 50); pc25 -= pc50; pnc = 100 - pc25 - pc50; } else { ph25 = Math.Min(95, (absDiff / 0.25) * 80); pnc = 100 - ph25; } }
+            else { if (cut) { pc25 = (absDiff / 0.25) * 100; pnc = 100 - pc25; } else { ph25 = (absDiff / 0.25) * 100; pnc = 100 - ph25; } }
+            if (pc50 > 1) gp.Probabilities.Add(new KeyValuePair<string, string>($"{(currentRate - 0.50):F2}%", $"{pc50:F1}%"));
+            if (pc25 > 1) gp.Probabilities.Add(new KeyValuePair<string, string>($"{(currentRate - 0.25):F2}%", $"{pc25:F1}%"));
+            gp.Probabilities.Add(new KeyValuePair<string, string>($"{currentRate:F2}% (no change)", $"{pnc:F1}%"));
+            if (ph25 > 1) gp.Probabilities.Add(new KeyValuePair<string, string>($"{(currentRate + 0.25):F2}%", $"{ph25:F1}%"));
+            cme.Periods.Add(gp);
+            return cme;
+        }
+
+        private static string GetNextFomcPeriod(int offset = 0)
+        {
+            var fomc = new[] { new DateTime(2026,1,27), new DateTime(2026,3,17), new DateTime(2026,4,28), new DateTime(2026,6,16), new DateTime(2026,7,28), new DateTime(2026,9,15), new DateTime(2026,10,27), new DateTime(2026,12,8) };
+            DateTime now = DateTime.UtcNow; int n = 0;
+            foreach (var d in fomc) { if (d >= now) { if (n == offset) return d.ToString("MMM-yyyy", CultureInfo.InvariantCulture); n++; } }
+            return fomc.Last().ToString("MMM-yyyy", CultureInfo.InvariantCulture);
         }
 
         private static async Task<object> BuildFedWatchFallbackAsync()

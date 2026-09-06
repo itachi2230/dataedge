@@ -505,6 +505,23 @@ namespace backtest.Views
             }
         }
 
+        /// <summary>
+        /// Permet la sélection et la copie de texte dans les bulles du chat.
+        /// Le TextBox étant IsReadOnly, il a besoin d'un clic pour recevoir le focus.
+        /// </summary>
+        private void TextBox_SelectFocus(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBox tb)
+            {
+                if (!tb.IsFocused)
+                {
+                    tb.Focus();
+                    tb.SelectAll();
+                }
+                e.Handled = false;
+            }
+        }
+
         private void BtnCopy_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.Tag is string textToCopy)
