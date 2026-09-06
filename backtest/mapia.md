@@ -29,7 +29,7 @@ Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY`
 |---|---|---|
 | **Front - UI** | `Views/FxAiChatControl.xaml` + `.xaml.cs` | Fenêtre de chat de l'agent (bulles, quick prompts, streaming) |
 | **Front - logique** | `services/FxAiAgentService.cs` | Client HTTP du chat : envoi, lecture du flux SSE, boucle agent |
-| **Front - tools** | `services/AgentWorkspaceService.cs` | Définitions des tools + exécution locale + contexte utilisateur ; délègue à `AgentStudiesService` (études, module Études + notes) et à `AgentWeeksService` (notes hebdo de la section Weeks : `Notes/Notes_yyyyMMdd.etude`) |
+| **Front - tools** | `services/AgentWorkspaceService.cs` | Définitions des tools + exécution locale + contexte utilisateur ; délègue à `AgentStudiesService` (études), `AgentWeeksService` (notes hebdo, Dashboard) et `AgentMarketService` (web : calendrier, FedWatch, sentiment, cotations, news, recherche, page) |
 | **Front - modèles** | `Models/ChatMessage.cs`, `Models/AiAgentError.cs` | Objets de données du chat et erreurs agent |
 | **Back - endpoint** | `fxglobal/src/Controller/AIChatController.php` | Route `POST /api/ai/chat`, streaming SSE, persistance BDD |
 | **Back - LLM** | `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclaration des fonctions, conversion `functionCall` |
@@ -131,7 +131,7 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 | **Bandeau de statut live** | Dans la bulle IA : point cyan pulsé + texte italique cyan (#7FD8E8) affiché **uniquement pendant le travail de l'agent** — **aucun chrono/décompte de secondes** (l'utilisateur ne doit pas percevoir la latence) : mention « Réflexion en cours… », fragments de réflexion du modèle (stream `reasoning`) et actions d'outils (`🔍 …` / `✓ … terminé`). Disparaît dès que la réponse finale commence (propriété `StatusText` → `HasStatus`, convertisseur `BoolToVis`) |
 | **Liste des messages** | `ItemsControl` lié à `ObservableCollection<ChatMessage>`, bulles dégradées différenciées (User / IA via `DataTrigger IsUser`), **largeur fluide** : `MaxWidth` des tuiles lié à l'`ActualWidth` du `ScrollViewer` via `WidthMinusConverter` (les bulles s'agrandissent quand le panneau est agrandi), boutons fantômes **⧉ Copier** et **↺ Relancer** |
 | **Indicateur** | 3 points cyan ondulants + « L'agent analyse... » (`LoadingIndicator`), masqué dès le 1er token |
-| **Quick prompts** | 8 chips avec **tooltip explicatif** au survol : « ◆ Bilan », « ◆ Études », « ◆ Semaine » (planification hebdo : calendrier du mois + news + calendrier économique → création/mise à jour de la note de la semaine dans Weeks), « ◆ Analyser », « ◆ Stratégies », « ◆ Journal », « ◆ Règles », « ◆ Marché » (envoient un prompt pré-rempli) |
+| **Quick prompts** | 8 chips **colorés** avec icône et **tooltip explicatif** au survol : « ✦ Bilan » (vert, résumé performances + priorités), « ◆ Études » (cyan), « ◷ Semaine » (orange, planification hebdo : calendrier du mois + news + calendrier économique → création/mise à jour de la note de la semaine dans Weeks), « ◆ Analyser » (cyan), « ◆ Stratégies » (cyan), « ◆ Journal » (cyan), « ◆ Règles » (cyan), « ◉ Sentiment » (violet, analyse complète du sentiment de marché : cotations + FedWatch + retail MyFxBook + calendrier + actualités → synthèse tendances et risques) |
 | **Saisie** | `TextBox` multiligne dans une bordure arrondie (caret cyan), envoi par bouton disque dégradé « ➤ » ou touche `Entrée`. **Pendant la génération le bouton d'envoi devient un bouton STOP** (`BtnStop`, disque rouge + carré blanc, style Gemini) : un clic annule le flux en cours |
 
 #### Code-behind — fonctions principales
@@ -173,7 +173,7 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 
 | Fonction | Rôle |
 |---|---|
-| `GetToolDefinitions()` | Retourne la liste des **19 tools** déclarés au modèle (dont 7 dédiés aux **notes hebdo / Weeks**), avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
+| `GetToolDefinitions()` | Retourne la liste des **26 tools (19 workspace + 7 web/marché)** déclarés au modèle (dont 7 dédiés aux **notes hebdo / Weeks**), avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
 | `RequiresConfirmation(toolName)` | Indique si un tool nécessite une confirmation utilisateur (tool inconnu → `true` par sécurité) |
 | `BuildIdentityContextAsync()` | Sérialise en JSON l'**identité seule** (profil cloud via `GetProfileCachedAsync`, cache 5 min) — envoyée au premier tour, persistée role=`context` côté serveur |
 | `BuildWorkspaceSnapshotAsync()` | Sérialise le **résumé workspace** (stratégies + stats, 25 derniers trades, chemins des études) — renvoyé uniquement quand le modèle appelle `get_workspace_snapshot` |
@@ -314,6 +314,22 @@ Définies dans `GeminiService::buildSystemInstruction()` via la constante `DIREC
 
 Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveur (→ `functionDeclarations` Gemini). Les paramètres sont **typés** (`AiToolParameter` : `name`, `type` = `string`/`number`/`boolean`, `description`, `required`) et convertis par `GeminiService::buildFunctionDeclarations` en schéma JSON Gemini (`STRING`/`NUMBER`/`BOOLEAN` + tableau `required`). À cela s'ajoute un outil **serveur**, non déclaré au client : **`google_search`** (grounding Gemini, veille marché temps réel — cf. `ENABLE_WEB_SEARCH` dans `GeminiService`).
 
+### Sous-système « Web & Marché » — `AgentMarketService.cs`
+
+7 nouveaux outils de **lecture web** (aucune confirmation, aucun accès workspace) donnent au modèle un accès **autonome à des données réelles** même sans recherche web native du LLM :
+
+- **`get_economic_calendar`** : calendrier économique réel multi-sources (ForexFactory via `faireconomy.media` RSS → TradingView → investing.com → Dukascopy) avec filtres par devise/importance et cache mémoire 20 min.
+- **`get_fed_watch`** : probabilités de taux Fed (endpoint JSON `cmegroup.com/services/trades/fedwatch`), repli calendrier FOMC 2026 + décision via TradingView si CME est bloqué.
+- **`get_fxbook_sentiment`** : sentiment retail Long/Short par paire (MyFxBook Community Outlook). API officielle si `myfxbookEmail`/`myfxbookPassword` dans `apikeys.json`, sinon scraping HTML tolérant.
+- **`get_market_overview`** : cotations en direct via Yahoo Finance `/v8/finance/chart` — paires FX, indices, métaux, crypto, énergie. Cache 5 min.
+- **`get_market_news`** : titres d'actualité via Google News RSS → repli Bing News RSS.
+- **`web_search`** : recherche web générique (Brave Search API si `braveApiKey` dans `apikeys.json`, sinon Bing RSS → HTML). Sans clé, aucun moteur n'est requis.
+- **`fetch_web_page`** : télécharge une page https et extrait titre + texte + liens, avec blocage réseau local. Sert à approfondir un résultat de recherche ou une news.
+
+L'infrastructure HTTP est mutualisée (`FetchAsync`, cache mémoire `ConcurrentDictionary`, parsing XML avec détection d'encoding windows-1252). Les clés optionnelles (`apikeys.json`) sont cherchées dans `%LOCALAPPDATA%\DataEdge` puis à côté de l'exécutable. Tous les outils gèrent leurs erreurs réseau avec des messages clairs en français pour le modèle, sans jamais exposer de détail technique à l'utilisateur.
+
+Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveur (→ `functionDeclarations` Gemini). Les paramètres sont **typés** (`AiToolParameter` : `name`, `type` = `string`/`number`/`boolean`, `description`, `required`) et convertis par `GeminiService::buildFunctionDeclarations` en schéma JSON Gemini (`STRING`/`NUMBER`/`BOOLEAN` + tableau `required`). À cela s'ajoute un outil **serveur**, non déclaré au client : **`google_search`** (grounding Gemini, veille marché temps réel — cf. `ENABLE_WEB_SEARCH` dans `GeminiService`).
+
 | Tool | Type | Paramètres (type) | Requiert confirmation * | Implémentation C# |
 |---|---|---|---|---|
 | `get_workspace_snapshot` | Lecture | — | non | `BuildWorkspaceSnapshotAsync()` |
@@ -328,6 +344,13 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 | `create_strategy` | Mutation | `name` (string), `description` (string, optionnel) | **oui** | `CreateStrategy(arguments)` |
 | `delete_strategy` | Mutation | `name` (string) | **oui** | `DeleteStrategy(arguments)` |
 | `add_journal_trade` | Mutation | `strategy_name` (string), `pair` (string), `result` (string : TP/SL/TR/BE/PARTIAL), `order_type` (string : BUY/SELL), `entry` (string date), `exit` (string date), `rr` (number), `profit` (number), `description` (string) | **oui** | `AddJournalTrade(arguments)` |
+| ➡️ `get_economic_calendar` | **Lecture web** | `from` (string date, opt), `to` (string date, opt), `currency` (string filtre, opt), `importance` (string filtre, opt), `source` (string : auto/forexfactory/tradingview/investing/dukascopy, opt), `max_results` (number, opt) | non | `AgentMarketService.GetEconomicCalendar(arguments)` |
+| ➡️ `get_fed_watch` | **Lecture web** | `meeting` (string : next/all/date, opt) | non | `AgentMarketService.GetFedWatch(arguments)` |
+| ➡️ `get_fxbook_sentiment` | **Lecture web** | `pairs` (string, opt : all ou virgules) | non | `AgentMarketService.GetFxbookSentiment(arguments)` |
+| ➡️ `get_market_overview` | **Lecture web** | `symbols` (string, opt : virgules) | non | `AgentMarketService.GetMarketOverview(arguments)` |
+| ➡️ `get_market_news` | **Lecture web** | `query` (string, opt), `language` (string, opt), `max_results` (number, opt) | non | `AgentMarketService.GetMarketNews(arguments)` |
+| ➡️ `web_search` | **Lecture web** | `query` (string, **obligatoire**), `max_results` (number, opt) | non | `AgentMarketService.WebSearch(arguments)` |
+| ➡️ `fetch_web_page` | **Lecture web** | `url` (string, **obligatoire**), `max_chars` (number, opt) | non | `AgentMarketService.FetchWebPage(arguments)` |
 | `get_weeks_catalog` | Lecture | — | non | `AgentWeeksService.GetCatalog()` |
 | `read_week` | Lecture | `week` (string : 'current', '2026-09-07', '20260907', '07/09/2026', 'Notes_20260907'), `max_chars` (number, optionnel) | non | `AgentWeeksService.Read(arguments)` |
 | `search_weeks` | Lecture | `query` (string), `max_results` (number, optionnel) | non | `AgentWeeksService.Search(arguments)` |
@@ -343,6 +366,7 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 Dans `FxAiChatControl.HandleToolCallAsync` :
 
 - **Tous les tools marqués `requires_confirmation: true`** (soit `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `add_journal_trade`, `write_week`, `delete_week`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, `read_week`, `search_weeks`, `get_month_calendar`, catalogues...) et les créations (`create_study`, `create_week`) ne demandent aucune confirmation.
+- **Les 7 nouveaux outils web** (`get_economic_calendar`, `get_fed_watch`, `get_fxbook_sentiment`, `get_market_overview`, `get_market_news`, `web_search`, `fetch_web_page`) sont des **lectures web pures** : ils ne touchent jamais au workspace ni au disque local, ne demandent **aucune confirmation** et sont exécutés immédiatement par `AgentMarketService`.
 - **Refus** → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` est renvoyé au modèle en `is_error: true` : l'agent est informé et peut reformuler au lieu de réessayer en boucle.
 - **Outils inconnus** → `RequiresConfirmation()` retourne `true` par sécurité (confirmation demandée).
 - **Exceptions d'exécution** → interceptées par `ExecuteSafelyAsync` côté `FxAiAgentService` : l'outil plante sans casser la boucle, le message d'erreur est transmis au modèle qui peut se corriger.

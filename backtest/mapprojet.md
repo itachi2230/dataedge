@@ -75,6 +75,7 @@ backtest/
 │   │   ├── AgentWorkspaceService.cs → Contexte utilisateur et exécution contrôlée des tools IA
 │   │   ├── AgentStudiesService.cs   → Tools IA « études » (lecture/recherche/création/écriture/suppression .etude, extraction texte sans images)
 │   │   ├── AgentWeeksService.cs     → Tools IA « weeks » : notes hebdo du dashboard (catalogue, lecture, recherche, calendrier mensuel, création/écriture/suppression Notes_*.etude, markdown → FlowDocument Segoe UI 14 #EEEEEE)
+│   │   ├── AgentMarketService.cs     → Tools IA « web & marché » : 7 nouveaux outils de données en direct (calendrier économique réel, FedWatch, sentiment retail, cotations, actualités, recherche web, lecture de page)
 │   │   ├── PdfExportService.cs → Génération d’un rapport PDF moderne et structuré de la stratégie
 │   │   └── RichTextService.cs → Service Rich Text (sauvegarde/chargement XamlPackage)
 │   └── RichTextService.cs     → Service Rich Text (sauvegarde/chargement XamlPackage)
@@ -289,6 +290,7 @@ POST /admin/ai/sessions/clear             → Purge sessions cache expirées
 | `services/ReplayPositionStore.cs` | Persistance JSON de la dernière position de replay (timestamp UNIX) par stratégie+paire+timeframe, dans %LOCALAPPDATA%/DataEdge/replay_positions.json |
 | `services/AgentStudiesService.cs` | Tools IA études : catalogue, lecture texte (sans images), recherche, création/écriture (markdown → .etude), suppression |
 | `services/AgentWeeksService.cs` | Tools IA weeks : agent sur les notes hebdomadaires de la section Weeks (`Notes/Notes_yyyyMMdd.etude`) — catalogue, lecture, recherche, calendrier mensuel (semaines ISO + notes existantes), création/écriture (replace/append/prepend, images préservées, mise en forme Segoe UI 14 #EEEEEE) et suppression ; recharge la note affichée dans le dashboard si l'agent modifie la semaine affichée (`MainWindow.RefreshWeekNotesIfCurrent`) |
+| `services/AgentMarketService.cs` | Tools IA « web & marché » : 7 nouveaux outils de données en direct — calendrier économique réel multi-sources (ForexFactory/TradingView), probabilités FedWatch CME, sentiment retail MyFxBook, cotations Yahoo Finance, actualités Google/Bing, recherche web Brave/Bing, lecture de page web — sans clé API obligatoire, cache mémoire mutualisé, `apikeys.json` optionnel dans %LOCALAPPDATA% |
 | `App.xaml.cs` | Entry point, gestionnaire exceptions global, crash reporter |
 | `backtesteur.xaml.cs` | Fenêtre backtest/replay (chart + stratégie) |
 

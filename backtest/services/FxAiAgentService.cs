@@ -388,6 +388,13 @@ namespace backtest.Services
                 case "create_strategy": return "Création de la stratégie";
                 case "delete_strategy": return "Suppression de la stratégie";
                 case "add_journal_trade": return "Ajout du trade au journal";
+                case "get_economic_calendar": return "Lecture du calendrier économique";
+                case "get_fed_watch": return "Consultation FedWatch (taux Fed)";
+                case "get_fxbook_sentiment": return "Lecture du sentiment retail (MyFxBook)";
+                case "get_market_overview": return "Cotations marché en direct";
+                case "get_market_news": return "Veille actualités financières";
+                case "web_search": return "Recherche web";
+                case "fetch_web_page": return "Lecture d'une page web";
                 default: return toolName;
             }
         }

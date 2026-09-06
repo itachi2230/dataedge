@@ -57,7 +57,7 @@
             <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.2" BeginTime="0:0:0.36" Duration="0:0:0.7" AutoReverse="True"/>
         </Storyboard>
 
-        <!-- Chip des prompts rapides -->
+        <!-- Chip des prompts rapides (style par défaut : cyan/bleu) -->
         <Style x:Key="ChipButton" TargetType="Button">
             <Setter Property="Background" Value="#0E2233"/>
             <Setter Property="Foreground" Value="#7FD8E8"/>
@@ -83,6 +83,48 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Chip Bilan : vert émeraude -->
+        <Style x:Key="ChipButtonGreen" BasedOn="{StaticResource ChipButton}" TargetType="Button">
+            <Setter Property="Background" Value="#0F2E1A"/>
+            <Setter Property="Foreground" Value="#2ECC71"/>
+            <Setter Property="BorderBrush" Value="#1B7A3A"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1A4A2A"/>
+                    <Setter Property="Foreground" Value="#58D68D"/>
+                    <Setter Property="BorderBrush" Value="#2ECC71"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Chip Semaine : orange ambré -->
+        <Style x:Key="ChipButtonOrange" BasedOn="{StaticResource ChipButton}" TargetType="Button">
+            <Setter Property="Background" Value="#2E1F0A"/>
+            <Setter Property="Foreground" Value="#F39C12"/>
+            <Setter Property="BorderBrush" Value="#7A4D1B"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#4A3010"/>
+                    <Setter Property="Foreground" Value="#F5B041"/>
+                    <Setter Property="BorderBrush" Value="#F39C12"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Chip Sentiment : violet magenta -->
+        <Style x:Key="ChipButtonPurple" BasedOn="{StaticResource ChipButton}" TargetType="Button">
+            <Setter Property="Background" Value="#1E0F2E"/>
+            <Setter Property="Foreground" Value="#BB8FCE"/>
+            <Setter Property="BorderBrush" Value="#6C3483"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#301A4A"/>
+                    <Setter Property="Foreground" Value="#D2B4DE"/>
+                    <Setter Property="BorderBrush" Value="#BB8FCE"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- Bouton fantôme (copier / relancer / fermer) -->
@@ -282,13 +324,13 @@
 
                 <!-- Prompts rapides -->
                 <WrapPanel Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="0" Margin="0,0,0,8">
-                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Bilan"
+                    <Button Style="{StaticResource ChipButtonGreen}" Click="QuickPrompt_Click" Content="✦  Bilan"
                             Tag="Fais un bilan de mon espace de trading et donne-moi trois priorités."
                             ToolTip="Résumé global de vos performances, stratégies et trades, avec 3 priorités d'action."/>
                     <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Études"
                             Tag="Liste mes études et résume le contenu principal de la plus récente."
                             ToolTip="Lister vos études/notes et résumer leur contenu."/>
-                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Semaine"
+                    <Button Style="{StaticResource ChipButtonOrange}" Click="QuickPrompt_Click" Content="◷  Semaine"
                             Tag="Planifie ma semaine de trading. Étapes : 1) appelle l'outil de calendrier pour le mois en cours, 2) cherche sur le web les news et le calendrier économique de la semaine (banques centrales, données macro), 3) crée ou complète la note de la semaine dans la section Weeks : récapitulatif jour par jour, niveaux d'impact en couleur (rouge = fort, orange = moyen) et plan d'action clair. Sois concret et va droit au but."
                             ToolTip="Planifier la semaine : calendrier du mois, news et calendrier économique, puis création/mise à jour de la note hebdo dans Weeks."/>
                     <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Analyser"
@@ -303,9 +345,9 @@
                     <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Règles"
                             Tag="Résume mes règles de trading et mes objectifs, puis propose 3 améliorations concrètes."
                             ToolTip="Revoir vos règles de trading et objectifs, avec des améliorations concrètes."/>
-                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Marché"
-                            Tag="Donne-moi un point rapide sur le marché : tendances des paires majeures et actualités importantes de la semaine."
-                            ToolTip="Point marché : tendances des paires majeures et actualités importantes de la semaine."/>
+                    <Button Style="{StaticResource ChipButtonPurple}" Click="QuickPrompt_Click" Content="◉  Sentiment"
+                            Tag="Analyse approfondie du sentiment de marché : 1) Récupère les cotations en direct des paires majeures (EURUSD, GBPUSD, USDJPY, XAUUSD), 2) Consulte le FedWatch pour le contexte de taux, 3) Récupère le sentiment retail MyFxBook, 4) Consulte le calendrier économique de la semaine, 5) Cherche les actualités récentes sur les marchés, 6) Synthèse : tendances, positions extrêmes, événements à risque et interprétation contrariante."
+                            ToolTip="Analyse complète du sentiment de marché : cotations, FedWatch, retail, calendrier, actualités et synthèse."/>
                 </WrapPanel>
 
                 <!-- Saisie avec halo au focus -->

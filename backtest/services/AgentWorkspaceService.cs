@@ -77,7 +77,30 @@ namespace backtest.Services
                     new AiToolParameter("exit", "string", "Date/heure de sortie, ex: 2026-09-03 16:45.", false),
                     new AiToolParameter("rr", "number", "Ratio risque/rendement, ex: 2.5.", false),
                     new AiToolParameter("profit", "number", "Profit en devise du compte (négatif si perte).", false),
-                    new AiToolParameter("description", "string", "Notes sur le trade (setup, contexte...).", false))
+                    new AiToolParameter("description", "string", "Notes sur le trade (setup, contexte...).", false)),
+                new AiToolDefinition("get_economic_calendar", "Récupérer le VRAI calendrier économique : dates, heures, impact (High/Medium/Low), prévisions et chiffres précédents pour toutes les grandes devises (USD, EUR, GBP, JPY...). Source réelle par défaut : ForexFactory (flux officiel) puis TradingView en repli. À utiliser systématiquement quand l'utilisateur demande les news de la semaine, ce qui sort cette semaine, ou pour planifier les trades autour des rendez-vous.", false,
+                    new AiToolParameter("from", "string", "Date de début au format AAAA-MM-JJ (défaut : aujourd'hui).", false),
+                    new AiToolParameter("to", "string", "Date de fin au format AAAA-MM-JJ (défaut : from + 7 jours).", false),
+                    new AiToolParameter("currency", "string", "Filtrer par devise (ex: USD, EUR, GBP, JPY, AUD, CAD, CHF... ou 'all' pour tout).", false),
+                    new AiToolParameter("importance", "string", "Filtrer par impact : high, medium, low, holiday ou all.", false),
+                    new AiToolParameter("source", "string", "Source : auto (défaut), forexfactory, tradingview, investing ou dukascopy.", false),
+                    new AiToolParameter("max_results", "number", "Nombre maximum d'événements renvoyés (défaut 60).", false)),
+                new AiToolDefinition("get_fed_watch", "Récupérer les probabilités de hausse/baisse des taux de la Fed (FedWatch CME) : taux cible le plus probable et répartition des probabilités pour les prochaines réunions FOMC. Si CME est bloqué par le réseau, retourne le calendrier FOMC officiel et la dernière décision. À utiliser pour toute question sur le discours de la Fed, les taux ou le dollar.", false,
+                    new AiToolParameter("meeting", "string", "Réunion cible : 'next' (défaut, prochaine réunion), 'all' (toutes), ou un mois ex: '2026-09'.", false)),
+                new AiToolDefinition("get_fxbook_sentiment", "Récupérer le sentiment retail MyFxBook : pourcentage de positions Long/Short par paire (ex: EURUSD 60% Long / 40% Short) — la position moyenne des traders. Un excès unilatéral est souvent un signal contrarien. Compatible API officielle si myfxbookEmail/myfxbookPassword sont configurés dans apikeys.json.", false,
+                    new AiToolParameter("pairs", "string", "Paires demandées séparées par des virgules (ex: 'EURUSD,GBPUSD,XAUUSD') ou 'all' (défaut).", false)),
+                new AiToolDefinition("get_market_overview", "Cotations en DIRECT (prix, variation %, plus haut/bas du jour, plus hauts/bas 52 semaines) pour des symboles : paires FX (EURUSD, GBPUSD, USDJPY, XAUUSD...), indices (US500, US30, US100, GER40, UK100...), crypto (BTC-USD, ETH-USD) et énergie (WTI, BRENT).", false,
+                    new AiToolParameter("symbols", "string", "Symboles séparés par des virgules. Défaut : EURUSD,GBPUSD,XAUUSD,BTC-USD.", false)),
+                new AiToolDefinition("get_market_news", "Récupérer les DERNIÈRES actualités financières (titres, sources, dates, liens) via Google News / Bing News. Sujets libres : 'EURUSD', 'Fed', 'pétrole', 'Nvidia'... À utiliser pour la veille marché et toute question d'actualité.", false,
+                    new AiToolParameter("query", "string", "Sujet de recherche (défaut : forex).", false),
+                    new AiToolParameter("language", "string", "Langue des résultats : fr, en, de, es... (défaut fr).", false),
+                    new AiToolParameter("max_results", "number", "Nombre maximum d'articles (défaut 10).", false)),
+                new AiToolDefinition("web_search", "Effectuer une RECHERCHE WEB générique sur Internet (Bing/Google-like) et renvoyer les meilleurs résultats {titre, url, extrait}. Même si le modèle ne dispose pas de navigation native, cet outil lui donne un accès complet à l'information en ligne. Pour approfondir une source, utiliser ensuite fetch_web_page avec l'URL retournée.", false,
+                    new AiToolParameter("query", "string", "Requête de recherche, ex: 'dernière décision Fed septembre 2026'.", false),
+                    new AiToolParameter("max_results", "number", "Nombre maximum de résultats (défaut 8).", false)),
+                new AiToolDefinition("fetch_web_page", "Télécharger une page web et en extraire le titre, le texte lisible et des liens. À utiliser pour lire le contenu complet derrière un résultat de web_search ou un article d'actualité, ou pour consulter un site (ex: communiqué officiel). Bloque les adresses internes/réseau local par sécurité.", false,
+                    new AiToolParameter("url", "string", "URL complète de la page à lire (https)."),
+                    new AiToolParameter("max_chars", "number", "Nombre maximum de caractères de texte renvoyés (défaut 8000).", false))
             };
         }
 
@@ -205,6 +228,20 @@ namespace backtest.Services
                         return DeleteStrategy(call.Arguments);
                     case "add_journal_trade":
                         return AddJournalTrade(call.Arguments);
+                    case "get_economic_calendar":
+                        return await AgentMarketService.GetEconomicCalendar(call.Arguments);
+                    case "get_fed_watch":
+                        return await AgentMarketService.GetFedWatch(call.Arguments);
+                    case "get_fxbook_sentiment":
+                        return await AgentMarketService.GetFxbookSentiment(call.Arguments);
+                    case "get_market_overview":
+                        return await AgentMarketService.GetMarketOverview(call.Arguments);
+                    case "get_market_news":
+                        return await AgentMarketService.GetMarketNews(call.Arguments);
+                    case "web_search":
+                        return await AgentMarketService.WebSearch(call.Arguments);
+                    case "fetch_web_page":
+                        return await AgentMarketService.FetchWebPage(call.Arguments);
                     default:
                         return AiToolResult.Error("Outil non implémenté.");
                 }

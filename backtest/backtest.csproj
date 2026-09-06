@@ -217,6 +217,7 @@
     <Compile Include="FxCloudService.cs" />
     <Compile Include="services\AgentStudiesService.cs" />
     <Compile Include="services\AgentWeeksService.cs" />
+    <Compile Include="services\AgentMarketService.cs" />
     <Compile Include="InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
