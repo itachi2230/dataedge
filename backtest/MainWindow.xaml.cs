@@ -708,6 +708,28 @@ namespace backtest
         private void NextWeek_Click(object sender, RoutedEventArgs e) { SaveNotes(); currentWeekStart = currentWeekStart.AddDays(7); LoadNotesForCurrentWeek(); }
 
         private void UpdateWeekStartDateDisplay() { weekStartDateText.Text = $"Semaine du {currentWeekStart:dd/MM/yy}"; }
+
+        /// <summary>
+        /// Rafraîchit la note affichée dans le dashboard quand l'agent IA vient
+        /// de créer/écrire/supprimer le fichier correspondant à la semaine
+        /// affichée : l'utilisateur voit la mise à jour sans changer de semaine.
+        /// Appelé par AgentWeeksService sur le thread UI (via Dispatcher).
+        /// </summary>
+        public void RefreshWeekNotesIfCurrent(string filePath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(filePath) || richTextBoxNotesWeeks == null) return;
+                string currentFile = Path.Combine(notesFolderPath, $"Notes_{currentWeekStart:yyyyMMdd}.etude");
+                if (!string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(currentFile), StringComparison.OrdinalIgnoreCase)) return;
+                RichTextService.LoadPackage(richTextBoxNotesWeeks, currentFile);
+                RichTextService.FormatImagesInDocument(richTextBoxNotesWeeks, 200);
+            }
+            catch
+            {
+                // Le rafraîchissement est un confort, jamais un chemin critique.
+            }
+        }
         #endregion
 
         #region ACTIONS BOUTONS & EVENTS

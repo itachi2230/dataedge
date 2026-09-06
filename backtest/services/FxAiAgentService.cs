@@ -363,6 +363,13 @@ namespace backtest.Services
                 case "create_study": return "Création de l'étude";
                 case "write_study": return "Écriture de l'étude";
                 case "delete_study": return "Suppression de l'étude";
+                case "get_weeks_catalog": return "Parcours des notes hebdo";
+                case "read_week": return "Lecture de la note de la semaine";
+                case "search_weeks": return "Recherche dans les notes hebdo";
+                case "get_month_calendar": return "Calcul du calendrier du mois";
+                case "create_week": return "Création de la note de la semaine";
+                case "write_week": return "Écriture de la note de la semaine";
+                case "delete_week": return "Suppression de la note de la semaine";
                 case "create_strategy": return "Création de la stratégie";
                 case "delete_strategy": return "Suppression de la stratégie";
                 case "add_journal_trade": return "Ajout du trade au journal";

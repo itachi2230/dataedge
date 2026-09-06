@@ -44,6 +44,25 @@ namespace backtest.Services
                     new AiToolParameter("mode", "string", "replace (défaut) pour remplacer tout, append pour ajouter à la fin, prepend pour insérer au début.", false)),
                 new AiToolDefinition("delete_study", "Supprimer définitivement une étude et son fichier local (action définitive).", true,
                     new AiToolParameter("name", "string", "Titre ou chemin de l'étude à supprimer.")),
+                new AiToolDefinition("get_weeks_catalog", "Lister les notes hebdomadaires de la section Weeks (dashboard) : semaines disponibles, fichiers, taille, semaine courante et présence de note. À appeler avant de lire ou modifier une note de semaine.", false),
+                new AiToolDefinition("read_week", "Lire le contenu textuel d'une note hebdomadaire (les images ne sont jamais envoyées, elles sont signalées par des marqueurs [image]).", false,
+                    new AiToolParameter("week", "string", "Semaine à lire : date ('2026-09-07' ou '20260907' ou '07/09/2026'), nom de fichier ('Notes_20260907') ou 'current' pour la semaine en cours. Toute date est alignée sur le lundi de sa semaine."),
+                    new AiToolParameter("max_chars", "number", "Nombre maximum de caractères renvoyés (défaut 8000).", false)),
+                new AiToolDefinition("search_weeks", "Rechercher un texte dans toutes les notes hebdomadaires (section Weeks) et renvoyer les extraits correspondants.", false,
+                    new AiToolParameter("query", "string", "Texte à rechercher dans les notes hebdomadaires."),
+                    new AiToolParameter("max_results", "number", "Nombre maximum de semaines renvoyées (défaut 8).", false)),
+                new AiToolDefinition("get_month_calendar", "Donner le calendrier d'un mois : grille des semaines (lundi → dimanche), numéros de semaine ISO, jours, semaines ayant déjà une note, semaine courante et jour courant. Point d'entrée recommandé pour planifier une semaine avec les news et le calendrier économique.", false,
+                    new AiToolParameter("year", "number", "Année (défaut : année en cours).", false),
+                    new AiToolParameter("month", "number", "Mois 1-12 (défaut : mois en cours).", false)),
+                new AiToolDefinition("create_week", "Créer la note hebdomadaire d'une semaine (section Weeks) et la remplir avec un contenu initial : planning de la semaine, news, événements économiques. Aucune confirmation n'est demandée pour la création.", false,
+                    new AiToolParameter("week", "string", "Semaine cible : date ('2026-09-07', '20260907', '07/09/2026') ou 'current'. Toute date est alignée sur le lundi de sa semaine."),
+                    new AiToolParameter("content", "string", "Contenu initial en markdown léger : # titres, **gras**, *italique*, __souligné__, - listes. Mise en forme avancée : [color=red]text[/color] (couleur : nom ou #RRGGBB), [size=18]text[/size] (taille). Les emojis sont autorisés s'ils apportent du sens (📅📈⚠️✅) mais à utiliser avec modération.", false)),
+                new AiToolDefinition("write_week", "Modifier une note hebdomadaire existante : replace (remplacer tout, défaut), append (ajouter à la fin) ou prepend (insérer au début). Les images existantes sont préservées.", true,
+                    new AiToolParameter("week", "string", "Semaine à modifier : date ('2026-09-07', '20260907', '07/09/2026') ou 'current'."),
+                    new AiToolParameter("content", "string", "Contenu à écrire en markdown léger (même syntaxe que create_week)."),
+                    new AiToolParameter("mode", "string", "replace (défaut) pour remplacer tout, append pour ajouter à la fin, prepend pour insérer au début.", false)),
+                new AiToolDefinition("delete_week", "Supprimer définitivement la note hebdomadaire d'une semaine et son fichier local (action définitive).", true,
+                    new AiToolParameter("week", "string", "Semaine dont la note doit être supprimée : date ('2026-09-07', '20260907', '07/09/2026') ou 'current'.")),
                 new AiToolDefinition("create_strategy", "Créer une stratégie dans DataEdge.", true,
                     new AiToolParameter("name", "string", "Nom unique de la nouvelle stratégie."),
                     new AiToolParameter("description", "string", "Description de la stratégie.", false)),
@@ -117,7 +136,8 @@ namespace backtest.Services
                     statistics = strategy.GetStatistics()
                 }).ToList(),
                 recent_trades = trades.OrderByDescending(item => item.trade.DateEntree).Take(25).Select(ToTradeSummary).ToList(),
-                studies = AgentStudiesService.GetRelativePaths()
+                studies = AgentStudiesService.GetRelativePaths(),
+                weeks = AgentWeeksService.GetSnapshotSummary()
             };
             return JsonSerializer.Serialize(snapshot);
         }
@@ -165,6 +185,20 @@ namespace backtest.Services
                         return AgentStudiesService.Write(call.Arguments);
                     case "delete_study":
                         return AgentStudiesService.Delete(call.Arguments);
+                    case "get_weeks_catalog":
+                        return AiToolResult.Success(AgentWeeksService.GetCatalog());
+                    case "read_week":
+                        return AgentWeeksService.Read(call.Arguments);
+                    case "search_weeks":
+                        return AgentWeeksService.Search(call.Arguments);
+                    case "get_month_calendar":
+                        return AgentWeeksService.GetMonthCalendar(call.Arguments);
+                    case "create_week":
+                        return AgentWeeksService.Create(call.Arguments);
+                    case "write_week":
+                        return AgentWeeksService.Write(call.Arguments);
+                    case "delete_week":
+                        return AgentWeeksService.Delete(call.Arguments);
                     case "create_strategy":
                         return CreateStrategy(call.Arguments);
                     case "delete_strategy":

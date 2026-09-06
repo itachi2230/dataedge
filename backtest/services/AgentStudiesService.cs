@@ -53,19 +53,25 @@ namespace backtest.Services
         private const double Heading1FontSize = 22;
         private const double Heading2FontSize = 17;
 
-        // Couleur claire par défaut pour tout texte créé par l'agent : le fond
-        // du RichTextBox d'étude étant sombre (#0A0A12), un texte noir serait
-        // illisible. Le pinceau est créé paresseusement sur le thread STA dédié
-        // (jamais dans le static constructor, pour ne pas initialiser WPF sur
-        // le mauvais thread).
+        // Couleur claire par défaut pour tout texte créé par l'agent : alignée
+        // sur les notes weeks (#EEEEEE, cf. AgentWeeksService) et sur les notes
+        // existantes du build. Le fond du RichTextBox d'étude étant sombre
+        // (#0A0A12), un texte noir serait illisible. Le pinceau est créé
+        // paresseusement sur le thread STA dédié (jamais dans le static
+        // constructor, pour ne pas initialiser WPF sur le mauvais thread).
         private static SolidColorBrush _defaultTextBrush;
 
         private static SolidColorBrush GetDefaultTextBrush()
         {
             if (_defaultTextBrush == null)
-                _defaultTextBrush = new SolidColorBrush(Color.FromRgb(0xE8, 0xEE, 0xF5));
+                _defaultTextBrush = new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xEE));
             return _defaultTextBrush;
         }
+
+        // Mise en forme par défaut du contenu créé par l'agent : identique aux
+        // notes weeks et aux notes du build (Segoe UI, corps 14, texte clair).
+        private const string DefaultFontFamily = "Segoe UI";
+        private const double DefaultFontSize = 14;
 
         // =====================================================================
         // CATALOGUE
@@ -200,7 +206,14 @@ namespace backtest.Services
             RunSta<object>(() =>
             {
                 Directory.CreateDirectory(directory);
-                var document = new FlowDocument();
+                // Document aux couleurs du module : Segoe UI 14, texte clair
+                // #EEEEEE (identique aux notes weeks et aux notes du build).
+                var document = new FlowDocument
+                {
+                    FontFamily = new FontFamily(DefaultFontFamily),
+                    FontSize = DefaultFontSize,
+                    Foreground = GetDefaultTextBrush()
+                };
                 if (!string.IsNullOrWhiteSpace(content))
                     AppendMarkdownToDocument(document, content, insertAtStart: false);
                 SaveDocument(document, path);
@@ -269,7 +282,8 @@ namespace backtest.Services
         // EXTRACTION DE TEXTE (XamlPackage → texte sans images)
         // =====================================================================
 
-        private sealed class ExtractionResult
+        // internal : partagé avec AgentWeeksService (notes hebdo).
+        internal sealed class ExtractionResult
         {
             public string Text { get; set; }
             public int ImageCount { get; set; }
@@ -289,7 +303,8 @@ namespace backtest.Services
         /// Extraction mise en cache : le parse XamlPackage (thread STA coûteux) n'est
         /// refait que si la date de modification du fichier a changé.
         /// </summary>
-        private static ExtractionResult ExtractText(string path)
+        // internal : partagé avec AgentWeeksService (notes hebdo).
+        internal static ExtractionResult ExtractText(string path)
         {
             DateTime modifiedUtc = File.GetLastWriteTimeUtc(path);
             lock (CacheLock)
@@ -305,7 +320,7 @@ namespace backtest.Services
             return result;
         }
 
-        private static void InvalidateCache(string path)
+        internal static void InvalidateCache(string path)
         {
             lock (CacheLock) TextCache.Remove(path);
         }
@@ -313,7 +328,7 @@ namespace backtest.Services
         /// <summary>
         /// Charge un .etude (XamlPackage) dans un FlowDocument.
         /// </summary>
-        private static FlowDocument LoadDocument(string path)
+        internal static FlowDocument LoadDocument(string path)
         {
             var document = new FlowDocument();
             if (!File.Exists(path)) return document;
@@ -331,7 +346,7 @@ namespace backtest.Services
         /// <summary>
         /// Sauvegarde un FlowDocument en .etude (XamlPackage).
         /// </summary>
-        private static void SaveDocument(FlowDocument document, string filePath)
+        internal static void SaveDocument(FlowDocument document, string filePath)
         {
             TextRange range = new TextRange(document.ContentStart, document.ContentEnd);
             using (FileStream fs = new FileStream(filePath, FileMode.Create))
@@ -384,12 +399,21 @@ namespace backtest.Services
             state.Text.Append("\n\n");
         }
 
-        private static void AppendInlines(InlineCollection inlines, ExtractionState state)
+        private static void AppendInlines(InlineCollection inlines, ExtractionState state, bool insideSpan = false)
         {
             foreach (var inline in inlines)
             {
                 // Ordre des cas important : LineBreak hérite de Span.
-                if (inline is Run run) state.Text.Append(run.Text);
+                if (inline is Run run)
+                {
+                    // Le XamlPackage normalise parfois Bold/Italic/Underline en
+                    // Run générique portant la propriété : on restitue alors le
+                    // marqueur markdown (sauf Run imbriqué dans un Span, qui
+                    // est déjà couvert par le marqueur du Span parent).
+                    string runMarker = insideSpan ? null : GetFormatMarker(run);
+                    if (runMarker == null) state.Text.Append(run.Text);
+                    else state.Text.Append(runMarker).Append(run.Text).Append(runMarker);
+                }
                 else if (inline is LineBreak) state.Text.Append('\n');
                 else if (inline is InlineUIContainer container)
                 {
@@ -402,16 +426,39 @@ namespace backtest.Services
                 else if (inline is Span span)
                 {
                     int spanStart = state.Text.Length;
-                    AppendInlines(span.Inlines, state);
+                    AppendInlines(span.Inlines, state, insideSpan: true);
                     string spanText = state.Text.ToString(spanStart, state.Text.Length - spanStart).Trim();
                     if (spanText.Length == 0) continue;
 
-                    string marker = span is Bold ? "**" : span is Italic ? "*" : span is Underline ? "__" : null;
+                    string marker = GetFormatMarker(span);
                     if (marker == null) continue;
                     state.Text.Length = spanStart;
                     state.Text.Append(marker).Append(spanText).Append(marker);
                 }
             }
+        }
+
+        /// <summary>
+        /// Marqueur markdown d'un inline mis en forme : l'élément typé WPF
+        /// (Bold/Italic/Underline) ou, après aller-retour XamlPackage, un
+        /// Span/Run générique portant la propriété localement (l'héritage est
+        /// exclu via ReadLocalValue pour ne pas marquer deux fois un Run déjà
+        /// couvert par son Span parent).
+        /// </summary>
+        private static string GetFormatMarker(Inline inline)
+        {
+            if (inline is Bold) return "**";
+            if (inline is Italic) return "*";
+            if (inline is Underline) return "__";
+            if (IsLocallySet(inline, TextElement.FontWeightProperty) && inline.FontWeight == FontWeights.Bold) return "**";
+            if (IsLocallySet(inline, TextElement.FontStyleProperty) && inline.FontStyle == FontStyles.Italic) return "*";
+            if (IsLocallySet(inline, Inline.TextDecorationsProperty) && inline.TextDecorations != null && inline.TextDecorations.Count > 0) return "__";
+            return null;
+        }
+
+        private static bool IsLocallySet(DependencyObject element, DependencyProperty property)
+        {
+            return element.ReadLocalValue(property) != DependencyProperty.UnsetValue;
         }
 
         private static void AppendList(List list, ExtractionState state)
@@ -447,7 +494,7 @@ namespace backtest.Services
         /// Extraits contextuels autour de chaque occurrence de la requête
         /// (repli en une seule ligne pour rester compact dans le chat).
         /// </summary>
-        private static List<string> FindSnippets(string text, string query, int max)
+        internal static List<string> FindSnippets(string text, string query, int max)
         {
             if (string.IsNullOrEmpty(text)) return new List<string>();
             string flattened = Regex.Replace(text, @"\s+", " ");
@@ -507,7 +554,7 @@ namespace backtest.Services
                         InsertBlock(document, pendingList, anchor);
                     }
                     string itemText = isBullet ? trimmed.Substring(2).Trim() : Regex.Replace(trimmed, @"^\d+[.)]\s", "").Trim();
-                    var itemParagraph = new Paragraph();
+                    var itemParagraph = NewStudyParagraph();
                     AppendFormattedInlines(itemParagraph.Inlines, itemText);
                     pendingList.ListItems.Add(new ListItem(itemParagraph));
                     continue;
@@ -521,11 +568,28 @@ namespace backtest.Services
                 else if (trimmed.StartsWith("# ")) InsertBlock(document, Heading(trimmed.Substring(2).Trim(), 22), anchor);
                 else
                 {
-                    var paragraph = new Paragraph();
+                    var paragraph = NewStudyParagraph();
                     AppendFormattedInlines(paragraph.Inlines, trimmed);
                     InsertBlock(document, paragraph, anchor);
                 }
             }
+        }
+
+        /// <summary>
+        /// Paragraphe de base du contenu créé par l'agent : Segoe UI, corps 14,
+        /// texte clair #EEEEEE — la même mise en forme que les notes weeks
+        /// (AgentWeeksService) et les notes du build, au lieu des valeurs par
+        /// défaut WPF (12 pt) qui rendaient le texte généré illisible/petit.
+        /// </summary>
+        private static Paragraph NewStudyParagraph()
+        {
+            return new Paragraph
+            {
+                FontFamily = new FontFamily(DefaultFontFamily),
+                FontSize = DefaultFontSize,
+                Foreground = GetDefaultTextBrush(),
+                Margin = new Thickness(0, 0, 0, 6)
+            };
         }
 
         /// <summary>
@@ -539,11 +603,13 @@ namespace backtest.Services
 
         private static Paragraph Heading(string text, double size)
         {
-            var paragraph = new Paragraph();
+            var paragraph = NewStudyParagraph();
+            // Titres en blanc (comme les notes weeks) pour se détacher du corps.
+            paragraph.Foreground = new SolidColorBrush(Colors.White);
             AppendFormattedInlines(paragraph.Inlines, text);
             paragraph.FontSize = size;
             paragraph.FontWeight = System.Windows.FontWeights.Bold;
-            paragraph.Margin = new Thickness(0, 6, 0, 4);
+            paragraph.Margin = new Thickness(0, 8, 0, 5);
             return paragraph;
         }
 
@@ -558,7 +624,7 @@ namespace backtest.Services
         /// pinceau clair par défaut (fond sombre), sauf si un conteneur coloré
         /// impose sa propre couleur.
         /// </summary>
-        private static void AppendFormattedInlines(InlineCollection inlines, string text, Brush defaultBrush = null)
+        internal static void AppendFormattedInlines(InlineCollection inlines, string text, Brush defaultBrush = null)
         {
             if (string.IsNullOrEmpty(text)) return;
             Brush fallback = defaultBrush ?? GetDefaultTextBrush();
@@ -646,7 +712,7 @@ namespace backtest.Services
             return 14;
         }
 
-        private static string StripImageMarkers(string line)
+        internal static string StripImageMarkers(string line)
         {
             return line.Replace("[image]", string.Empty).Replace("[image ]", string.Empty).Replace("[ image ]", string.Empty);
         }
@@ -758,7 +824,7 @@ namespace backtest.Services
         /// Dispatcher.Invoke (synchrone) : fiable car appelé depuis un thread
         /// d'arrière-plan (agent IA) sans pompe de messages propre.
         /// </summary>
-        private static T RunSta<T>(Func<T> action)
+        internal static T RunSta<T>(Func<T> action)
         {
             EnsureDocDispatcher();
             T result = default;
@@ -773,7 +839,7 @@ namespace backtest.Services
             return result;
         }
 
-        private static string GetString(JsonElement arguments, string property, string fallback = "")
+        internal static string GetString(JsonElement arguments, string property, string fallback = "")
         {
             if (!arguments.TryGetProperty(property, out var value)) return fallback;
             switch (value.ValueKind)
@@ -786,7 +852,7 @@ namespace backtest.Services
             }
         }
 
-        private static double GetNumber(JsonElement arguments, string property, double fallback = 0)
+        internal static double GetNumber(JsonElement arguments, string property, double fallback = 0)
         {
             if (!arguments.TryGetProperty(property, out var value)) return fallback;
             switch (value.ValueKind)

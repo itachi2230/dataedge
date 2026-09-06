@@ -283,6 +283,9 @@
                     <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Études"
                             Tag="Liste mes études et résume le contenu principal de la plus récente."
                             ToolTip="Lister vos études/notes et résumer leur contenu."/>
+                    <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Semaine"
+                            Tag="Planifie ma semaine de trading. Étapes : 1) appelle l'outil de calendrier pour le mois en cours, 2) cherche sur le web les news et le calendrier économique de la semaine (banques centrales, données macro), 3) crée ou complète la note de la semaine dans la section Weeks : récapitulatif jour par jour, niveaux d'impact en couleur (rouge = fort, orange = moyen) et plan d'action clair. Sois concret et va droit au but."
+                            ToolTip="Planifier la semaine : calendrier du mois, news et calendrier économique, puis création/mise à jour de la note hebdo dans Weeks."/>
                     <Button Style="{StaticResource ChipButton}" Click="QuickPrompt_Click" Content="◆  Analyser"
                             Tag="Analyse mes trades récents et identifie les biais répétitifs."
                             ToolTip="Analyser vos derniers trades et repérer les biais ou erreurs récurrentes."/>

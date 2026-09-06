@@ -150,6 +150,16 @@ namespace backtest.Views
                         Dispatcher.Invoke(() => PushStatus(status));
                     });
                 });
+
+                // Filet de sécurité : le serveur peut clore le flux sans le moindre
+                // contenu utile (modèle silencieux, budget de tokens consommé par
+                // la seule réflexion...) — dans ce cas la bulle resterait vide
+                // sans aucune erreur visible. On affiche un message clair.
+                if (string.IsNullOrWhiteSpace(aiMessage.Text))
+                {
+                    aiMessage.Text = "L'agent n'a renvoyé aucune réponse (le modèle est resté silencieux). Reformulez votre demande ou réessayez.";
+                    FxCloudService.Log("Agent IA : tour terminé sans aucun contenu utile (bulle vide remplacée par un message d'attente).");
+                }
             }
             catch (Exception ex)
             {

@@ -29,7 +29,7 @@ Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY`
 |---|---|---|
 | **Front - UI** | `Views/FxAiChatControl.xaml` + `.xaml.cs` | Fenêtre de chat de l'agent (bulles, quick prompts, streaming) |
 | **Front - logique** | `services/FxAiAgentService.cs` | Client HTTP du chat : envoi, lecture du flux SSE, boucle agent |
-| **Front - tools** | `services/AgentWorkspaceService.cs` | Définitions des tools + exécution locale + contexte utilisateur |
+| **Front - tools** | `services/AgentWorkspaceService.cs` | Définitions des tools + exécution locale + contexte utilisateur ; délègue à `AgentStudiesService` (études, module Études + notes) et à `AgentWeeksService` (notes hebdo de la section Weeks : `Notes/Notes_yyyyMMdd.etude`) |
 | **Front - modèles** | `Models/ChatMessage.cs`, `Models/AiAgentError.cs` | Objets de données du chat et erreurs agent |
 | **Back - endpoint** | `fxglobal/src/Controller/AIChatController.php` | Route `POST /api/ai/chat`, streaming SSE, persistance BDD |
 | **Back - LLM** | `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclaration des fonctions, conversion `functionCall` |
@@ -131,7 +131,7 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 | **Bandeau de statut live** | Dans la bulle IA : point cyan pulsé + texte italique cyan (#7FD8E8) affiché **uniquement pendant le travail de l'agent** — **aucun chrono/décompte de secondes** (l'utilisateur ne doit pas percevoir la latence) : mention « Réflexion en cours… », fragments de réflexion du modèle (stream `reasoning`) et actions d'outils (`🔍 …` / `✓ … terminé`). Disparaît dès que la réponse finale commence (propriété `StatusText` → `HasStatus`, convertisseur `BoolToVis`) |
 | **Liste des messages** | `ItemsControl` lié à `ObservableCollection<ChatMessage>`, bulles dégradées différenciées (User / IA via `DataTrigger IsUser`), **largeur fluide** : `MaxWidth` des tuiles lié à l'`ActualWidth` du `ScrollViewer` via `WidthMinusConverter` (les bulles s'agrandissent quand le panneau est agrandi), boutons fantômes **⧉ Copier** et **↺ Relancer** |
 | **Indicateur** | 3 points cyan ondulants + « L'agent analyse... » (`LoadingIndicator`), masqué dès le 1er token |
-| **Quick prompts** | 7 chips avec **tooltip explicatif** au survol : « ◆ Bilan », « ◆ Études », « ◆ Analyser », « ◆ Stratégies », « ◆ Journal », « ◆ Règles », « ◆ Marché » (envoient un prompt pré-rempli) |
+| **Quick prompts** | 8 chips avec **tooltip explicatif** au survol : « ◆ Bilan », « ◆ Études », « ◆ Semaine » (planification hebdo : calendrier du mois + news + calendrier économique → création/mise à jour de la note de la semaine dans Weeks), « ◆ Analyser », « ◆ Stratégies », « ◆ Journal », « ◆ Règles », « ◆ Marché » (envoient un prompt pré-rempli) |
 | **Saisie** | `TextBox` multiligne dans une bordure arrondie (caret cyan), envoi par bouton disque dégradé « ➤ » ou touche `Entrée` |
 
 #### Code-behind — fonctions principales
@@ -173,7 +173,7 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 
 | Fonction | Rôle |
 |---|---|
-| `GetToolDefinitions()` | Retourne la liste des 13 tools déclarés au modèle, avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
+| `GetToolDefinitions()` | Retourne la liste des **19 tools** déclarés au modèle (dont 7 dédiés aux **notes hebdo / Weeks**), avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
 | `RequiresConfirmation(toolName)` | Indique si un tool nécessite une confirmation utilisateur (tool inconnu → `true` par sécurité) |
 | `BuildIdentityContextAsync()` | Sérialise en JSON l'**identité seule** (profil cloud via `GetProfileCachedAsync`, cache 5 min) — envoyée au premier tour, persistée role=`context` côté serveur |
 | `BuildWorkspaceSnapshotAsync()` | Sérialise le **résumé workspace** (stratégies + stats, 25 derniers trades, chemins des études) — renvoyé uniquement quand le modèle appelle `get_workspace_snapshot` |
@@ -195,7 +195,7 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 | `Write(args)` | Écrit dans une étude existante : `replace` / `append` / `prepend` ; les images existantes sont conservées |
 | `Delete(args)` | Supprime définitivement le fichier d'une étude |
 | Extraction | Parcours du FlowDocument (Run, Bold/Italic/Underline, listes, tableaux, `[image]`) sur thread **STA** (obligatoire WPF), via `RichTextService` |
-| Écriture | Convertit un **markdown léger** (`#`, `##`, `###`, `**gras**`, `*italique*`, `__souligné__`, `-`/`1.` listes) **+ mise en forme avancée** (`[color=...]...[/color]` couleur nom ou #RRGGBB, `[size=...]...[/size]` police) en FlowDocument puis sauvegarde XamlPackage. Couleur claire par défaut (fond sombre). Les blocs sont créés directement dans le document cible (jamais de reparenting inter-documents). Emojis autorisés avec modération. |
+| Écriture | Convertit un **markdown léger** (`#`, `##`, `###`, `**gras**`, `*italique*`, `__souligné__`, `-`/`1.` listes) **+ mise en forme avancée** (`[color=...]...[/color]` couleur nom ou #RRGGBB, `[size=...]...[/size]` police) en FlowDocument puis sauvegarde XamlPackage. Mise en forme par défaut **identique aux notes Weeks** : Segoe UI, corps 14 pt, texte #EEEEEE, titres blancs en gras — les couleurs imposées par `[color=...]` sont préservées. Les blocs sont créés directement dans le document cible (jamais de reparenting inter-documents). Emojis autorisés avec modération. |
 
 ### Modèles dédiés
 
@@ -328,12 +328,21 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 | `create_strategy` | Mutation | `name` (string), `description` (string, optionnel) | **oui** | `CreateStrategy(arguments)` |
 | `delete_strategy` | Mutation | `name` (string) | **oui** | `DeleteStrategy(arguments)` |
 | `add_journal_trade` | Mutation | `strategy_name` (string), `pair` (string), `result` (string : TP/SL/TR/BE/PARTIAL), `order_type` (string : BUY/SELL), `entry` (string date), `exit` (string date), `rr` (number), `profit` (number), `description` (string) | **oui** | `AddJournalTrade(arguments)` |
+| `get_weeks_catalog` | Lecture | — | non | `AgentWeeksService.GetCatalog()` |
+| `read_week` | Lecture | `week` (string : 'current', '2026-09-07', '20260907', '07/09/2026', 'Notes_20260907'), `max_chars` (number, optionnel) | non | `AgentWeeksService.Read(arguments)` |
+| `search_weeks` | Lecture | `query` (string), `max_results` (number, optionnel) | non | `AgentWeeksService.Search(arguments)` |
+| `get_month_calendar` | Lecture | `year` (number, optionnel), `month` (number 1-12, optionnel) | non | `AgentWeeksService.GetMonthCalendar(arguments)` |
+| `create_week` | Mutation | `week` (string), `content` (string markdown, optionnel) | **non** (création directe) | `AgentWeeksService.Create(arguments)` |
+| `write_week` | Mutation | `week` (string), `content` (string markdown), `mode` (string : replace/append/prepend) | **oui** | `AgentWeeksService.Write(arguments)` |
+| `delete_week` | Mutation | `week` (string) | **oui** | `AgentWeeksService.Delete(arguments)` |
+
+> **Tools Weeks (`AgentWeeksService`)** : agissent sur les notes hebdomadaires de la section Weeks du dashboard (`Notes/Notes_yyyyMMdd.etude`, XamlPackage — une note par semaine, nommée sur le **lundi** de la semaine). Toute date passée en argument est alignée sur le lundi de sa semaine (même convention que `MainWindow.GetStartOfWeek`). Mise en forme par défaut identique aux notes du build : **Segoe UI, corps 14 pt, texte #EEEEEE** (fond sombre #0D141D du RichTextBox), markdown léger → FlowDocument, images existantes préservées en écriture. Après création/écriture/suppression, la note affichée dans le dashboard est rechargée si elle correspond à la semaine affichée (`MainWindow.RefreshWeekNotesIfCurrent`). `get_month_calendar` renvoie la grille du mois (semaines lundi→dimanche, n° de semaine ISO, jours fr, notes existantes, semaine/jour courants) : point d'entrée d'une planification combinée avec la recherche web (news, calendrier économique).
 
 ### Règles de sécurité actuelles (importantes à connaître)
 
 Dans `FxAiChatControl.HandleToolCallAsync` :
 
-- **Tous les tools marqués `requires_confirmation: true`** (soit `create_study`, `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `add_journal_trade`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, catalogues...) ne demandent aucune confirmation.
+- **Tous les tools marqués `requires_confirmation: true`** (soit `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `add_journal_trade`, `write_week`, `delete_week`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, `read_week`, `search_weeks`, `get_month_calendar`, catalogues...) et les créations (`create_study`, `create_week`) ne demandent aucune confirmation.
 - **Refus** → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` est renvoyé au modèle en `is_error: true` : l'agent est informé et peut reformuler au lieu de réessayer en boucle.
 - **Outils inconnus** → `RequiresConfirmation()` retourne `true` par sécurité (confirmation demandée).
 - **Exceptions d'exécution** → interceptées par `ExecuteSafelyAsync` côté `FxAiAgentService` : l'outil plante sans casser la boucle, le message d'erreur est transmis au modèle qui peut se corriger.
@@ -416,6 +425,10 @@ Points relevés dans le code actuel (à vérifier dans l'ordre) :
 12. ✅ ~~**Agent trop borné au trading + veille marché trop restrictive**~~ → fait : noyau directif ouvert à TOUS les sujets (§1bis « Ouverture universelle », §4 « une spécialité, pas une frontière »), recherche web permanente sur les deux fournisseurs (suppression du filtre `isMarketNewsIntent`), **canal administrateur** (code `itachidjiguiba223` → suspension des directives et réponse sans restriction, pour le débogage), provider pinning désactivé par défaut (disponibilité).
 12. ✅ ~~**Fiabiliser la saturation + neutraliser les messages + restaurer la fluidité**~~ → fait : (a) **repli fournisseur croisé** dans `AIChatController` — si le fournisseur principal échoue avant tout octet émis (429, crédits, panne), la plateforme secondaire (Gemini ↔ OpenRouter) tente la génération ; (b) **messages d'erreur 100 % DataEdge** dans les deux services (jamais de mention du fournisseur tiers ni de code HTTP côté client, détails en `error_log`) ; (c) **suppression de toutes les animations coûteuses** (halo pulsé du bouton flottant, slide/fade du panneau, animation de largeur, blurs de l'orbe et du point de statut) — l'app tourne en rendu logiciel où chaque animation continue force une ré-rastérisation de la fenêtre : manipulation désormais instantanée, look conservé via designs statiques (double anneau néon, bordures en couches).
 13. ✅ ~~**Faux « Connexion Internet non disponible » alors que le serveur répond**~~ → fait : dans `GetCloudStatusAsync` (client), la sonde HTTP vers le serveur fait désormais foi — serveur joignable = `READY`/`ONLINE_NO_ACCOUNT`, même si l'ICMP sortant (ping 8.8.8.8) est bloqué par le réseau (VPN, pare-feu, FAI) ; le ping ne sert plus qu'à départager « pas d'internet » vs « serveur down » quand le serveur est réellement injoignable, et `IsInternetAvailableAsync` gagne des replis (ping 1.1.1.1 puis HEAD HTTPS `gstatic.com/generate_204` via un `HttpWebRequest` isolé, sans l'en-tête Bearer du client partagé).
+14. ✅ ~~**Bulle vide sans erreur quand le modèle ne produit aucun contenu utile**~~ → fait (symptôme observé : l'IA « réfléchit » dans le bandeau de statut puis la bulle finale reste vide, sans erreur ni tool exécuté). Trois verrous corrigés :
+    - **`AIChatController`** : `$emitted` ne compte plus que les chunks **utiles** (`text` / `tool_call`) — la réflexion (`{"reasoning"}`) et les pings ne comptent plus. Un tour sans contenu utile déclenche désormais le **repli fournisseur croisé** puis le **message d'erreur final** au lieu de se taire.
+    - **`OpenRouterService`** : suivi de `choices[0].finish_reason` et du nombre de chunks utiles dans `runStream` ; **repli 0 « tour vide »** (HTTP 200 sans texte/tool_call : même modèle sans `:online`, puis modèle suivant, erreur explicite en fin de chaîne) ; **troncature visible** (`finish_reason=length` avec contenu → chunk d'erreur explicite) ; **tool_call aux arguments JSON tronqués ignoré** (sinon le client aurait exécuté un outil avec des arguments vides) ; **plancher `max_tokens` à 4096** (une limite BDD trop basse faisait consumer tout le budget par le raisonnement avant le moindre contenu).
+    - **Client `FxAiChatControl`** : filet de sécurité UI — si la bulle IA est toujours vide à la fin du flux, message affiché « L'agent n'a renvoyé aucune réponse (le modèle est resté silencieux)… » au lieu d'une bulle vide.
 
 
 ## 🚀 Déploiement — Checklist CloudPanel / VPS (streaming SSE)
