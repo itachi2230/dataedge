@@ -153,8 +153,13 @@
 
                 <!-- Effacer / agrandir / fermer (mode panneau flottant) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnClearChat" Style="{StaticResource GhostButton}" Content="🗑" FontSize="12" FontWeight="Bold"
-                            Click="BtnClearChat_Click" ToolTip="Effacer toute la discussion (serveur + agent)"/>
+                    <Button x:Name="BtnClearChat" Style="{StaticResource GhostButton}" FontWeight="Bold"
+                        Click="BtnClearChat_Click" ToolTip="Effacer toute la discussion (serveur + agent)">
+                        <!-- Icône Fluent « Delete » (Segoe MDL2 Assets, \uE74D) : hérite
+                             de la couleur du bouton fantôme (survol cyan automatique). -->
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE74D;" FontSize="12"
+                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Button>
                     <Button x:Name="BtnExpand" Style="{StaticResource GhostButton}" Content="⤢" FontSize="12" FontWeight="Bold"
                             Margin="3,0,0,0" Click="BtnExpand_Click" ToolTip="Agrandir la discussion"/>
                     <Button Style="{StaticResource GhostButton}" Content="✕" FontSize="12" FontWeight="Bold" Margin="3,0,0,0"
@@ -351,7 +356,39 @@
                         </Style>
                     </Button.Resources>
                 </Button>
+
+                <!-- Bouton STOP (style Gemini) : remplace le bouton d'envoi pendant
+                     la génération. Un clic interrompt la réflexion / la réponse. -->
+                <Button Background="#D63B3B" BorderThickness="0" Click="BtnStop_Click" Cursor="Hand"
+                        Grid.Column="1" Grid.Row="1" Height="38" Margin="9,0,0,0" Width="38"
+                        x:Name="BtnStop" VerticalAlignment="Bottom" Visibility="Collapsed"
+                        ToolTip="Arrêter la génération">
+                    <Button.Resources>
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}" CornerRadius="19" x:Name="StopBorder">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#FF5B5B"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter Property="Background" Value="#B02828"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Resources>
+                    <!-- Carré d'arrêt classique (disque rouge + carré blanc) -->
+                    <Path Data="M2,2 L10,2 L10,10 L2,10 Z" Fill="White" Width="12" Height="12"
+                          Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Button>
             </Grid>
-        </Border>
+</Border>
     </Grid>
 </UserControl>

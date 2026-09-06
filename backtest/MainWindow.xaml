@@ -311,6 +311,14 @@
                 </StackPanel>
             </Grid>
 
+            <!-- Voile transparent couvrant le contenu pendant que le copilote est
+                 ouvert : un clic à l'extérieur du panneau le referme (comportement
+                 Gemini). Déclaré AVANT le panneau pour rester dessous (ZIndex 450
+                 < 500) ; les clics sur le panneau lui-même ne sont pas interceptés. -->
+            <Border x:Name="AiAgentOverlay" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0"
+                    Panel.ZIndex="450" Visibility="Collapsed" Background="Transparent"
+                    MouseLeftButtonDown="AiAgentOverlay_MouseLeftButtonDown"/>
+
             <!-- Copilote IA : panneau latéral flottant (glisse depuis la droite,
                  superposé à la vue courante — le contexte reste visible) -->
             <Grid x:Name="AiAgentDrawer" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Panel.ZIndex="500"

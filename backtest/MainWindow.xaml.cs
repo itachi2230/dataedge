@@ -36,6 +36,13 @@ namespace backtest
             // À faire UNE SEULE FOIS au lancement de l'app
             
             InitializeComponent();
+
+            // Filet de sécurité « clic extérieur » pour le copilote IA : couvre les
+            // rares zones WPF non interceptées par le voile transparent (ex. panneau
+            // latéral droit à ZIndex 9999). Un clic hors du panneau le referme.
+            EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewMouseLeftButtonDownEvent,
+                new MouseButtonEventHandler(MainWindow_PreviewMouseLeftButtonDown), true);
+
             currentWeekStart = GetStartOfWeek(DateTime.Now);
 
             // Appliquer le paramètre d'activation de l'agent au démarrage
@@ -601,6 +608,7 @@ namespace backtest
             // perceptible en une seule frame).
             AiAgentDrawer.Opacity = 1;
             AiAgentDrawer.Visibility = Visibility.Visible;
+            AiAgentOverlay.Visibility = Visibility.Visible;
             BtnAiFab.Visibility = Visibility.Collapsed;
         }
 
@@ -611,7 +619,35 @@ namespace backtest
 
             // Fermeture INSTANTANÉE + retour immédiat du bouton flottant.
             AiAgentDrawer.Visibility = Visibility.Collapsed;
+            AiAgentOverlay.Visibility = Visibility.Collapsed;
             UpdateAgentFabVisibility();
+        }
+
+        /// <summary>
+        /// Clic sur le voile transparent derrière le panneau : le copilote se
+        /// referme (comportement Gemini — tout clic à l'extérieur ferme).
+        /// </summary>
+        private void AiAgentOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            HideAiAgent();
+        }
+
+        /// <summary>
+        /// Filet de sécurité « clic extérieur » enregistré au niveau de la fenêtre :
+        /// si le copilote est ouvert et que le clic n'est pas à l'intérieur du
+        /// panneau, on le referme. Couvre les zones WPF qui échappent au voile
+        /// transparent (ex. panneau latéral `SidePanel` à ZIndex 9999).
+        /// </summary>
+        private void MainWindow_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!_aiAgentOpen) return;
+            if (AiAgentDrawer.Visibility != Visibility.Visible) return;
+
+            Point p = e.GetPosition(AiAgentDrawer);
+            if (p.X < 0 || p.Y < 0 || p.X > AiAgentDrawer.ActualWidth || p.Y > AiAgentDrawer.ActualHeight)
+            {
+                HideAiAgent();
+            }
         }
 
         /// <summary>

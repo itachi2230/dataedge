@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using backtest.Models;
 
@@ -27,7 +28,7 @@ namespace backtest.Services
         /// exécution des outils) : jamais mélangés au texte final de la bulle.
         /// Appelé sur un thread de fond — l'appelant doit marshaler vers l'UI.
         /// </param>
-        public async Task SendMessageToAiStreamAsync(string prompt, Action<string> onChunkReceived, string userContext = "", IReadOnlyList<AiToolDefinition> tools = null, Func<AiToolCall, Task<AiToolResult>> toolHandler = null, Action<string> onStatusReceived = null)
+        public async Task SendMessageToAiStreamAsync(string prompt, Action<string> onChunkReceived, string userContext = "", IReadOnlyList<AiToolDefinition> tools = null, Func<AiToolCall, Task<AiToolResult>> toolHandler = null, Action<string> onStatusReceived = null, CancellationToken cancellationToken = default)
         {
             // 1. Vérifications réseau habituelles
             string status = await _cloudService.GetCloudStatusAsync(useCachedIfFresh: true);
@@ -52,6 +53,9 @@ namespace backtest.Services
 
             try
             {
+                // Annulation demandée avant même le premier tour (bouton STOP) ?
+                cancellationToken.ThrowIfCancellationRequested();
+
                 List<AiToolResultPayload> pendingResults = null;
                 // Compteur des appels d'outils (nom + arguments) : coupe les boucles ou
                 // le modele rappellerait indefiniment le meme outil avec les memes arguments.
@@ -60,13 +64,17 @@ namespace backtest.Services
                 {
                     // L'identité (context) ne part qu'au premier tour : le serveur la
                     // persiste une fois puis la rejoue depuis l'historique BDD.
-                    var turnResult = await SendTurnAsync(prompt, turn == 0 ? userContext : string.Empty, sessionId, tools, pendingResults, onChunkReceived, onStatusReceived);
+                    var turnResult = await SendTurnAsync(prompt, turn == 0 ? userContext : string.Empty, sessionId, tools, pendingResults, onChunkReceived, onStatusReceived, cancellationToken);
 
                     // Réponse textuelle finale : plus aucun outil demandé, la boucle se termine.
                     if (turnResult.ToolCalls.Count == 0) break;
 
                     if (toolHandler == null)
                         throw new AiAgentException(new AiAgentError("L'agent a demandé une action mais aucun exécuteur local n'est disponible."));
+
+                    // L'utilisateur a interrompu pendant un tour : on n'exécute pas
+                    // les outils déjà demandés et l'annulation remonte vers l'UI.
+                    cancellationToken.ThrowIfCancellationRequested();
 
                     // Exécution locale de TOUS les outils demandés par le modèle (appels parallèles inclus),
                     // puis nouveau tour serveur avec les résultats au format functionResponse.
@@ -108,6 +116,7 @@ namespace backtest.Services
                     prompt = string.Empty; // Les tours suivants ne transportent que les résultats d'outils
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch (AiAgentException) { throw; }
             catch (Exception ex)
             {
@@ -225,7 +234,7 @@ namespace backtest.Services
             }
         }
 
-        private async Task<ToolTurnResult> SendTurnAsync(string prompt, string userContext, string sessionId, IReadOnlyList<AiToolDefinition> tools, List<AiToolResultPayload> toolResults, Action<string> onChunkReceived, Action<string> onStatusReceived = null)
+        private async Task<ToolTurnResult> SendTurnAsync(string prompt, string userContext, string sessionId, IReadOnlyList<AiToolDefinition> tools, List<AiToolResultPayload> toolResults, Action<string> onChunkReceived, Action<string> onStatusReceived = null, CancellationToken cancellationToken = default)
         {
             var payload = new
             {
@@ -243,7 +252,7 @@ namespace backtest.Services
                 {
                     Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
                 };
-                return await _cloudService.GetHttpClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                return await _cloudService.GetHttpClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             });
             if (!response.IsSuccessStatusCode)
             {
@@ -256,15 +265,21 @@ namespace backtest.Services
             }
 
             using (response)
-            using (var reader = new StreamReader(await response.Content.ReadAsStreamAsync(), Encoding.UTF8))
+            using (Stream stream = await response.Content.ReadAsStreamAsync())
             {
                 // On lit le flux EN ENTIER : un même tour du modèle peut contenir du texte
                 // ET plusieurs functionCall en parallèle. Le texte est affiché en direct,
                 // les tool_calls sont collectés puis exécutés après la fin du flux.
+                // Lecteur ligne-par-ligne ANNULEUR : StreamReader.ReadLineAsync n'accepte
+                // pas de CancellationToken sur .NET Framework ; on lit donc les octets
+                // nous-même (Stream.ReadAsync, lui, en accepte un) puis on reconstruit
+                // les lignes — qu'elles soient découpées entre plusieurs lectures réseau.
+                var sse = new SseLineReader(stream);
                 var toolCalls = new List<AiToolCall>();
-                while (!reader.EndOfStream)
+                string line;
+                while ((line = await sse.ReadLineAsync(cancellationToken).ConfigureAwait(false)) != null)
                 {
-                    var line = await reader.ReadLineAsync();
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (string.IsNullOrWhiteSpace(line)) continue;
                     if (TryReadToolCall(line, out var toolCall))
                     {
@@ -439,6 +454,77 @@ namespace backtest.Services
             {
                 FxCloudService.Log($"Erreur exécution outil agent {call.Name}: {ex.Message}");
                 return AiToolResult.Error($"Échec de l'outil {call.Name} : {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Lecteur de lignes SSE annulable : la version StreamReader.ReadLineAsync ne
+        /// prend pas de CancellationToken sur .NET Framework. On lit donc les octets
+        /// du flux via Stream.ReadAsync (qui accepte un token) et on reconstruit les
+        /// lignes, qu'elles soient ou non découpées entre plusieurs lectures réseau.
+        /// </summary>
+        private sealed class SseLineReader
+        {
+            private readonly Stream _stream;
+            private readonly byte[] _buffer = new byte[8192];
+            private readonly MemoryStream _pending = new MemoryStream();
+            private int _bufferPos;
+            private int _bufferLen;
+
+            public SseLineReader(Stream stream)
+            {
+                _stream = stream;
+            }
+
+            /// <summary>
+            /// Lit la ligne suivante (sans retour chariot). Retourne null en fin de flux.
+            /// </summary>
+            public async Task<string> ReadLineAsync(CancellationToken cancellationToken)
+            {
+                while (true)
+                {
+                    // 1. Cherche un '\n' dans la fenêtre d'octets déjà lue.
+                    int newlineIndex = -1;
+                    for (int i = _bufferPos; i < _bufferLen; i++)
+                    {
+                        if (_buffer[i] == (byte)'\n')
+                        {
+                            newlineIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (newlineIndex >= 0)
+                    {
+                        _pending.Write(_buffer, _bufferPos, newlineIndex - _bufferPos);
+                        _bufferPos = newlineIndex + 1;
+                        return ReadPendingAndReset();
+                    }
+
+                    // 2. Pas de '\n' dans la fenêtre : on emporte ce qui reste et on lit la suite.
+                    if (_bufferLen > _bufferPos)
+                    {
+                        _pending.Write(_buffer, _bufferPos, _bufferLen - _bufferPos);
+                    }
+                    _bufferPos = 0;
+                    _bufferLen = 0;
+
+                    int read = await _stream.ReadAsync(_buffer, 0, _buffer.Length, cancellationToken).ConfigureAwait(false);
+                    if (read <= 0)
+                    {
+                        // Fin du flux : une dernière ligne sans '\n' peut subsister.
+                        return _pending.Length > 0 ? ReadPendingAndReset() : null;
+                    }
+                    _bufferPos = 0;
+                    _bufferLen = read;
+                }
+            }
+
+            private string ReadPendingAndReset()
+            {
+                string line = Encoding.UTF8.GetString(_pending.ToArray());
+                _pending.SetLength(0);
+                return line.TrimEnd('\r');
             }
         }
 

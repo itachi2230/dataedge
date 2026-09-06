@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -84,6 +85,10 @@ namespace backtest.Views
 
         private async void SendMessage(string messageText = null)
         {
+            // Garde-fou : une seule génération à la fois (le bouton STOP et le
+            // remplissage de la bulle ne sont pas prévus pour du parallélisme).
+            if (_activeAiMessage != null) return;
+
             string query = messageText ?? TxtInput.Text.Trim();
             if (string.IsNullOrEmpty(query)) return;
 
@@ -111,6 +116,13 @@ namespace backtest.Views
             Messages.Add(aiMessage);
             ScrollToBottom();
             _activeAiMessage = aiMessage;
+
+            // Pendant la génération, le bouton d'envoi devient un bouton STOP
+            // (style Gemini) : l'utilisateur peut interrompre la réflexion ou la
+            // réponse à tout moment d'un simple clic.
+            _cts = new CancellationTokenSource();
+            BtnSend.Visibility = Visibility.Collapsed;
+            BtnStop.Visibility = Visibility.Visible;
 
             // 4. Statut live (style Cline) : réflexion du modèle + exécution des outils,
             //    affichés dans le bandeau de la bulle avec un chrono. Jamais mélangés
@@ -148,7 +160,7 @@ namespace backtest.Views
                     {
                         // Statuts transitoires (reasoning + outils) : marshalés vers l'UI.
                         Dispatcher.Invoke(() => PushStatus(status));
-                    });
+                    }, _cts.Token);
                 });
 
                 // Filet de sécurité : le serveur peut clore le flux sans le moindre
@@ -159,6 +171,29 @@ namespace backtest.Views
                 {
                     aiMessage.Text = "L'agent n'a renvoyé aucune réponse (le modèle est resté silencieux). Reformulez votre demande ou réessayez.";
                     FxCloudService.Log("Agent IA : tour terminé sans aucun contenu utile (bulle vide remplacée par un message d'attente).");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Arrêt demandé par l'utilisateur (bouton STOP). On coupe proprement :
+                // si la réponse n'a pas commencé, le message envoyé est annulé (les
+                // bulles utilisateur + IA sont retirées et la saisie est restaurée
+                // pour reformuler) ; sinon la réponse partielle est conservée et
+                // marquée comme interrompue (comportement Gemini).
+                StopStatusTracking();
+
+                if (string.IsNullOrWhiteSpace(aiMessage.Text))
+                {
+                    Messages.Remove(aiMessage);
+                    if (Messages.Count > 0 && Messages[Messages.Count - 1].IsUser)
+                    {
+                        Messages.RemoveAt(Messages.Count - 1);
+                    }
+                    TxtInput.Text = query;
+                }
+                else
+                {
+                    aiMessage.Text += "\n\n⏹ Réponse interrompue.";
                 }
             }
             catch (Exception ex)
@@ -172,9 +207,19 @@ namespace backtest.Views
             }
             finally
             {
-                // 6. Réactiver les contrôles de saisie
+                // 6. Réactiver les contrôles de saisie et restaurer le bouton d'envoi
                 StopStatusTracking();
                 _activeAiMessage = null;
+                if (_cts != null)
+                {
+                    _cts.Dispose();
+                    _cts = null;
+                }
+                if (BtnStop != null)
+                {
+                    BtnStop.Visibility = Visibility.Collapsed;
+                }
+                BtnSend.Visibility = Visibility.Visible;
                 if (LoadingIndicator != null)
                 {
                     LoadingIndicator.Visibility = Visibility.Collapsed;
@@ -189,6 +234,7 @@ namespace backtest.Views
 
         private ChatMessage _statusMessage;
         private ChatMessage _activeAiMessage;
+        private CancellationTokenSource _cts;
         private DateTime _toolStatusAt;
         private readonly System.Text.StringBuilder _reasoningTail = new System.Text.StringBuilder();
         private string _toolStatusLine;
@@ -374,6 +420,13 @@ namespace backtest.Views
         }
 
         private void BtnSend_Click(object sender, RoutedEventArgs e) => SendMessage();
+
+        private void BtnStop_Click(object sender, RoutedEventArgs e)
+        {
+            // Annule le flux en cours : la réflexion s'arrête ; la réponse partielle
+            // est conservée (ou le message est retiré si rien n'a encore été produit).
+            _cts?.Cancel();
+        }
 
         private void QuickPrompt_Click(object sender, RoutedEventArgs e)
         {
