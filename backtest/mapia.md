@@ -29,7 +29,7 @@ Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY`
 |---|---|---|
 | **Front - UI** | `Views/FxAiChatControl.xaml` + `.xaml.cs` | Fenêtre de chat de l'agent (bulles, quick prompts, streaming) |
 | **Front - logique** | `services/FxAiAgentService.cs` | Client HTTP du chat : envoi, lecture du flux SSE, boucle agent |
-| **Front - tools** | `services/AgentWorkspaceService.cs` | Définitions des tools + exécution locale + contexte utilisateur ; délègue à `AgentStudiesService` (études), `AgentWeeksService` (notes hebdo, Dashboard) et `AgentMarketService` (web : calendrier, FedWatch, sentiment, cotations, news, recherche, page) |
+| **Front - tools** | `services/AgentWorkspaceService.cs` | Définitions des tools + exécution locale + contexte utilisateur ; délègue à `AgentStudiesService` (études), `AgentWeeksService` (notes hebdo, Dashboard), `AgentMarketService` (web : calendrier, FedWatch, sentiment, cotations, news, recherche, page) et `AgentFileService` (fichiers locaux : lecture txt/md/json/csv/pdf/xlsx/docx, création txt/json/md/pdf/docx, ouverture dossier) |
 | **Front - modèles** | `Models/ChatMessage.cs`, `Models/AiAgentError.cs` | Objets de données du chat et erreurs agent |
 | **Back - endpoint** | `fxglobal/src/Controller/AIChatController.php` | Route `POST /api/ai/chat`, streaming SSE, persistance BDD |
 | **Back - LLM** | `fxglobal/src/Service/GeminiService.php` | Appel API Gemini, déclaration des fonctions, conversion `functionCall` |
@@ -127,12 +127,12 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 
 | Élément | Description |
 |---|---|
-| **En-tête** | Orbe IA néon statique (double anneau + icône robot vectorielle, **aucun effet de blur ni animation** — rendu logiciel), titre « DATAEDGE **AI** », pastille verte « Copilote connecté · vos données restent locales », bouton **effacement** (`BtnClearChat_Click` → efface toute la discussion **serveur + agent** ; icône Fluent `Delete` via la police **Segoe MDL2 Assets** `\uE74D`, hérite du survol cyan du `GhostButton`), bouton **⤢** (`ExpandRequested` → agrandit/réduit le panneau) et bouton **✕** (`CloseRequested` → masque le panneau) |
+| **En-tête** | Orbe IA néon statique (double anneau + icône robot vectorielle, **aucun effet de blur ni animation** — rendu logiciel), titre « DATAEDGE **AI** », pastille verte « Copilote connecté · vos données restent locales », bouton **effacement** (`BtnClearChat_Click` → efface toute la discussion **serveur + agent** ; icône Fluent `Delete` via la police **Segoe MDL2 Assets** `\uE74D`, hérite du survol cyan du `GhostButton`), bouton **dossier** (`BtnOpenAgentFolder_Click` → ouvre `Documents\DataEdge` dans l'Explorateur ; icône Fluent `OpenFolder` `\uE838`), bouton **⤢** (`ExpandRequested` → agrandit/réduit le panneau) et bouton **✕** (`CloseRequested` → masque le panneau) |
 | **Bandeau de statut live** | Dans la bulle IA : point cyan pulsé + texte italique cyan (#7FD8E8) affiché **uniquement pendant le travail de l'agent** — **aucun chrono/décompte de secondes** (l'utilisateur ne doit pas percevoir la latence) : mention « Réflexion en cours… », fragments de réflexion du modèle (stream `reasoning`) et actions d'outils (`🔍 …` / `✓ … terminé`). Disparaît dès que la réponse finale commence (propriété `StatusText` → `HasStatus`, convertisseur `BoolToVis`) |
 | **Liste des messages** | `ItemsControl` lié à `ObservableCollection<ChatMessage>`, bulles dégradées différenciées (User / IA via `DataTrigger IsUser`), **largeur fluide** : `MaxWidth` des tuiles lié à l'`ActualWidth` du `ScrollViewer` via `WidthMinusConverter` (les bulles s'agrandissent quand le panneau est agrandi), boutons fantômes **⧉ Copier** et **↺ Relancer** |
 | **Indicateur** | 3 points cyan ondulants + « L'agent analyse... » (`LoadingIndicator`), masqué dès le 1er token |
 | **Quick prompts** | 8 chips **colorés** avec icône et **tooltip explicatif** au survol : « ✦ Bilan » (vert, résumé performances + priorités), « ◆ Études » (cyan), « ◷ Semaine » (orange, planification hebdo : calendrier du mois + news + calendrier économique → création/mise à jour de la note de la semaine dans Weeks), « ◆ Analyser » (cyan), « ◆ Stratégies » (cyan), « ◆ Journal » (cyan), « ◆ Règles » (cyan), « ◉ Sentiment » (violet, analyse complète du sentiment de marché : cotations + FedWatch + retail MyFxBook + calendrier + actualités → synthèse tendances et risques) |
-| **Saisie** | `TextBox` multiligne dans une bordure arrondie (caret cyan), envoi par bouton disque dégradé « ➤ » ou touche `Entrée`. **Pendant la génération le bouton d'envoi devient un bouton STOP** (`BtnStop`, disque rouge + carré blanc, style Gemini) : un clic annule le flux en cours |
+| **Saisie** | `TextBox` multiligne dans une bordure arrondie (caret cyan), **auto-extensible jusqu'à 200 px** puis scrollbar (les gros collages restent visibles), envoi par bouton disque dégradé « ➤ » ou touche `Entrée`. **Bouton 📎** (`BtnAttach_Click`) : pièce jointe txt/md/json/csv/xml/yaml/log/pdf/xlsx/docx → copiée dans `DataEdge\Imports` + **chip d'aperçu** (`AttachPanel`/`AttachName` + ✕ retrait) ; à l'envoi, contenu inliné si texte < 16 000 caractères, sinon mention `[PIÈCE JOINTE : ... chemin ...]` lue par l'agent via `read_local_file` (contourne les limites de payload). Avertissement `InputHint` > 20 000 caractères. **Pendant la génération le bouton d'envoi devient un bouton STOP** (`BtnStop`, disque rouge + carré blanc, style Gemini) : un clic annule le flux en cours |
 
 #### Code-behind — fonctions principales
 
@@ -149,6 +149,11 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 | `BtnCopy_Click` | Copie le texte de la bulle dans le presse-papiers (feedback temporaire) |
 | `BtnResend_Click` | Relance le prompt correspondant |
 | `TxtInput_KeyDown` | Envoi sur `Enter` |
+| `BtnAttach_Click` | Pièce jointe : `OpenFileDialog` filtré → `AgentFileService.SaveImportedFile` (copie horodatée vers `DataEdge\Imports`, `.doc` refusé) → chip `AttachPanel`/`AttachName` |
+| `BtnRemoveAttachment_Click` / `ClearAttachment()` | Retire la pièce jointe en attente |
+| `BtnOpenAgentFolder_Click` | Ouvre `Documents\DataEdge` dans l'Explorateur (`AgentFileService.OpenAgentFolder`) |
+| `TxtInput_TextChanged` | Avertissement `InputHint` au-delà de 20 000 caractères (« utilise 📎 ») |
+| `SendMessage` — pièces jointes | Le texte **envoyé** (`fullQuery`) inclut le contenu inliné (< 16 k, délimiteurs `<<<CONTENU_FICHIER>>>`) ou la mention structurée avec chemin ; le texte **affiché** (`displayText`) ajoute juste « 📎 nom » ; la pièce jointe est consommée après l'envoi |
 | `QuickPrompt_Click` | Remplit et envoie un prompt prédéfini |
 
 ### `services/FxAiAgentService.cs` — Client HTTP de l'agent
@@ -173,7 +178,7 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 
 | Fonction | Rôle |
 |---|---|
-| `GetToolDefinitions()` | Retourne la liste des **26 tools (19 workspace + 7 web/marché)** déclarés au modèle (dont 7 dédiés aux **notes hebdo / Weeks**), avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
+| `GetToolDefinitions()` | Retourne la liste des **33 tools (19 workspace + 7 web/marché + 7 fichiers locaux)** déclarés au modèle (dont 7 dédiés aux **notes hebdo / Weeks**), avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
 | `RequiresConfirmation(toolName)` | Indique si un tool nécessite une confirmation utilisateur (tool inconnu → `true` par sécurité) |
 | `BuildIdentityContextAsync()` | Sérialise en JSON l'**identité seule** (profil cloud via `GetProfileCachedAsync`, cache 5 min) — envoyée au premier tour, persistée role=`context` côté serveur |
 | `BuildWorkspaceSnapshotAsync()` | Sérialise le **résumé workspace** (stratégies + stats, 25 derniers trades, chemins des études) — renvoyé uniquement quand le modèle appelle `get_workspace_snapshot` |
@@ -196,6 +201,25 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 | `Delete(args)` | Supprime définitivement le fichier d'une étude |
 | Extraction | Parcours du FlowDocument (Run, Bold/Italic/Underline, listes, tableaux, `[image]`) sur thread **STA** (obligatoire WPF), via `RichTextService` |
 | Écriture | Convertit un **markdown léger** (`#`, `##`, `###`, `**gras**`, `*italique*`, `__souligné__`, `-`/`1.` listes) **+ mise en forme avancée** (`[color=...]...[/color]` couleur nom ou #RRGGBB, `[size=...]...[/size]` police) en FlowDocument puis sauvegarde XamlPackage. Mise en forme par défaut **identique aux notes Weeks** : Segoe UI, corps 14 pt, texte #EEEEEE, titres blancs en gras — les couleurs imposées par `[color=...]` sont préservées. Les blocs sont créés directement dans le document cible (jamais de reparenting inter-documents). Emojis autorisés avec modération. |
+
+### `services/AgentFileService.cs` — Tools IA « fichiers locaux » (+ `AgentMarkdown`, `WordDocumentBuilder`)
+
+Permet à l'agent de **lire et créer des fichiers sur la machine** de l'utilisateur. Classe statique déléguée par `AgentWorkspaceService.ExecuteAsync` (7 tools). Sous-dossiers de `Documents\DataEdge` : `Documents\` (fichiers créés), `Rapports\` (PDF statistiques + PDF agent), `Imports\` (copies des pièces jointes du chat).
+
+| Fonction (tool) | Rôle |
+|---|---|
+| `ListFolder(args)` | `list_local_folder` — liste dossiers/fichiers (chemin, type, taille, date), option récursive, max 250 entrées ; vide = dossier DataEdge |
+| `ReadFile(args)` | `read_local_file` — dispatch par extension : `.txt/.md/.json/.csv/.xml/.yaml/.log` (texte), `.pdf` (extraction texte **PdfPig** Apache 2.0, page par page), `.xlsx/.xls` (**ExcelDataReader** MIT, feuilles → lignes ` | `, 500 lignes/feuille), `.docx` (**DocumentFormat.OpenXml** MIT, paragraphes). Résultat paginé (`max_chars` 8000/30000, `offset_chars`) |
+| `SearchInFiles(args)` | `search_in_files` — regex échappée insensible à la casse dans les fichiers texte du dossier DataEdge, extraits ±120 caractères, max 2 Mo/fichier |
+| `CreateTextFile(args)` | `create_text_file` — txt/md/json sous `DataEdge\Documents` (+sous-dossier), **validation JSON** avant écriture, jamais d'écrasement (suffixe `_2`, `_3`…), max 500 k caractères |
+| `CreatePdfFile(args)` | `create_pdf_file` — délègue à `PdfExportService.ExportDocumentPdf(title, markdown, directory)` : PDF A4 design DataEdge (en-tête sombre, titres cyan/violet, listes, footer numéroté) |
+| `CreateWordFile(args)` | `create_word_file` — délègue à `WordDocumentBuilder.CreateDocument` : `.docx` A4 via OpenXML avec styles `Normal/Heading1-4` (Segoe UI, titres colorés), listes à puces, citations, séparateurs |
+| `OpenFolder(args)` | `open_folder` — ouvre un dossier autorisé dans l'Explorateur (`explorer.exe`) |
+| `SaveImportedFile(sourcePath)` / `OpenAgentFolder()` | **API UI du chat** : copie une pièce jointe choisie dans `DataEdge\Imports` (horodatée, `.doc` refusé) / ouvre `Documents\DataEdge` dans l'Explorateur |
+
+- **Sécurité des chemins** : `ResolvePath` (lecture) n'accepte que les racines `Documents\DataEdge`, `Documents`, `Bureau`, `Téléchargements` (+ `~` et chemins relatifs interprétés depuis DataEdge) ; `ResolveWriteSubfolder` (écriture) n'accepte **que** des chemins sous `Documents\DataEdge`. Tout chemin hors racines → `AiToolResult.Error` explicite.
+- **`AgentMarkdown`** (internal, partagé) : parseur markdown léger (`#/##/###`, `**gras**`, `*italique*`/`_italique_`, `` `code` ``, `-` listes, `>` citations, `---` règles) utilisé **à la fois** par le PDF (QuestPDF `RenderMarkdownBlocks`) et le Word (`WordDocumentBuilder`).
+- **Licences** : PdfPig (Apache 2.0), ExcelDataReader (MIT), DocumentFormat.OpenXml (MIT), QuestPDF (Community < 1 M$ de CA/an) — **100 % gratuites en usage commercial**.
 
 ### Modèles dédiés
 
@@ -358,6 +382,13 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 | `create_week` | Mutation | `week` (string), `content` (string markdown, optionnel) | **non** (création directe) | `AgentWeeksService.Create(arguments)` |
 | `write_week` | Mutation | `week` (string), `content` (string markdown), `mode` (string : replace/append/prepend) | **oui** | `AgentWeeksService.Write(arguments)` |
 | `delete_week` | Mutation | `week` (string) | **oui** | `AgentWeeksService.Delete(arguments)` |
+| ➡️ `list_local_folder` | **Lecture locale** | `path` (string, opt — défaut dossier DataEdge), `recursive` (boolean, opt) | non | `AgentFileService.ListFolder(arguments)` |
+| ➡️ `read_local_file` | **Lecture locale** | `path` (string, **obligatoire**), `max_chars` (number, opt — défaut 8000, max 30000), `offset_chars` (number, opt — pagination) | non | `AgentFileService.ReadFile(arguments)` |
+| ➡️ `search_in_files` | **Lecture locale** | `query` (string, **obligatoire**), `folder` (string, opt), `max_results` (number, opt) | non | `AgentFileService.SearchInFiles(arguments)` |
+| ➡️ `create_text_file` | Mutation locale | `name` (string), `content` (string), `format` (string : txt/json/md, opt), `subfolder` (string, opt — relatif à DataEdge) | **oui** | `AgentFileService.CreateTextFile(arguments)` |
+| ➡️ `create_pdf_file` | Mutation locale | `name` (string), `title` (string, opt), `content` (string markdown), `subfolder` (string, opt) | **oui** | `AgentFileService.CreatePdfFile(arguments)` |
+| ➡️ `create_word_file` | Mutation locale | `name` (string), `content` (string markdown), `subfolder` (string, opt) | **oui** | `AgentFileService.CreateWordFile(arguments)` |
+| ➡️ `open_folder` | Action locale | `path` (string, opt — défaut DataEdge) | **oui** | `AgentFileService.OpenFolder(arguments)` |
 
 > **Tools Weeks (`AgentWeeksService`)** : agissent sur les notes hebdomadaires de la section Weeks du dashboard (`Notes/Notes_yyyyMMdd.etude`, XamlPackage — une note par semaine, nommée sur le **lundi** de la semaine). Toute date passée en argument est alignée sur le lundi de sa semaine (même convention que `MainWindow.GetStartOfWeek`). Mise en forme par défaut identique aux notes du build : **Segoe UI, corps 14 pt, texte #EEEEEE** (fond sombre #0D141D du RichTextBox), markdown léger → FlowDocument, images existantes préservées en écriture. Après création/écriture/suppression, la note affichée dans le dashboard est rechargée si elle correspond à la semaine affichée (`MainWindow.RefreshWeekNotesIfCurrent`). `get_month_calendar` renvoie la grille du mois (semaines lundi→dimanche, n° de semaine ISO, jours fr, notes existantes, semaine/jour courants) : point d'entrée d'une planification combinée avec la recherche web (news, calendrier économique).
 
@@ -365,7 +396,7 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 
 Dans `FxAiChatControl.HandleToolCallAsync` :
 
-- **Tous les tools marqués `requires_confirmation: true`** (soit `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `add_journal_trade`, `write_week`, `delete_week`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, `read_week`, `search_weeks`, `get_month_calendar`, catalogues...) et les créations (`create_study`, `create_week`) ne demandent aucune confirmation.
+- **Tous les tools marqués `requires_confirmation: true`** (soit `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `add_journal_trade`, `write_week`, `delete_week`, `create_text_file`, `create_pdf_file`, `create_word_file`, `open_folder`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, `read_week`, `search_weeks`, `get_month_calendar`, catalogues...) et les créations (`create_study`, `create_week`) ne demandent aucune confirmation.
 - **Les 7 nouveaux outils web** (`get_economic_calendar`, `get_fed_watch`, `get_fxbook_sentiment`, `get_market_overview`, `get_market_news`, `web_search`, `fetch_web_page`) sont des **lectures web pures** : ils ne touchent jamais au workspace ni au disque local, ne demandent **aucune confirmation** et sont exécutés immédiatement par `AgentMarketService`.
 - **Refus** → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` est renvoyé au modèle en `is_error: true` : l'agent est informé et peut reformuler au lieu de réessayer en boucle.
 - **Outils inconnus** → `RequiresConfirmation()` retourne `true` par sécurité (confirmation demandée).

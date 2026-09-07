@@ -22,9 +22,16 @@
 | **C# 8+** | Langage |
 | **WebView2** | Rendu du graphique (Chromium) |
 | **OxyPlot** | Graphiques statistiques (Winrate, Sessions, etc.) |
-| **EPPlus** | Migration Excel → JSON |
-| **Newtonsoft.Json + System.Text.Json** | Sérialisation JSON |`r`n`r`n### Dépendances Principales (NuGet)
-- `EPPlus 8.5.0` - Manipulation Excel
+| **EPPlus** | (retiré — migration Excel → JSON terminée, licence non commerciale incompatible avec une distribution commerciale) |
+| **PdfPig / ExcelDataReader / DocumentFormat.OpenXml** | Lecture PDF / Excel / Word par l'agent IA (licences Apache 2.0 / MIT, gratuites en commercial) |
+| **QuestPDF** | Génération PDF (rapports de statistiques + documents de l'agent IA) |
+| **Newtonsoft.Json + System.Text.Json** | Sérialisation JSON |
+
+### Dépendances Principales (NuGet)
+- `PdfPig 0.1.16` - Extraction de texte PDF (Apache 2.0) + `Microsoft.Bcl.HashCode 6.0.0`
+- `DocumentFormat.OpenXml 2.20.0` - Création/lecture Word .docx (MIT)
+- `ExcelDataReader 3.6.0` - Lecture Excel .xlsx/.xls (MIT)
+- `QuestPDF 2026.8.0` - Génération PDF (Community : gratuit < 1 M$ de CA/an)
 - `Microsoft.Web.WebView2 1.0.3912.50` - Navigateur intégré
 - `OxyPlot.Wpf 2.0.0` - Graphiques statistiques
 - `Newtonsoft.Json 13.0.3` - JSON
@@ -74,7 +81,8 @@ backtest/
 │   │   ├── AgentStudiesService.cs   → Tools IA « études » (lecture/recherche/création/écriture/suppression .etude, extraction texte sans images)
 │   │   ├── AgentWeeksService.cs     → Tools IA « weeks » : notes hebdo du dashboard (catalogue, lecture, recherche, calendrier mensuel, création/écriture/suppression Notes_*.etude, markdown → FlowDocument Segoe UI 14 #EEEEEE)
 │   │   ├── AgentMarketService.cs     → Tools IA « web & marché » : 7 nouveaux outils de données en direct (calendrier économique réel, FedWatch, sentiment retail, cotations, actualités, recherche web, lecture de page)
-│   │   ├── PdfExportService.cs → Génération d’un rapport PDF moderne et structuré de la stratégie
+│   │   ├── AgentFileService.cs     → Tools IA « fichiers locaux » : lecture txt/md/json/csv/xml/pdf(PdfPig)/xlsx(ExcelDataReader)/docx(OpenXML), recherche de texte, création txt/json/md/pdf/word, ouverture dossier ; sécurité par racines autorisées (DataEdge, Documents, Bureau, Téléchargements) ; + AgentMarkdown (parseur partagé) et WordDocumentBuilder (.docx)
+│   │   ├── PdfExportService.cs → Génération d’un rapport PDF moderne et structuré de la stratégie + ExportDocumentPdf : génération PDF générique markdown → design DataEdge (utilisée par l’agent IA)
 │   │   └── RichTextService.cs → Service Rich Text (sauvegarde/chargement XamlPackage)
 │   └── RichTextService.cs     → Service Rich Text (sauvegarde/chargement XamlPackage)
 │
@@ -322,6 +330,16 @@ msbuild backtest.csproj /p:Configuration=Release
 `MainWindow` héberge `FxAiChatControl` dans un **panneau latéral flottant** (`AiAgentDrawer`, superposé à droite, largeur 430 px agrandissable jusqu'à ~1000 px via le bouton ⤢ du chat — les tuiles de message s'adaptent à la largeur). Le déclencheur est un **bouton flottant néon statique discret** (46 px, icône sparkle, bas-droit du dashboard, aucune animation — l'app tourne en rendu logiciel) accessible depuis n'importe quelle vue ; l'ouverture/fermeture du panneau est **instantanée** et le contenu courant (dashboard, chart, journal) reste visible/actif derrière. Le client appelle `/api/ai/chat` avec le token cloud (JWT Bearer) et lit directement la réponse streamée du serveur ; pendant la réflexion du modèle et l'exécution des tools, un bandeau de statut live (raisonnement + actions d'outils, **sans chrono affiché**) s'affiche dans la bulle IA. En cas de saturation du fournisseur principal, le serveur bascule automatiquement sur la plateforme IA secondaire avant tout octet envoyé. Le backend utilisé est celui du dossier `fxglobal/` (pas de publisher Mercure dans cette version).
 
 📄 **Voir le mapping complet et détaillé de l'agent IA (front + back) dans `mapia.md`.**
+
+### Fichiers locaux de l'agent (lecture + création + dossiers)
+
+L'agent peut **lire et créer des documents sur la machine** via 7 nouveaux tools (`AgentFileService.cs`) et des **boutons dédiés dans le chat** :
+
+- **Dossier maître** : `Documents\DataEdge` — `Documents\` (fichiers créés par l'agent), `Rapports\` (PDF statistiques + PDF agent), `Imports\` (copies des pièces jointes du chat).
+- **Lecture locale** (tools `read_local_file`, `list_local_folder`, `search_in_files`) : `.txt/.md/.json/.csv/.xml/.log`, `.pdf` (extraction texte **PdfPig**), `.xlsx/.xls` (**ExcelDataReader**), `.docx` (**OpenXML**). Racines autorisées en lecture : `Documents\DataEdge`, `Documents`, **Bureau**, **Téléchargements**.
+- **Création de fichiers** (tools `create_text_file`/`create_pdf_file`/`create_word_file`, avec confirmation) : txt/json (JSON validé)/md, **PDF** au design DataEdge (`PdfExportService.ExportDocumentPdf`, refactor de l'export de statistiques), **Word .docx** (`WordDocumentBuilder`). Écritures confinées à `Documents\DataEdge`, jamais d'écrasement (suffixes `_2`, `_3`…).
+- **Pièces jointes du chat** : bouton 📎 → copie dans `DataEdge\Imports` → l'agent lit le contenu en local (`read_local_file`) ; bouton 📂 dans l'en-tête → ouvre `Documents\DataEdge` dans l'Explorateur. Le champ de saisie s'auto-extend jusqu'à 200 px (gros collages) avec un avertissement au-delà de 20 000 caractères.
+- **Sécurité** : `ResolvePath` (lecture, racines autorisées) et `ResolveWriteSubfolder` (écriture, limité à `Documents\DataEdge`) ; tout chemin hors périmètre est refusé avec un message explicite. Licences gratuites en commercial : PdfPig (Apache 2.0), ExcelDataReader (MIT), OpenXML (MIT), QuestPDF (Community < 1 M$).
 
 ## Backend — `fxglobal/` (Symfony)
 

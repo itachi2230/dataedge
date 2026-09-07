@@ -195,6 +195,12 @@
 
                 <!-- Effacer / agrandir / fermer (mode panneau flottant) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource GhostButton}" FontWeight="Bold" Click="BtnOpenAgentFolder_Click"
+                        ToolTip="Ouvrir le dossier des fichiers de l'agent (Documents\DataEdge : documents, rapports PDF/Word, imports)">
+                        <!-- Icône Fluent « OpenFolder » (Segoe MDL2 Assets, \uE838) : hérite
+                             de la couleur du bouton fantôme (survol cyan automatique). -->
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE838;" FontSize="12"/>
+                    </Button>
                     <Button x:Name="BtnClearChat" Style="{StaticResource GhostButton}" FontWeight="Bold"
                         Click="BtnClearChat_Click" ToolTip="Effacer toute la discussion (serveur + agent)">
                         <!-- Icône Fluent « Delete » (Segoe MDL2 Assets, \uE74D) : hérite
@@ -321,6 +327,8 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -355,13 +363,44 @@
                             ToolTip="Analyse complète du sentiment de marché : cotations, FedWatch, retail, calendrier, actualités et synthèse."/>
                 </WrapPanel>
 
-                <!-- Saisie avec halo au focus -->
-                <Border Grid.Column="0" Grid.Row="1" CornerRadius="12" Background="#0A141F" BorderBrush="#1C4258" BorderThickness="1" x:Name="InputBorder">
-                    <TextBox x:Name="TxtInput" FontSize="12.5" KeyDown="TxtInput_KeyDown" MaxHeight="90" Padding="11,8"
-                             Background="Transparent" BorderThickness="0" Foreground="#EAF2F8" CaretBrush="{StaticResource CyanNeon}"
-                             Tag="Posez votre question à l'IA..." TextWrapping="Wrap" VerticalContentAlignment="Center"
-                             VerticalScrollBarVisibility="Auto"/>
+                <!-- Pièce jointe en attente d'envoi (chip) -->
+                <Border Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1" x:Name="AttachPanel" Visibility="Collapsed"
+                        Background="#0D2338" BorderBrush="#1F4A66" BorderThickness="1" CornerRadius="8" Padding="8,5" Margin="0,0,0,6">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="📎" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="AttachName" Grid.Column="1" FontSize="11" Foreground="#9FD8EA" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <Button x:Name="BtnRemoveAttachment" Grid.Column="2" Click="BtnRemoveAttachment_Click" Content="✕" FontSize="10"
+                                Background="Transparent" Foreground="#5A6B7A" BorderThickness="0" Cursor="Hand" Padding="6,0"
+                                ToolTip="Retirer la pièce jointe"/>
+                    </Grid>
                 </Border>
+
+                <!-- Saisie avec halo au focus + bouton pièce jointe 📎 -->
+                <Border Grid.Column="0" Grid.Row="2" CornerRadius="12" Background="#0A141F" BorderBrush="#1C4258" BorderThickness="1" x:Name="InputBorder">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="TxtInput" Grid.Column="0" FontSize="12.5" KeyDown="TxtInput_KeyDown" MaxHeight="200" Padding="11,8"
+                                 Background="Transparent" BorderThickness="0" Foreground="#EAF2F8" CaretBrush="{StaticResource CyanNeon}"
+                                 Tag="Posez votre question à l'IA..." TextWrapping="Wrap" VerticalContentAlignment="Center"
+                                 VerticalScrollBarVisibility="Auto" TextChanged="TxtInput_TextChanged"/>
+                        <Button x:Name="BtnAttach" Grid.Column="1" Click="BtnAttach_Click" Margin="0,0,9,0" VerticalAlignment="Center"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand" FontSize="14"
+                                ToolTip="Joindre un fichier (txt, json, md, csv, pdf, xlsx, docx). Il est copié dans Documents\DataEdge\Imports puis lu localement par l'agent."
+                                Content="📎"/>
+                    </Grid>
+                </Border>
+
+                <!-- Avertissement texte très long -->
+                <TextBlock x:Name="InputHint" Grid.Row="3" Grid.ColumnSpan="2" Text="" FontSize="10" Foreground="#E8B34B"
+                           Margin="4,4,4,0" Visibility="Collapsed" TextWrapping="Wrap"/>
 
                 <!-- Bouton d'envoi : disque gradient + halo -->
                 <Button Background="{StaticResource SendButtonGradient}" BorderThickness="0" Click="BtnSend_Click" Content="➤"

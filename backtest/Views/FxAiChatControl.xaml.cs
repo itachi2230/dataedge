@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -92,6 +93,44 @@ namespace backtest.Views
             string query = messageText ?? TxtInput.Text.Trim();
             if (string.IsNullOrEmpty(query)) return;
 
+            // Pièce jointe : les petits fichiers texte sont inlinés directement dans
+            // le message ; les autres (pdf, xlsx, docx ou gros textes) sont mentionnés
+            // avec leur chemin local — l'agent les lit lui-même via read_local_file.
+            // Cela contourne les limites de taille du champ de saisie et du payload.
+            string fullQuery = query;
+            string displayText = query;
+            if (_attachmentPath != null && File.Exists(_attachmentPath))
+            {
+                string attachmentName = Path.GetFileName(_attachmentPath);
+                string extension = Path.GetExtension(_attachmentPath).ToLowerInvariant();
+                bool isInlineText = extension == ".txt" || extension == ".md" || extension == ".json"
+                    || extension == ".csv" || extension == ".xml" || extension == ".yaml"
+                    || extension == ".yml" || extension == ".log";
+
+                if (isInlineText)
+                {
+                    string content = string.Empty;
+                    try { content = File.ReadAllText(_attachmentPath); } catch { }
+                    if (content.Length <= 16000)
+                    {
+                        fullQuery += "\n\n[PIÈCE JOINTE : " + attachmentName + "]\n<<<CONTENU_FICHIER>>>\n" + content + "\n<<<FIN_FICHIER>>>";
+                    }
+                    else
+                    {
+                        fullQuery += "\n\n[PIÈCE JOINTE : " + attachmentName + " — copié vers « " + _attachmentPath
+                            + " ». Utilise l'outil read_local_file avec ce chemin pour lire son contenu (pagine avec offset_chars si nécessaire).]";
+                    }
+                }
+                else
+                {
+                    fullQuery += "\n\n[PIÈCE JOINTE : " + attachmentName + " — copié vers « " + _attachmentPath
+                        + " ». Utilise l'outil read_local_file avec ce chemin pour lire son contenu.]";
+                }
+
+                displayText += "\n📎 " + attachmentName;
+                ClearAttachment();
+            }
+
             // Désactiver la saisie pendant la génération
             TxtInput.IsEnabled = false;
             BtnSend.IsEnabled = false;
@@ -102,7 +141,7 @@ namespace backtest.Views
             }
 
             // 1. Ajouter le message de l'utilisateur
-            Messages.Add(new ChatMessage { Sender = "User", Text = query, Timestamp = DateTime.Now });
+            Messages.Add(new ChatMessage { Sender = "User", Text = displayText, Timestamp = DateTime.Now });
             ScrollToBottom();
 
             // 2. Afficher l'indicateur de frappe
@@ -135,7 +174,7 @@ namespace backtest.Views
                 string identityContext = await _workspaceService.BuildIdentityContextAsync();
                 await Task.Run(async () =>
                 {
-                    await _aiService.SendMessageToAiStreamAsync(query, (chunk) =>
+                    await _aiService.SendMessageToAiStreamAsync(fullQuery, (chunk) =>
                     {
                         // Mettre à jour l'UI sur le thread principal
                         Dispatcher.Invoke(() =>
@@ -504,6 +543,80 @@ namespace backtest.Views
                 e.Handled = true;
             }
         }
+
+        #region Pièces jointes locales (lues par l'agent via read_local_file)
+
+        /// <summary>Chemin local du fichier joint en attente (copie dans Documents\DataEdge\Imports).</summary>
+        private string _attachmentPath;
+
+        /// <summary>
+        /// Ouvre une boîte de sélection de fichier, le copie dans Documents\DataEdge\Imports
+        /// et affiche le chip d'aperçu. Le fichier n'est jamais envoyé au serveur : l'agent
+        /// lit son contenu en local via l'outil read_local_file.
+        /// </summary>
+        private void BtnAttach_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Joindre un fichier à l'agent",
+                Filter = "Fichiers pris en charge (*.txt;*.md;*.json;*.csv;*.xml;*.yaml;*.yml;*.log;*.pdf;*.xlsx;*.xls;*.docx)|*.txt;*.md;*.json;*.csv;*.xml;*.yaml;*.yml;*.log;*.pdf;*.xlsx;*.xls;*.docx|Tous les fichiers (*.*)|*.*"
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            if (!AgentFileService.SaveImportedFile(dialog.FileName, out string importedPath, out string error))
+            {
+                System.Windows.MessageBox.Show(error, "Pièce jointe", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            _attachmentPath = importedPath;
+            AttachName.Text = Path.GetFileName(dialog.FileName) + "  —  " + importedPath;
+            AttachPanel.Visibility = Visibility.Visible;
+            TxtInput.Focus();
+        }
+
+        private void BtnRemoveAttachment_Click(object sender, RoutedEventArgs e)
+        {
+            ClearAttachment();
+        }
+
+        private void ClearAttachment()
+        {
+            _attachmentPath = null;
+            if (AttachPanel != null)
+                AttachPanel.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>Ouvre le dossier maître de l'agent (Documents\DataEdge) dans l'Explorateur.</summary>
+        private void BtnOpenAgentFolder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                AgentFileService.OpenAgentFolder();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show("Impossible d'ouvrir le dossier : " + ex.Message, "DataEdge", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        /// <summary>Avertissement au-delà de 20 000 caractères : proposer la pièce jointe plutôt qu'un énorme collage.</summary>
+        private void TxtInput_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (InputHint == null) return;
+            if (TxtInput.Text.Length > 20000)
+            {
+                InputHint.Text = "⚠ Texte très long (" + TxtInput.Text.Length.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("fr-FR"))
+                    + " caractères) : l'envoi peut échouer ou être tronqué. Utilise le bouton 📎 pour joindre un fichier à la place.";
+                InputHint.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                InputHint.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        #endregion
 
         /// <summary>
         /// Permet la sélection et la copie de texte dans les bulles du chat.

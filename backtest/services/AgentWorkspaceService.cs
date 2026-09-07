@@ -68,7 +68,7 @@ namespace backtest.Services
                     new AiToolParameter("description", "string", "Description de la stratégie.", false)),
                 new AiToolDefinition("delete_strategy", "Supprimer une stratégie et ses données locales (action définitive).", true,
                     new AiToolParameter("name", "string", "Nom exact de la stratégie à supprimer.")),
-                new AiToolDefinition("add_journal_trade", "Ajouter un trade au journal d'une stratégie.", true,
+                new AiToolDefinition("add_journal_trade", "Ajouter un trade au journal d'une stratégie.", false,
                     new AiToolParameter("strategy_name", "string", "Nom exact de la stratégie cible."),
                     new AiToolParameter("pair", "string", "Paire tradée, ex: EURUSD, XAUUSD."),
                     new AiToolParameter("result", "string", "Résultat du trade : TP, SL, TR, BE ou PARTIAL."),
@@ -100,7 +100,34 @@ namespace backtest.Services
                     new AiToolParameter("max_results", "number", "Nombre maximum de résultats (défaut 8).", false)),
                 new AiToolDefinition("fetch_web_page", "Télécharger une page web et en extraire le titre, le texte lisible et des liens. À utiliser pour lire le contenu complet derrière un résultat de web_search ou un article d'actualité, ou pour consulter un site (ex: communiqué officiel). Bloque les adresses internes/réseau local par sécurité.", false,
                     new AiToolParameter("url", "string", "URL complète de la page à lire (https)."),
-                    new AiToolParameter("max_chars", "number", "Nombre maximum de caractères de texte renvoyés (défaut 8000).", false))
+                    new AiToolParameter("max_chars", "number", "Nombre maximum de caractères de texte renvoyés (défaut 8000).", false)),
+                new AiToolDefinition("list_local_folder", "Lister les fichiers et dossiers d'un répertoire local autorisé (Documents\\DataEdge, Documents, Bureau, Téléchargements). Sans chemin, liste le dossier DataEdge de l'agent (Documents, Rapports, Imports, Journal...). À appeler avant read_local_file quand tu ne connais pas le chemin exact d'un fichier.", false,
+                    new AiToolParameter("path", "string", "Chemin du dossier (absolu sous une racine autorisée, ou relatif au dossier DataEdge). Vide = dossier DataEdge.", false),
+                    new AiToolParameter("recursive", "boolean", "true pour inclure les sous-dossiers (défaut false).", false)),
+                new AiToolDefinition("read_local_file", "Lire le contenu d'un fichier local : .txt/.md/.json/.csv/.xml/.log (texte), .pdf (texte extrait), .xlsx/.xls (feuilles en tableaux), .docx (texte). Pour les gros contenus, utilise offset_chars pour paginer. Permet aussi de lire les fichiers joints par l'utilisateur (dossier DataEdge\\Imports) et les fichiers sur son Bureau.", false,
+                    new AiToolParameter("path", "string", "Chemin du fichier (absolu sous une racine autorisée, ou relatif au dossier DataEdge)."),
+                    new AiToolParameter("max_chars", "number", "Nombre maximum de caractères renvoyés (défaut 8000, max 30000).", false),
+                    new AiToolParameter("offset_chars", "number", "Décalage de départ dans le texte (pagination, défaut 0).", false)),
+                new AiToolDefinition("search_in_files", "Rechercher un texte dans tous les fichiers texte du dossier DataEdge (txt, md, json, csv, xml, log) et renvoyer les extraits correspondants avec leur chemin.", false,
+                    new AiToolParameter("query", "string", "Texte à rechercher."),
+                    new AiToolParameter("folder", "string", "Sous-dossier de départ (défaut : tout le dossier DataEdge).", false),
+                    new AiToolParameter("max_results", "number", "Nombre maximum de fichiers renvoyés (défaut 10).", false)),
+                new AiToolDefinition("create_text_file", "Créer un fichier texte (.txt), markdown (.md) ou JSON (.json) dans Documents\\DataEdge\\Documents de l'utilisateur. Le JSON est validé avant écriture. Un fichier existant n'est jamais écrasé (suffixe _2, _3...).", true,
+                    new AiToolParameter("name", "string", "Nom du fichier, avec ou sans extension (ex: 'plan_semaine' ou 'resultats.json')."),
+                    new AiToolParameter("content", "string", "Contenu complet à écrire. Pour .json : JSON valide."),
+                    new AiToolParameter("format", "string", "txt (défaut), md ou json.", false),
+                    new AiToolParameter("subfolder", "string", "Sous-dossier optionnel sous DataEdge (ex: 'Documents\\Analyses'). Créé si absent.", false)),
+                new AiToolDefinition("create_pdf_file", "Générer un PDF mis en page au design DataEdge (titres, listes, gras/italique, pied de page avec numéros) à partir d'un contenu markdown léger, dans Documents\\DataEdge\\Documents. Idéal pour remettre une analyse au format rapport.", true,
+                    new AiToolParameter("name", "string", "Nom du fichier sans extension."),
+                    new AiToolParameter("title", "string", "Titre affiché en en-tête du PDF (défaut : nom du fichier).", false),
+                    new AiToolParameter("content", "string", "Contenu markdown léger : #/##/### titres, **gras**, *italique*, `code`, - listes, > citations, --- séparateur."),
+                    new AiToolParameter("subfolder", "string", "Sous-dossier optionnel sous DataEdge. Défaut : Documents.", false)),
+                new AiToolDefinition("create_word_file", "Créer un document Word (.docx) à partir d'un contenu markdown léger (titres stylés, listes, gras/italique, A4), dans Documents\\DataEdge\\Documents.", true,
+                    new AiToolParameter("name", "string", "Nom du fichier sans extension."),
+                    new AiToolParameter("content", "string", "Contenu markdown léger (mêmes règles que create_pdf_file)."),
+                    new AiToolParameter("subfolder", "string", "Sous-dossier optionnel sous DataEdge. Défaut : Documents.", false)),
+                new AiToolDefinition("open_folder", "Ouvrir un dossier local dans l'Explorateur Windows (par défaut Documents\\DataEdge, le dossier des fichiers de l'agent). Utile pour montrer à l'utilisateur le fichier qui vient d'être créé.", true,
+                    new AiToolParameter("path", "string", "Chemin du dossier à ouvrir (racines autorisées uniquement). Vide = dossier DataEdge.", false))
             };
         }
 
@@ -242,6 +269,20 @@ namespace backtest.Services
                         return await AgentMarketService.WebSearch(call.Arguments);
                     case "fetch_web_page":
                         return await AgentMarketService.FetchWebPage(call.Arguments);
+                    case "list_local_folder":
+                        return AgentFileService.ListFolder(call.Arguments);
+                    case "read_local_file":
+                        return AgentFileService.ReadFile(call.Arguments);
+                    case "search_in_files":
+                        return AgentFileService.SearchInFiles(call.Arguments);
+                    case "create_text_file":
+                        return AgentFileService.CreateTextFile(call.Arguments);
+                    case "create_pdf_file":
+                        return AgentFileService.CreatePdfFile(call.Arguments);
+                    case "create_word_file":
+                        return AgentFileService.CreateWordFile(call.Arguments);
+                    case "open_folder":
+                        return AgentFileService.OpenFolder(call.Arguments);
                     default:
                         return AiToolResult.Error("Outil non implémenté.");
                 }

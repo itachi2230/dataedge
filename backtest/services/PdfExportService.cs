@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using backtest.Services;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -130,6 +132,78 @@ namespace backtest
             return filePath;
         }
 
+        /// <summary>
+        /// Génère un PDF « document » générique à partir d'un contenu markdown léger,
+        /// réutilisant le design des rapports DataEdge (en-tête sombre, accents cyan/violet).
+        /// Utilisé par l'agent IA (tool create_pdf_file) ; l'export des statistiques de
+        /// stratégie (ExportStatisticsPdf) reste inchangé.
+        /// </summary>
+        /// <param name="title">Titre affiché en en-tête du document.</param>
+        /// <param name="markdownContent">Contenu markdown léger (AgentMarkdown).</param>
+        /// <param name="outputDirectory">Dossier de sortie absolu (ex: Documents\DataEdge\Documents).</param>
+        /// <returns>Chemin complet du PDF généré.</returns>
+        public static string ExportDocumentPdf(string title, string markdownContent, string outputDirectory)
+        {
+            if (markdownContent == null) throw new ArgumentNullException(nameof(markdownContent));
+            if (string.IsNullOrWhiteSpace(outputDirectory)) throw new ArgumentException("Dossier de sortie requis.", nameof(outputDirectory));
+
+            Directory.CreateDirectory(outputDirectory);
+
+            string safeTitle = SanitizeFileName(string.IsNullOrWhiteSpace(title) ? "document" : title);
+            string filePath = Path.Combine(outputDirectory, $"{safeTitle}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+            var blocks = AgentMarkdown.Parse(markdownContent);
+
+            Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(1.8f, Unit.Centimetre);
+                    page.DefaultTextStyle(x => x.FontFamily("Segoe UI").FontSize(10).FontColor(TextDark));
+                    page.PageColor(Colors.White);
+
+                    page.Header().Element(header =>
+                    {
+                        header.Background(Dark).Padding(12).Row(row =>
+                        {
+                            row.RelativeItem().Column(col =>
+                            {
+                                col.Item().Text("DATAEDGE").FontSize(8).Bold().FontColor(Accent);
+                                col.Item().PaddingTop(2).Text((title ?? "Document").ToUpperInvariant()).FontSize(16).Bold().FontColor(White);
+                            });
+                            row.RelativeItem().AlignRight().Column(col =>
+                            {
+                                col.Item().AlignRight().Text("DOCUMENT").FontSize(8).Bold().FontColor(White);
+                                col.Item().AlignRight().PaddingTop(2).Text(DateTime.Now.ToString("dd/MM/yyyy à HH:mm", Fr)).FontSize(8).FontColor("#B7C5D3");
+                            });
+                        });
+                    });
+
+                    page.Content().Element(content => content.Column(col => RenderMarkdownBlocks(col, blocks)));
+
+                    page.Footer().Element(footer =>
+                    {
+                        footer.Column(col =>
+                        {
+                            col.Item().LineHorizontal(0.5f).LineColor(CardBorder);
+                            col.Item().PaddingTop(4).Row(row =>
+                            {
+                                row.RelativeItem().Text("Généré par l'agent DataEdge").FontSize(7).FontColor(TextGray);
+                                row.RelativeItem().AlignRight().Text(t =>
+                                {
+                                    t.CurrentPageNumber().FontSize(7).Bold().FontColor(TextGray);
+                                    t.Span(" / ").FontSize(7).FontColor(TextGray);
+                                    t.TotalPages().FontSize(7).Bold().FontColor(TextGray);
+                                });
+                            });
+                        });
+                    });
+                });
+            }).GeneratePdf(filePath);
+
+            return filePath;
+        }
+
         public static void ExportStatisticsPdf(string filePath, Strategie strategie,
             Dictionary<string, object> stats, AdvancedStats advanced,
             string statName, List<string> customFields, List<string> customStatFields)
@@ -185,6 +259,51 @@ namespace backtest
                     });
                 });
             }).GeneratePdf(filePath);
+        }
+
+        private static void RenderMarkdownBlocks(ColumnDescriptor col, List<AgentMarkdown.MdBlock> blocks)
+        {
+            foreach (var block in blocks)
+            {
+                switch (block.Kind)
+                {
+                    case "heading":
+                        float headingSize = block.Level == 1 ? 15 : block.Level == 2 ? 12.5f : 11;
+                        string headingColor = block.Level == 1 ? Accent2 : Accent;
+                        col.Item().PaddingTop(block.Level == 1 ? 10 : 7).PaddingBottom(3).Text(text =>
+                            text.Span(block.PlainText).FontSize(headingSize).Bold().FontColor(headingColor));
+                        break;
+                    case "bullet":
+                        col.Item().PaddingLeft(14).PaddingBottom(2).Text(text =>
+                        {
+                            text.Span("•  ").Bold().FontColor(Accent);
+                            AppendMarkdownSpans(text, block.Spans);
+                        });
+                        break;
+                    case "quote":
+                        col.Item().PaddingLeft(14).PaddingBottom(3).Text(text =>
+                            AppendMarkdownSpans(text, block.Spans, forceItalic: true, forceColor: TextGray));
+                        break;
+                    case "rule":
+                        col.Item().PaddingTop(5).PaddingBottom(5).LineHorizontal(0.5f).LineColor(CardBorder);
+                        break;
+                    default:
+                        col.Item().PaddingBottom(5).Text(text => AppendMarkdownSpans(text, block.Spans));
+                        break;
+                }
+            }
+        }
+
+        private static void AppendMarkdownSpans(TextDescriptor text, List<AgentMarkdown.MdSpan> spans, bool forceItalic = false, string forceColor = null)
+        {
+            foreach (var span in spans)
+            {
+                var piece = text.Span(span.Text ?? string.Empty);
+                if (span.Bold) piece.Bold();
+                if (span.Italic || forceItalic) piece.Italic();
+                if (span.Code) piece.FontFamily("Consolas").FontColor("#C7254E");
+                else if (forceColor != null) piece.FontColor(forceColor);
+            }
         }
 
         private static Action<IContainer> StatsSummary(Strategie strategie, Dictionary<string, object> stats, AdvancedStats advanced, List<Trade> trades)
