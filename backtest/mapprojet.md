@@ -23,16 +23,12 @@
 | **WebView2** | Rendu du graphique (Chromium) |
 | **OxyPlot** | Graphiques statistiques (Winrate, Sessions, etc.) |
 | **EPPlus** | Migration Excel → JSON |
-| **Newtonsoft.Json + System.Text.Json** | Sérialisation JSON |
-| **Xceed Extended WPF Toolkit** | Composants UI (AvalonDock) |
-| **Pack : Extended.Wpf.Toolkit 4.6.1** | |
-
-### Dépendances Principales (NuGet)
+| **Newtonsoft.Json + System.Text.Json** | Sérialisation JSON |`r`n`r`n### Dépendances Principales (NuGet)
 - `EPPlus 8.5.0` - Manipulation Excel
 - `Microsoft.Web.WebView2 1.0.3912.50` - Navigateur intégré
 - `OxyPlot.Wpf 2.0.0` - Graphiques statistiques
 - `Newtonsoft.Json 13.0.3` - JSON
-- `Extended.Wpf.Toolkit 4.6.1` - Composants UI
+
 
 ### Structure des Fichiers
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -62,10 +62,10 @@ namespace backtest
             ResultComboBox.SelectedItem = _tradeEnEdition.Result;
 
             DateEntreePicker.SelectedDate = _tradeEnEdition.DateEntree;
-            TimeEntreePicker.Value = _tradeEnEdition.DateEntree;
+            TimeEntreeTextBox.Text = _tradeEnEdition.DateEntree.ToString("HH:mm");
 
             DateSortiePicker.SelectedDate = _tradeEnEdition.DateSortie;
-            TimeSortiePicker.Value = _tradeEnEdition.DateSortie;
+            TimeSortieTextBox.Text = _tradeEnEdition.DateSortie.ToString("HH:mm");
 
             RrTextBox.Text = _tradeEnEdition.RR.ToString();
             RrTextBox.Foreground = Brushes.White;
@@ -159,8 +159,8 @@ namespace backtest
                     _tradeEnEdition.Paire = PaireTextBox.Text.ToUpper();
                     _tradeEnEdition.TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem;
                     _tradeEnEdition.Result = (Resultat)ResultComboBox.SelectedItem;
-                    _tradeEnEdition.DateEntree = CombineDateTime(DateEntreePicker.SelectedDate, TimeEntreePicker.Value);
-                    _tradeEnEdition.DateSortie = CombineDateTime(DateSortiePicker.SelectedDate, TimeSortiePicker.Value);
+                    _tradeEnEdition.DateEntree = DateEntreePicker.SelectedDate.Value.Date + (TimeSpan.TryParse(TimeEntreeTextBox.Text, out var te) ? te : TimeSpan.Zero);
+                    _tradeEnEdition.DateSortie = DateSortiePicker.SelectedDate.Value.Date + (TimeSpan.TryParse(TimeSortieTextBox.Text, out var ts) ? ts : TimeSpan.Zero);
                     _tradeEnEdition.RR = rrValue;
                     _tradeEnEdition.ImageLtf = ImageLtfTextBox.Text;
                     _tradeEnEdition.ImageHtf = ImageHtfTextBox.Text;
@@ -181,8 +181,8 @@ namespace backtest
                         Paire = PaireTextBox.Text.ToUpper(),
                         TypeOrdre = (TypeOrdre)TypeOrdreComboBox.SelectedItem,
                         Result = (Resultat)ResultComboBox.SelectedItem,
-                        DateEntree = CombineDateTime(DateEntreePicker.SelectedDate, TimeEntreePicker.Value),
-                        DateSortie = CombineDateTime(DateSortiePicker.SelectedDate, TimeSortiePicker.Value),
+                        DateEntree = DateEntreePicker.SelectedDate.Value.Date + (TimeSpan.TryParse(TimeEntreeTextBox.Text, out var te) ? te : TimeSpan.Zero),
+                        DateSortie = DateSortiePicker.SelectedDate.Value.Date + (TimeSpan.TryParse(TimeSortieTextBox.Text, out var ts) ? ts : TimeSpan.Zero),
                         RR = rrValue,
                         ImageLtf = ImageLtfTextBox.Text,
                         ImageHtf = ImageHtfTextBox.Text,
@@ -232,12 +232,6 @@ namespace backtest
 
             // 5. Focus sur le premier champ pour recommencer direct
             PaireTextBox.Focus();
-        }
-        private DateTime CombineDateTime(DateTime? date, DateTime? time)
-        {
-            if (!date.HasValue || !time.HasValue)
-                throw new Exception("Date et Heure obligatoires.");
-            return date.Value.Date + time.Value.TimeOfDay;
         }
         private void SetupPlaceholders(Panel container)
         {

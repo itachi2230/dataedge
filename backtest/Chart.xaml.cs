@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -109,8 +109,8 @@ namespace backtest
             try
             {
                 // On combine Date et Heure
-                DateTime entree = DateEntreePicker.SelectedDate.Value.Date + TimeEntreePicker.Value.Value.TimeOfDay;
-                DateTime sortie = DateSortiePicker.SelectedDate.Value.Date + TimeSortiePicker.Value.Value.TimeOfDay;
+                TimeSpan entreeTime; if (!TimeSpan.TryParse(TimeEntreeTextBox.Text, out entreeTime)) entreeTime = TimeSpan.Zero; DateTime entree = DateEntreePicker.SelectedDate.Value.Date + entreeTime;
+                TimeSpan sortieTime; if (!TimeSpan.TryParse(TimeSortieTextBox.Text, out sortieTime)) sortieTime = TimeSpan.Zero; DateTime sortie = DateSortiePicker.SelectedDate.Value.Date + sortieTime;
 
                 // Récupération des confluences dynamiques
                 var confluences = DynamicFieldsPanel.Children
@@ -165,9 +165,9 @@ namespace backtest
 
             // Réinitialisation des Dates (on remet à "Maintenant")
             DateEntreePicker.SelectedDate = null;
-            TimeEntreePicker.Value = null;
+            TimeEntreeTextBox.Text = "00:00";
             DateSortiePicker.SelectedDate = null;
-            TimeSortiePicker.Value = null;
+            TimeSortieTextBox.Text = "00:00";
 
             // Nettoyage des confluences dynamiques
             foreach (var tb in DynamicFieldsPanel.Children.OfType<TextBox>())
@@ -658,14 +658,14 @@ namespace backtest
             if (trade.DateEntree != DateTime.MinValue)
             {
                 DateEntreePicker.SelectedDate = trade.DateEntree.Date;
-                TimeEntreePicker.Value = trade.DateEntree;
+                TimeEntreeTextBox.Text = trade.DateEntree.ToString("HH:mm");
             }
 
             // 4. Dates et Heures (Sortie)
             if (trade.DateSortie != DateTime.MinValue)
             {
                 DateSortiePicker.SelectedDate = trade.DateSortie.Date;
-                TimeSortiePicker.Value = trade.DateSortie;
+                TimeSortieTextBox.Text = trade.DateSortie.ToString("HH:mm");
             }
 
             // 5. Autre

@@ -559,105 +559,12 @@ public class ChampPersonnalise
         /// </summary>
         public static void ExecuteFullMigration()
         {
-            ExcelPackage.License.SetNonCommercialPersonal("djiguiba"); 
-            string dataPath = Strategie.dataFolder;
-            string backupPath = Path.Combine(dataPath, "old_version");
-
-            if (!Directory.Exists(backupPath)) Directory.CreateDirectory(backupPath);
-
-            var excelFiles = Directory.GetFiles(dataPath, "*.xlsx")
-                                      .Where(f => !Path.GetFileName(f).StartsWith("J"))
-                                      .ToList();
-
-            foreach (var excelPath in excelFiles)
-            {
-                string strategyName = Path.GetFileNameWithoutExtension(excelPath);
-                try
-                {
-                    // 1. On effectue la migration (réutilise la méthode MigrateSingleFile précédente)
-                    MigrateSingleFile(strategyName, excelPath);
-
-                    // 2. Déplacement du fichier Excel vers le dossier de sauvegarde
-                    string destExcel = Path.Combine(backupPath, Path.GetFileName(excelPath));
-                    if (File.Exists(destExcel)) File.Delete(destExcel); // Évite l'erreur si déjà présent
-                    File.Move(excelPath, destExcel);
-
-                    // 3. Optionnel : On déplace aussi les métadonnées Excel si elles existent
-                    string metadataFile = Path.Combine(Strategie.metadataFolder, $"{strategyName}_metadata.xlsx");
-                    if (File.Exists(metadataFile))
-                    {
-                        string destMeta = Path.Combine(backupPath, Path.GetFileName(metadataFile));
-                        if (File.Exists(destMeta)) File.Delete(destMeta);
-                        File.Move(metadataFile, destMeta);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Windows.MessageBox.Show($"Erreur lors de la migration de {strategyName} : {ex.Message}");
-                }
-            }
+            
         }
 
         private static void MigrateSingleFile(string name, string excelPath)
         {
-            // On crée l'objet Stratégie (le constructeur gère la création du JSON de base et l'ajout au fichier index)
-            var newStrategy = new Strategie(name, "Migré depuis l'ancienne version", false);
-            var data = new StrategieData { Nom = name, Description = "Migré depuis l'ancienne version" };
-            var tradesList = new List<Trade>();
-
-            using (var package = new ExcelPackage(new FileInfo(excelPath)))
-            {
-                var ws = package.Workbook.Worksheets[0];
-                if (ws.Dimension == null) return;
-
-                int rows = ws.Dimension.Rows;
-                int cols = ws.Dimension.Columns;
-
-                var headers = new Dictionary<int, string>();
-                for (int c = 1; c <= cols; c++) headers[c] = ws.Cells[1, c].Text.Trim();
-
-                var std = new List<string> { "ID", "PAIRE", "RESULTAT", "DATE ENTREE", "DATE SORTIE", "RR", "TYPE ORDRE", "IMAGE LTF", "IMAGE HTF", "DESCRIPTION", "PROFIT" };
-
-                data.ChampsCustomConfig = headers.Values
-                    .Where(h => !std.Contains(h.ToUpper()) && !string.IsNullOrEmpty(h))
-                    .Select(h => h.ToUpper()).ToList();
-
-                for (int r = 2; r <= rows; r++)
-                {
-                    var t = new Trade { strategie = name };
-                    var customs = new List<ChampPersonnalise>();
-
-                    for (int c = 1; c <= cols; c++)
-                    {
-                        string h = headers[c].ToUpper();
-                        string val = ws.Cells[r, c].Text;
-
-                        switch (h)
-                        {
-                            case "ID": t.Id = Convert.ToInt64(val) ; break;
-                            case "PAIRE": t.Paire = val; break;
-                            case "RESULTAT": t.Result = ParseEnum<Resultat>(val); break;
-                            case "DATE ENTREE": t.DateEntree = ParseDate(val); break;
-                            case "DATE SORTIE": t.DateSortie = ParseDate(val); break;
-                            case "RR": t.RR = (float)ParseDouble(val); break;
-                            case "TYPE ORDRE": t.TypeOrdre = val.ToUpper().Contains("BUY") ? TypeOrdre.BUY : TypeOrdre.SELL; break;
-                            case "IMAGE LTF": t.ImageLtf = val; break;
-                            case "IMAGE HTF": t.ImageHtf = val; break;
-                            case "DESCRIPTION": t.description = val; break;
-                            case "PROFIT": t.Profit = ParseDouble(val); break;
-                            default:
-                                if (data.ChampsCustomConfig.Contains(h))
-                                    customs.Add(new ChampPersonnalise(h, val));
-                                break;
-                        }
-                    }
-                    t.ChampsPersonnalises = customs;
-                    tradesList.Add(t);
-                }
-            }
-            data.Trades = tradesList;
-            newStrategy.CalculateStatistics(data); // Cette méthode sauvegarde le JSON
-        }
+              }
 
         // Helpers statiques pour la conversion propre
         private static T ParseEnum<T>(string val) where T : struct

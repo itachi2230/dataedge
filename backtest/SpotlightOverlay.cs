@@ -204,9 +204,8 @@ private void CreateOverlayVisual()
             });
 
             // Boutons de navigation
-            var navStack = new StackPanel
+            var navStack = new WrapPanel
             {
-                Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
@@ -230,15 +229,30 @@ private void CreateOverlayVisual()
             _skipBtn = new Button
             {
                 Content = "✕  PASSER",
-                FontSize = 10.5,
+                FontSize = 10,
                 Height = 34,
-                Padding = new Thickness(12, 0, 12, 0),
+                Padding = new Thickness(6, 0, 6, 0),
                 Cursor = System.Windows.Input.Cursors.Hand,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
                 Background = Brushes.Transparent,
                 BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                 BorderThickness = new Thickness(1)
             };
+            // Même template arrondi que les boutons Prev/Next
+            var skipTemplate = new ControlTemplate(typeof(Button));
+            var skipBorder = new FrameworkElementFactory(typeof(Border));
+            skipBorder.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+            skipBorder.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
+            skipBorder.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
+            skipBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(18));
+            skipBorder.SetValue(Border.ClipToBoundsProperty, true);
+            skipBorder.SetValue(Border.PaddingProperty, new Thickness(8, 0, 8, 0));
+            var skipPresenter = new FrameworkElementFactory(typeof(ContentPresenter));
+            skipPresenter.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            skipPresenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            skipBorder.AppendChild(skipPresenter);
+            skipTemplate.VisualTree = skipBorder;
+            _skipBtn.Template = skipTemplate;
             _skipBtn.Click += (s, e) => Close();
             navStack.Children.Add(_skipBtn);
 
@@ -252,12 +266,13 @@ private Button CreateNavButton(string text, bool isPrimary)
             var btn = new Button
             {
                 Content = text,
-                FontSize = 11,
+                FontSize = 10,
                 FontWeight = FontWeights.Bold,
                 Height = 34,
-                Padding = new Thickness(14, 0, 14, 0),
+                MinWidth = 40,
+                Padding = new Thickness(4, 0, 4, 0),
                 Cursor = System.Windows.Input.Cursors.Hand,
-                Margin = new Thickness(0, 0, 8, 0),
+                Margin = new Thickness(0, 0, 6, 4),
                 Foreground = new SolidColorBrush(isPrimary ? AccentCyan : Color.FromRgb(0x88, 0xCC, 0xFF)),
                 Background = Brushes.Transparent,
                 BorderBrush = new SolidColorBrush(isPrimary ? AccentCyan : Color.FromRgb(0x44, 0x88, 0xBB)),
@@ -270,7 +285,9 @@ private Button CreateNavButton(string text, bool isPrimary)
             border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
             border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
             border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
-            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(18));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+            border.SetValue(Border.ClipToBoundsProperty, true);
+            border.SetValue(Border.PaddingProperty, new Thickness(8, 0, 8, 0));
             var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
             presenter.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             presenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);

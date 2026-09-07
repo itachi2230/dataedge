@@ -1,7 +1,6 @@
-﻿<Window x:Class="backtest.AjoutTrade"
+<Window x:Class="backtest.AjoutTrade"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
         Title="Ajouter un Trade" Height="750" Width="500" 
         Background="#0A0A12" WindowStyle="None" AllowsTransparency="True" 
         WindowStartupLocation="CenterScreen">
@@ -83,12 +82,12 @@
                         <StackPanel Margin="0,0,5,0">
                             <TextBlock Text="ENTRÉE (DATE/HEURE)" FontSize="9" Foreground="Gray" Margin="0,0,0,5"/>
                             <DatePicker x:Name="DateEntreePicker" Margin="0,0,0,5"/>
-                            <xctk:TimePicker x:Name="TimeEntreePicker" Background="#121220" Foreground="White" BorderBrush="#252540"/>
+                            <TextBox x:Name="TimeEntreeTextBox" Text="00:00" Background="#121220" Foreground="White" BorderBrush="#252540" BorderThickness="1" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,0,5"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Margin="5,0,0,0">
                             <TextBlock Text="SORTIE (DATE/HEURE)" FontSize="9" Foreground="Gray" Margin="0,0,0,5"/>
                             <DatePicker x:Name="DateSortiePicker" Margin="0,0,0,5"/>
-                            <xctk:TimePicker x:Name="TimeSortiePicker" Background="#121220" Foreground="White" BorderBrush="#252540"/>
+                            <TextBox x:Name="TimeSortieTextBox" Text="00:00" Background="#121220" Foreground="White" BorderBrush="#252540" BorderThickness="1" VerticalContentAlignment="Center" Padding="5,0" Margin="5,0,0,0"/>
                         </StackPanel>
                     </Grid>
 

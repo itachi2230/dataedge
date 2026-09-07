@@ -1,10 +1,9 @@
-﻿<UserControl x:Class="backtest.Chart"
+<UserControl x:Class="backtest.Chart"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-             xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
              mc:Ignorable="d" 
              d:DesignHeight="400" d:DesignWidth="900">
 
@@ -125,15 +124,13 @@
                                 <TextBlock Text="ENTRÉE" FontSize="9" Foreground="#2962FF" FontWeight="Bold" Margin="0,5,0,2"/>
                                 <UniformGrid Columns="2" Margin="0,0,0,8">
                                     <DatePicker x:Name="DateEntreePicker" Margin="0,0,2,0"/>
-                                    <xctk:TimePicker x:Name="TimeEntreePicker" Format="Custom" FormatString="HH:mm" 
-                                             Background="#121220" Foreground="White" BorderBrush="#252540" Margin="2,0,0,0"/>
+                                    <TextBox x:Name="TimeEntreeTextBox" Text="00:00" Background="#121220" Foreground="White" BorderBrush="#252540" BorderThickness="1" VerticalContentAlignment="Center" Padding="5,0" Margin="2,0,0,0"/>
                                 </UniformGrid>
 
                                 <TextBlock Text="SORTIE" FontSize="9" Foreground="#FF2962" FontWeight="Bold" Margin="0,8,0,2"/>
                                 <UniformGrid Columns="2" Margin="0,0,0,8">
                                     <DatePicker x:Name="DateSortiePicker" Margin="0,0,2,0"/>
-                                    <xctk:TimePicker x:Name="TimeSortiePicker" Format="Custom" FormatString="HH:mm" 
-                                             Background="#121220" Foreground="White" BorderBrush="#252540" Margin="2,0,0,0"/>
+                                    <TextBox x:Name="TimeSortieTextBox" Text="00:00" Background="#121220" Foreground="White" BorderBrush="#252540" BorderThickness="1" VerticalContentAlignment="Center" Padding="5,0" Margin="2,0,0,0"/>
                                 </UniformGrid>
 
                                 <UniformGrid Columns="2" Margin="0,0,0,8">

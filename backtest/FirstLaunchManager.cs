@@ -9,7 +9,7 @@ namespace backtest
 {
     public static class FirstLaunchManager
     {
-        private const string FirstLaunchFile = "firstLaunch.txt";
+        private const string FirstLaunchFile = "firstLaunch1.txt";
         private const string SpotlightPendingFile = "spotlight_pending.txt";
 
         public static bool IsFirstLaunch()
