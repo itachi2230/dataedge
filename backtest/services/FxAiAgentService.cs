@@ -42,7 +42,7 @@ namespace backtest.Services
                 onChunkReceived?.Invoke("Le serveur de l'IA est actuellement injoignable.");
                 return;
             }
-            if (status == "ONLINE_NO_ACCOUNT" || string.IsNullOrEmpty(_cloudService.CurrentToken))
+            if (status == "ONLINE_NO_ACCOUNT" || string.IsNullOrEmpty(FxCloudService.CurrentToken))
             {
                 onChunkReceived?.Invoke("Veuillez vous connecter à votre compte DataEdge pour utiliser l'agent IA.");
                 return;
@@ -138,7 +138,7 @@ namespace backtest.Services
 
             string status = await _cloudService.GetCloudStatusAsync(useCachedIfFresh: true);
             if (status == "OFFLINE_NO_INTERNET" || status == "OFFLINE_SERVER_DOWN"
-                || status == "ONLINE_NO_ACCOUNT" || string.IsNullOrEmpty(_cloudService.CurrentToken))
+                || status == "ONLINE_NO_ACCOUNT" || string.IsNullOrEmpty(FxCloudService.CurrentToken))
             {
                 return history;
             }
@@ -210,7 +210,7 @@ namespace backtest.Services
         {
             string status = await _cloudService.GetCloudStatusAsync(useCachedIfFresh: true);
             if (status == "OFFLINE_NO_INTERNET" || status == "OFFLINE_SERVER_DOWN"
-                || status == "ONLINE_NO_ACCOUNT" || string.IsNullOrEmpty(_cloudService.CurrentToken))
+                || status == "ONLINE_NO_ACCOUNT" || string.IsNullOrEmpty(FxCloudService.CurrentToken))
             {
                 return false;
             }

@@ -24,8 +24,14 @@ namespace backtest.Services
         public readonly string _sessionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "session_v1.json");
         private static readonly object _logLock = new object();
 
-        public string CurrentToken { get; private set; }
-        public string RefreshToken { get; private set; }
+        // État d'authentification PARTAGÉ par toutes les instances du service :
+        // la connexion / création de compte passe par l'instance de SettingsView
+        // tandis que l'agent IA et la synchro utilisent celle de MainWindow.
+        // Statique = dès qu'un compte se connecte, tout le logiciel le voit
+        // immédiatement, sans redémarrage (bug : l'agent IA restait « non
+        // connecté » jusqu'à la réouverture de l'application).
+        public static string CurrentToken { get; private set; }
+        public static string RefreshToken { get; private set; }
         public string AppId { get; private set; }
 
         static FxCloudService()
@@ -594,6 +600,11 @@ namespace backtest.Services
 
         private void LoadTokens()
         {
+            // Les tokens sont partagés (statique) : si une connexion vient d'avoir
+            // lieu en mémoire (SettingsView), ne jamais l'écraser avec le contenu
+            // potentiellement périmé du disque lors d'une construction d'instance.
+            if (!string.IsNullOrEmpty(CurrentToken)) return;
+
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TokenFileName);
             if (File.Exists(path))
             {
