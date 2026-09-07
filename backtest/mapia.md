@@ -8,7 +8,7 @@
 L'agent IA de DataEdge est un **copilote de trading intégré** au logiciel WPF. Il permet à l'utilisateur de :
 
 - **Discuter** de ses performances, stratégies, trades et études en langage naturel.
-- **Agir sur son espace local** via des *function calls* (tools) : lire le workspace, créer/supprimer des stratégies, ajouter des trades au journal, lire/chercher/créer/remplir/supprimer des études.
+- **Agir sur son espace local** via des *function calls* (tools) : lire le workspace, créer/supprimer des stratégies, ajouter des trades au journal **et au backtest** des stratégies, lire/chercher/créer/remplir/supprimer des études.
 
 Le LLM est appelé **uniquement par le serveur** (les clés `OPENROUTER_API_KEY` / `GEMINI_API_KEY` ne quittent jamais le backend). Le fournisseur est choisi dans la table **`ai_settings`** (pilotable au dashboard `/admin/ai`) : **`openrouter`** (défaut — API compatible OpenAI, modèle `open_router_model`, ex. `z-ai/glm-5.3-flash` : ~10x moins cher que Gemini Flash, function calling testé) ou **`gemini`** (API `generativelanguage.googleapis.com`). Le paramètre `ai_provider` de `fxglobal/config/services.yaml` sert de valeur par défaut à la première exécution. Les deux implémentent `AiChatProviderInterface` et émettent le même protocole de chunks : le client ne change pas.
 
@@ -144,7 +144,7 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 | `CloseRequested` / `ExpandRequested` (+ `BtnClose_Click`, `BtnExpand_Click`, `SetExpandedState`) | Événements levés par les boutons de l'en-tête : ✕ → le `MainWindow` masque le panneau flottant ; ⤢ → le `MainWindow` bascule la largeur du panneau (430 px ↔ étendue) puis rappelle `SetExpandedState(bool)` pour basculer le glyphe ⤢/⤡ |
 | `LoadHistoryAsync()` | Au démarrage du contrôle : `GetChatHistoryAsync()` en tâche de fond → si historique non vide **et** aucun message déjà envoyé, remplace le message d'accueil par l'historique ; saisie bloquée pendant le chargement, réactivée ensuite (échec silencieux, log) |
 | `BtnClearChat_Click` | **Efface toute la discussion** : confirmation `MessageBox` Yes/No → `_aiService.ClearChatHistoryAsync()` (`DELETE api/ai/history`) en tâche de fond → affichage local vidé + message d'accueil (texte différent si le serveur était injoignable) ; refusé tant qu'une réponse est en cours (`_activeAiMessage != null`) |
-| `HandleToolCallAsync(AiToolCall)` | Demande une `MessageBox` Yes/No pour **tout** tool dont la définition déclare `requires_confirmation: true` (via `AgentWorkspaceService.RequiresConfirmation`) ; si refus → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` transmis au modèle en `is_error: true` |
+| `HandleToolCallAsync(AiToolCall)` | Demande une `MessageBox` Yes/No pour **tout** tool dont la définition déclare `requires_confirmation: true` (via `AgentWorkspaceService.RequiresConfirmation`) ; si refus → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` transmis au modèle en `is_error: true`. Après **toute mutation réussie**, lève `DashboardRefreshRequested` (abrégé par `WorkspaceMutationTools`) pour que `MainWindow` recharge le dashboard (`loadStrategies()`). |
 | `ScrollToBottom()` | Auto-défilement du chat |
 | `BtnCopy_Click` | Copie le texte de la bulle dans le presse-papiers (feedback temporaire) |
 | `BtnResend_Click` | Relance le prompt correspondant |
@@ -178,14 +178,14 @@ Design « copilote » futuriste/pro : orbe IA néon (icône robot vectorielle), 
 
 | Fonction | Rôle |
 |---|---|
-| `GetToolDefinitions()` | Retourne la liste des **33 tools (19 workspace + 7 web/marché + 7 fichiers locaux)** déclarés au modèle (dont 7 dédiés aux **notes hebdo / Weeks**), avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
+| `GetToolDefinitions()` | Retourne la liste des **34 tools (20 workspace + 7 web/marché + 7 fichiers locaux)** déclarés au modèle (dont 7 dédiés aux **notes hebdo / Weeks**), avec **paramètres typés** (`AiToolParameter` : `name`, `type` string/number/boolean, `description`, `required`) |
 | `RequiresConfirmation(toolName)` | Indique si un tool nécessite une confirmation utilisateur (tool inconnu → `true` par sécurité) |
 | `BuildIdentityContextAsync()` | Sérialise en JSON l'**identité seule** (profil cloud via `GetProfileCachedAsync`, cache 5 min) — envoyée au premier tour, persistée role=`context` côté serveur |
 | `BuildWorkspaceSnapshotAsync()` | Sérialise le **résumé workspace** (stratégies + stats, 25 derniers trades, chemins des études) — renvoyé uniquement quand le modèle appelle `get_workspace_snapshot` |
 | `ExecuteAsync(call, confirmMutation)` | Dispatch par `switch` vers l'implémentation de chaque outil ; gère la **confirmation** pour les outils marqués `requiresConfirmation` ; log + `AiToolResult.Error` sur exception |
 | Coercition des arguments | `GetString` / `GetBool` / `GetNumber` tolèrent tous les ValueKind JSON (nombre, booléen, chaîne) — évite les exceptions quand le modèle envoie `rr`/`profit` en number |
 | Outils lecture | `GetStrategyDetails`, `SearchTrades`, `AgentStudiesService` (`GetCatalog`, `Read`, `Search`) |
-| Outils mutation | `CreateStrategy`, `DeleteStrategy`, `AddJournalTrade`, `AgentStudiesService` (`Create`, `Write`, `Delete`) |
+| Outils mutation | `CreateStrategy`, `DeleteStrategy`, `AddJournalTrade`, `AddBacktestTrade`, `AgentStudiesService` (`Create`, `Write`, `Delete`), `AgentWeeksService` (`Create`, `Write`, `Delete`) |
 
 > ℹ️ Depuis l'optimisation du payload : le client n'envoie plus que l'**identité** (profil) — persistée une fois par conversation (role `context`) et rejouée depuis l'historique BDD. Les données du workspace (stratégies, trades, études) ne sont plus jamais injectées automatiquement : le modèle les lit à la demande via `get_workspace_snapshot` et les autres tools.
 
@@ -367,7 +367,8 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 | `delete_study` | Mutation | `name` (string) | **oui** | `AgentStudiesService.Delete(arguments)` |
 | `create_strategy` | Mutation | `name` (string), `description` (string, optionnel) | **oui** | `CreateStrategy(arguments)` |
 | `delete_strategy` | Mutation | `name` (string) | **oui** | `DeleteStrategy(arguments)` |
-| `add_journal_trade` | Mutation | `strategy_name` (string), `pair` (string), `result` (string : TP/SL/TR/BE/PARTIAL), `order_type` (string : BUY/SELL), `entry` (string date), `exit` (string date), `rr` (number), `profit` (number), `description` (string) | **oui** | `AddJournalTrade(arguments)` |
+| `add_journal_trade` | Mutation | `strategy_name` (string), `pair` (string), `result` (string : TP/SL/TR/BE/PARTIAL), `order_type` (string : BUY/SELL), `entry` (string date), `exit` (string date), `rr` (number), `profit` (number), `description` (string) | non | `AddJournalTrade(arguments)` |
+| `add_backtest_trade` | Mutation | `strategy_name` (string), `pair` (string), `result` (string : TP/SL/TR/BE/PARTIAL), `order_type` (string : BUY/SELL), `entry` (string date), `exit` (string date), `rr` (number), `description` (string) | non | `AddBacktestTrade(arguments)` |
 | ➡️ `get_economic_calendar` | **Lecture web** | `from` (string date, opt), `to` (string date, opt), `currency` (string filtre, opt), `importance` (string filtre, opt), `source` (string : auto/forexfactory/tradingview/investing/dukascopy, opt), `max_results` (number, opt) | non | `AgentMarketService.GetEconomicCalendar(arguments)` |
 | ➡️ `get_fed_watch` | **Lecture web** | `meeting` (string : next/all/date, opt) | non | `AgentMarketService.GetFedWatch(arguments)` |
 | ➡️ `get_fxbook_sentiment` | **Lecture web** | `pairs` (string, opt : all ou virgules) | non | `AgentMarketService.GetFxbookSentiment(arguments)` |
@@ -396,9 +397,10 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 
 Dans `FxAiChatControl.HandleToolCallAsync` :
 
-- **Tous les tools marqués `requires_confirmation: true`** (soit `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `add_journal_trade`, `write_week`, `delete_week`, `create_text_file`, `create_pdf_file`, `create_word_file`, `open_folder`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, `read_week`, `search_weeks`, `get_month_calendar`, catalogues...) et les créations (`create_study`, `create_week`) ne demandent aucune confirmation.
+- **Tous les tools marqués `requires_confirmation: true`** (soit `write_study`, `delete_study`, `create_strategy`, `delete_strategy`, `write_week`, `delete_week`, `create_text_file`, `create_pdf_file`, `create_word_file`, `open_folder`) → une `MessageBox` « Autoriser cette modification ? » est affichée avec le nom du tool et ses arguments ; l'exécution n'a lieu que si l'utilisateur répond **Yes**. Les lectures (`read_study`, `search_studies`, `read_week`, `search_weeks`, `get_month_calendar`, catalogues...) et les créations (`create_study`, `create_week`) ne demandent aucune confirmation. Les ajouts de trades (`add_journal_trade`, `add_backtest_trade`) sont exécutés directement (`requires_confirmation: false`), à la demande explicite de l'utilisateur.
 - **Les 7 nouveaux outils web** (`get_economic_calendar`, `get_fed_watch`, `get_fxbook_sentiment`, `get_market_overview`, `get_market_news`, `web_search`, `fetch_web_page`) sont des **lectures web pures** : ils ne touchent jamais au workspace ni au disque local, ne demandent **aucune confirmation** et sont exécutés immédiatement par `AgentMarketService`.
 - **Refus** → `AiToolResult.Error("Action refusée ou annulée par l'utilisateur.")` est renvoyé au modèle en `is_error: true` : l'agent est informé et peut reformuler au lieu de réessayer en boucle.
+- **Rechargement automatique du dashboard** : après toute mutation réussie (stratégie créée/supprimée, trade ajouté au journal ou au backtest, note hebdo ou étude écrite/supprimée), `FxAiChatControl` lève l'événement `DashboardRefreshRequested` ; `MainWindow` (abonné dans `ShowAiAgent`) appelle `loadStrategies()` sur le thread UI → journal, vignettes de performance, stats et backtest du dashboard sont rechargés **sans redémarrage du logiciel**. Les notes hebdo sont elles rechargées immédiatement quand la semaine modifiée est celle affichée (`RefreshWeekNotesIfCurrent`).
 - **Outils inconnus** → `RequiresConfirmation()` retourne `true` par sécurité (confirmation demandée).
 - **Exceptions d'exécution** → interceptées par `ExecuteSafelyAsync` côté `FxAiAgentService` : l'outil plante sans casser la boucle, le message d'erreur est transmis au modèle qui peut se corriger.
 

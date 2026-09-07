@@ -277,7 +277,7 @@ POST /admin/ai/sessions/clear             → Purge sessions cache expirées
 | `strategie.cs` | Modèle + logique métier : CRUD trades, calcul stats, migration Excel→JSON |
 | `Chart.xaml.cs` | Graphique TradingView WebView2, gestion timeframes, watchlist, ajout trades |
 | `FxCloudService.cs` | Service cloud : auth, sync, profil, handshake, crash reporting |
-| `services/AgentWorkspaceService.cs` | Expose le contexte local et les tools IA de lecture/mutation confirmée |
+| `services/AgentWorkspaceService.cs` | Expose le contexte local et les tools IA de lecture/mutation confirmée (dont `add_journal_trade` et `add_backtest_trade` pour ajouter un trade au journal ou au backtest d'une stratégie) |
 | `fxglobal/src/Controller/AIChatController.php` | Endpoint IA : route `POST /api/ai/chat`, streaming SSE, persistance BDD |
 | `fxglobal/src/Controller/AIAdminController.php` | Back-office `/admin/ai/**` : config coût de l'agent IA (fournisseur, modèle, sliding window, cache, pinning, web search) + stats |
 | `fxglobal/src/Entity/AISettings.php` | Config globale de l'IA (table `ai_settings`, une ligne pilotée au dashboard admin) |

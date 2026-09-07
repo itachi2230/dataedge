@@ -612,6 +612,23 @@ namespace backtest
                 _aiChat = new Views.FxAiChatControl(_cloudService);
                 _aiChat.CloseRequested += (s, e) => HideAiAgent();
                 _aiChat.ExpandRequested += (s, e) => ToggleAiAgentSize();
+                // Après une action de l'agent (stratégie, trade, week, étude),
+                // recharge la vue correspondante du dashboard : l'utilisateur
+                // voit le changement sans redémarrer le logiciel.
+                _aiChat.DashboardRefreshRequested += (s, e) =>
+                {
+                    if (Application.Current != null)
+                    {
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            try { loadStrategies(); } catch { /* confort, jamais bloquant */ }
+                        });
+                    }
+                    else
+                    {
+                        loadStrategies();
+                    }
+                };
                 AiAgentPanelHost.Child = _aiChat;
             }
 

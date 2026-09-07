@@ -68,7 +68,7 @@ namespace backtest.Services
                     new AiToolParameter("description", "string", "Description de la stratégie.", false)),
                 new AiToolDefinition("delete_strategy", "Supprimer une stratégie et ses données locales (action définitive).", true,
                     new AiToolParameter("name", "string", "Nom exact de la stratégie à supprimer.")),
-                new AiToolDefinition("add_journal_trade", "Ajouter un trade au journal d'une stratégie.", false,
+                new AiToolDefinition("add_journal_trade", "Ajouter un trade au JOURNAL d'une stratégie : réserve aux trades réellement exécutés saisis dans le journal du dashboard (avec profit en devise). Ne PAS utiliser pour les données de backtest : pour des trades de backtest (test/simulés sur le graphique), utiliser add_backtest_trade.", false,
                     new AiToolParameter("strategy_name", "string", "Nom exact de la stratégie cible."),
                     new AiToolParameter("pair", "string", "Paire tradée, ex: EURUSD, XAUUSD."),
                     new AiToolParameter("result", "string", "Résultat du trade : TP, SL, TR, BE ou PARTIAL."),
@@ -78,6 +78,15 @@ namespace backtest.Services
                     new AiToolParameter("rr", "number", "Ratio risque/rendement, ex: 2.5.", false),
                     new AiToolParameter("profit", "number", "Profit en devise du compte (négatif si perte).", false),
                     new AiToolParameter("description", "string", "Notes sur le trade (setup, contexte...).", false)),
+                new AiToolDefinition("add_backtest_trade", "Ajouter un trade aux données de BACKTEST d'une stratégie (trades de test/simulés, l'historique rejoué sur le graphique, sans profit en devise). À utiliser quand l'utilisateur fournit des données de backtest. Les stats de la stratégie sont recalculées automatiquement. Pour un trade réellement exécuté (journal), utiliser add_journal_trade.", false,
+                    new AiToolParameter("strategy_name", "string", "Nom exact de la stratégie cible."),
+                    new AiToolParameter("pair", "string", "Paire tradée, ex: EURUSD, XAUUSD."),
+                    new AiToolParameter("result", "string", "Résultat du trade : TP, SL, TR, BE ou PARTIAL."),
+                    new AiToolParameter("order_type", "string", "Type d'ordre : BUY ou SELL."),
+                    new AiToolParameter("entry", "string", "Date/heure d'entrée, ex: 2026-09-03 14:30.", false),
+                    new AiToolParameter("exit", "string", "Date/heure de sortie, ex: 2026-09-03 16:45.", false),
+                    new AiToolParameter("rr", "number", "Ratio risque/rendement, ex: 2.5 (obligatoire pour le backtest).", false),
+                    new AiToolParameter("description", "string", "Notes sur le trade de backtest (setup, contexte...).", false)),
                 new AiToolDefinition("get_economic_calendar", "Récupérer le VRAI calendrier économique : dates, heures, impact (High/Medium/Low), prévisions et chiffres précédents pour toutes les grandes devises (USD, EUR, GBP, JPY...). Source réelle par défaut : ForexFactory (flux officiel) puis TradingView en repli. À utiliser systématiquement quand l'utilisateur demande les news de la semaine, ce qui sort cette semaine, ou pour planifier les trades autour des rendez-vous.", false,
                     new AiToolParameter("from", "string", "Date de début au format AAAA-MM-JJ (défaut : aujourd'hui).", false),
                     new AiToolParameter("to", "string", "Date de fin au format AAAA-MM-JJ (défaut : from + 7 jours).", false),
@@ -255,6 +264,8 @@ namespace backtest.Services
                         return DeleteStrategy(call.Arguments);
                     case "add_journal_trade":
                         return AddJournalTrade(call.Arguments);
+                    case "add_backtest_trade":
+                        return AddBacktestTrade(call.Arguments);
                     case "get_economic_calendar":
                         return await AgentMarketService.GetEconomicCalendar(call.Arguments);
                     case "get_fed_watch":
@@ -362,6 +373,25 @@ namespace backtest.Services
                 description = GetString(arguments, "description"), strategie = strategy.Nom
             });
             return AiToolResult.Success($"Trade ajouté au journal de {strategy.Nom}.");
+        }
+
+        private AiToolResult AddBacktestTrade(JsonElement arguments)
+        {
+            string strategyName = GetString(arguments, "strategy_name");
+            var strategy = utils.getStrategies().FirstOrDefault(item => string.Equals(item.Nom, strategyName, StringComparison.OrdinalIgnoreCase));
+            if (strategy == null) return AiToolResult.Error("Stratégie introuvable.");
+            if (!Enum.TryParse(GetString(arguments, "result"), true, out Resultat result)) return AiToolResult.Error("Résultat invalide. Valeurs attendues : TP, SL, TR, BE ou PARTIAL.");
+            if (!Enum.TryParse(GetString(arguments, "order_type"), true, out TypeOrdre orderType)) return AiToolResult.Error("Type d'ordre invalide. Valeurs attendues : BUY ou SELL.");
+            DateTime.TryParse(GetString(arguments, "entry"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var entry);
+            DateTime.TryParse(GetString(arguments, "exit"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var exit);
+            float rr = (float)GetNumber(arguments, "rr");
+            strategy.AddTrade(new Trade
+            {
+                Paire = GetString(arguments, "pair"), Result = result, TypeOrdre = orderType,
+                DateEntree = entry, DateSortie = exit, RR = rr,
+                description = GetString(arguments, "description"), strategie = strategy.Nom
+            });
+            return AiToolResult.Success($"Trade ajouté au backtest de {strategy.Nom}.");
         }
 
         private static object ToTradeSummary(dynamic item)

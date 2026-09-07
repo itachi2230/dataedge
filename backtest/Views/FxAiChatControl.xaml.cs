@@ -385,6 +385,15 @@ namespace backtest.Views
         /// </summary>
         public event EventHandler ExpandRequested;
 
+        /// <summary>
+        /// Levé après qu'une action de l'agent a modifié les données du
+        /// workspace (stratégie créée/supprimée, trade ajouté au journal ou
+        /// au backtest, note hebdomadaire ou étude écrite/supprimée...) :
+        /// le MainWindow recharge la vue correspondante du dashboard afin
+        /// que l'utilisateur voie le changement sans redémarrer le logiciel.
+        /// </summary>
+        public event EventHandler DashboardRefreshRequested;
+
         private void BtnClose_Click(object sender, RoutedEventArgs e)
         {
             CloseRequested?.Invoke(this, EventArgs.Empty);
@@ -424,7 +433,33 @@ namespace backtest.Views
             if (!allowed)
                 return AiToolResult.Error("Action refusée ou annulée par l'utilisateur.");
 
-            return await _workspaceService.ExecuteAsync(call, requestedCall => Task.FromResult(true));
+            AiToolResult result = await _workspaceService.ExecuteAsync(call, requestedCall => Task.FromResult(true));
+            if (result.IsSuccess && IsWorkspaceMutation(call.Name))
+            {
+                // L'agent a modifié des données : le dashboard (stratégies,
+                // journal, backtest, weeks) doit se recharger pour refléter
+                // le changement immédiatement, sans redémarrage du logiciel.
+                DashboardRefreshRequested?.Invoke(this, EventArgs.Empty);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Outils dont l'exécution modifie les données affichées dans le
+        /// dashboard (stratégies, trades, notes hebdomadaires, études) :
+        /// après l'une de ces mutations, le MainWindow recharge sa vue.
+        /// </summary>
+        private static readonly System.Collections.Generic.HashSet<string> WorkspaceMutationTools =
+            new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+            {
+                "create_strategy", "delete_strategy", "add_journal_trade", "add_backtest_trade",
+                "create_week", "write_week", "delete_week",
+                "create_study", "write_study", "delete_study"
+            };
+
+        private static bool IsWorkspaceMutation(string toolName)
+        {
+            return WorkspaceMutationTools.Contains(toolName);
         }
 
         /// <summary>
