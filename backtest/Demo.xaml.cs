@@ -151,6 +151,9 @@ namespace backtest
 
         private void OpenMainWindow()
         {
+            // Marquer que le spotlight tour doit être affiché sur le dashboard
+            FirstLaunchManager.MarkSpotlightPending();
+
             MainWindow mainWindow = new MainWindow();
             mainWindow.Show();
             Application.Current.MainWindow = mainWindow;

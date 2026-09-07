@@ -388,7 +388,7 @@
                             <ColumnDefinition Width="1.5*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="0" Margin="8,15,5,0">
+                        <Border x:Name="StatsBorder" Style="{StaticResource CardStyle}" Grid.Column="0" Margin="8,15,5,0">
                             <UniformGrid Columns="2">
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="BUY" Foreground="Gray" HorizontalAlignment="Center" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
@@ -409,7 +409,7 @@
                             </UniformGrid>
                         </Border>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="1" Margin="11,15,4,0">
+                        <Border x:Name="PairsBorder" Style="{StaticResource CardStyle}" Grid.Column="1" Margin="11,15,4,0">
                             <UniformGrid Columns="2" VerticalAlignment="Center">
                                 <StackPanel>
                                     <TextBlock Text="BEST" Foreground="Gray" FontSize="14" HorizontalAlignment="Center"/>
@@ -422,7 +422,7 @@
                             </UniformGrid>
                         </Border>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="3" Margin="10,0,5,0" Padding="10,8">
+                        <Border x:Name="SentimentBorder" Style="{StaticResource CardStyle}" Grid.Column="3" Margin="10,0,5,0" Padding="10,8">
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Top" Text="SENTIMENT" Foreground="Gray" FontSize="12" FontWeight="Bold" Margin="5,0,0,0"/>
 
@@ -482,7 +482,7 @@
                             </DockPanel>
                         </Border>
 
-                        <Grid Grid.Column="2" VerticalAlignment="Center" Height="120" Margin="10,12,10,13">
+                        <Grid x:Name="CounterGrid" Grid.Column="2" VerticalAlignment="Center" Height="120" Margin="10,12,10,13">
                             <Ellipse Stroke="{StaticResource AccentBlue}" StrokeThickness="1.5" Width="90" Height="90" Opacity="0.7">
                                 <Ellipse.Effect>
                                     <BlurEffect Radius="8"/>
@@ -514,7 +514,7 @@
                             <ColumnDefinition Width="1*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="0">
+                        <Border x:Name="JournalBorder" Style="{StaticResource CardStyle}" Grid.Column="0">
                             <DockPanel>
                                 <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                                     <TextBlock Text="JOURNAL DE TRADING" 
@@ -571,7 +571,7 @@
                             </DockPanel>
                         </Border>
 
-                        <Border Style="{StaticResource CardStyle}" Grid.Column="1" Padding="0">
+                        <Border x:Name="StrategiesBorder" Style="{StaticResource CardStyle}" Grid.Column="1" Padding="0">
                             <TabControl Background="Transparent" BorderThickness="0">
                                 
                                 <TabItem Header="BACKTEST">

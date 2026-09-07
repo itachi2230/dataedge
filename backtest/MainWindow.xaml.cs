@@ -108,6 +108,19 @@ namespace backtest
             TradesDataGri.ContextMenu = journalMenu;
             PerformSystemHandshake();
             UpdateAllSentimentIndices();
+
+            // --- Spotlight Tour (premier lancement après le Demo) ---
+            if (FirstLaunchManager.IsSpotlightPending())
+            {
+                this.Loaded += (s, e) =>
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        StartSpotlightTour();
+                        FirstLaunchManager.ClearSpotlightPending();
+                    }), System.Windows.Threading.DispatcherPriority.Background);
+                };
+            }
         }
 
         #region CHARGEMENT DES STRATÉGIES ET JOURNAL ET NOTIFS
@@ -1136,6 +1149,81 @@ namespace backtest
         private void Button_MouseLeftButtonDown_Handled(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+        }
+/// <summary>
+        /// Lance le tour guidé spotlight sur le dashboard pour le premier lancement.
+        /// </summary>
+        private void StartSpotlightTour()
+        {
+            try
+            {
+                // Utilisation directe des noms XAML — plus fiable que les indices
+                var overlay = new SpotlightOverlay(this);
+
+                // Étape 1 : Stats trades (BUY/SELL rings)
+                overlay.AddStep(StatsBorder,
+                    "📊 STATISTIQUES DE TRADES",
+                    "Visualisez en un coup d'œil vos taux de réussite BUY et SELL avec les anneaux de progression. Plus le cercle se remplit, meilleure est votre performance.",
+                    SpotlightPosition.Bottom, 8);
+
+                // Étape 2 : Meilleure / Pire paire
+                overlay.AddStep(PairsBorder,
+                    "🏆 PERFORMANCE PAR PAIRE",
+                    "Identifiez instantanément vos meilleures et pires paires de trading. La meilleure paire s'affiche en vert, la moins performante en orange.",
+                    SpotlightPosition.Bottom, 8);
+
+                // Étape 3 : Compteur total de trades
+                overlay.AddStep(CounterGrid,
+                    "📋 TOTAL DES TRADES",
+                    "Consultez le nombre total de trades que vous avez exécutés. Ce compteur se met à jour automatiquement à chaque nouveau trade ajouté.",
+                    SpotlightPosition.Bottom, 8);
+
+                // Étape 4 : Sentiment Fear & Greed
+                overlay.AddStep(SentimentBorder,
+                    "🧠 SENTIMENT DU MARCHÉ",
+                    "Suivez les indices Fear & Greed US et Crypto en temps réel. Cliquez pour ouvrir l'analyse détaillée avec l'historique complet.",
+                    SpotlightPosition.Bottom, 8);
+
+                // Étape 5 : Journal des trades
+                overlay.AddStep(TradesDataGri,
+                    "📒 JOURNAL DE TRADING",
+                    "Retrouvez l'historique complet de tous vos trades : paire, type (BUY/SELL), profit enregistré. Double-cliquez sur un trade pour voir ses détails.",
+                    SpotlightPosition.Top, 6);
+
+                // Étape 6 : Stratégies et notes hebdomadaires
+                overlay.AddStep(StrategiesBorder,
+                    "🔬 BACKTEST & NOTES",
+                    "Backtestez vos stratégies de trading dans l'onglet BACKTEST. Prenez vos notes hebdomadaires dans l'onglet NOTES pour votre journal de bord hebdomadaire.",
+                    SpotlightPosition.Left, 6);
+
+                // Étape 7 : Panneau latéral de navigation
+                overlay.AddStep(SidePanel,
+                    "📌 PANNEAU DE NAVIGATION",
+                    "ACCÈS RAPIDE à toutes les sections : Accueil 📋, Études 📂, Investing 📊, Espace 👥 et Configuration ⚙️. Passez la souris pour déplier ce panneau essentiel.",
+                    SpotlightPosition.Right, 20,
+                    onBeforeShow: () =>
+                    {
+                        SidePanel.Width = 80;
+                    },
+                    onAfterHide: () =>
+                    {
+                        SidePanel.Width = 25;
+                    });
+
+                // Étape 8 : IA Copilote
+                overlay.AddStep(BtnAiFab,
+                    "🤖 ASSISTANT IA COPILOTE",
+                    "Votre assistant IA intelligent est toujours disponible. Cliquez sur l'icône étincelle pour analyser vos données, poser des questions sur le marché ou obtenir des conseils personnalisés.",
+                    SpotlightPosition.Left, 12);
+
+                overlay.Show();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SpotlightTour error: {ex.Message}");
+                MessageBox.Show($"Erreur du tour guidé : {ex.Message}\n\n{ex.StackTrace}", "Spotlight",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
     }

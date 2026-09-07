@@ -63,7 +63,9 @@ backtest/
 ├── 📄 Modèles & Logique Métier
 │   ├── strategie.cs      → Classe Strategie, Trade, PerformanceStat, AdvancedStats, utils
 │   ├── CalculStatistics.cs → Structure Statistics (stats globales)
-│   ├── FirstLaunchManager.cs → Détection premier lancement
+│   ├── FirstLaunchManager.cs → Détection premier lancement + flag spotlight
+│   ├── SpotlightStep.cs    → Modèle de données pour une étape du tour guidé
+│   ├── SpotlightOverlay.cs → Système de Feature Highlight / Spotlight overlay pour le tour guidé du dashboard
 │   └── NetworkUtils.cs    → Récupération indices Fear & Greed (API CNN + alternative.me)
 │
 ├── 📄 Services
