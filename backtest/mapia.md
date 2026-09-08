@@ -208,16 +208,16 @@ Permet à l'agent de **lire et créer des fichiers sur la machine** de l'utilisa
 
 | Fonction (tool) | Rôle |
 |---|---|
-| `ListFolder(args)` | `list_local_folder` — liste dossiers/fichiers (chemin, type, taille, date), option récursive, max 250 entrées ; vide = dossier DataEdge |
+| `ListFolder(args)` | `list_local_folder` — liste dossiers/fichiers de tout dossier du PC (chemin, type, taille, date), option récursive, max 250 entrées ; vide = dossier DataEdge |
 | `ReadFile(args)` | `read_local_file` — dispatch par extension : `.txt/.md/.json/.csv/.xml/.yaml/.log` (texte), `.pdf` (extraction texte **PdfPig** Apache 2.0, page par page), `.xlsx/.xls` (**ExcelDataReader** MIT, feuilles → lignes ` | `, 500 lignes/feuille), `.docx` (**DocumentFormat.OpenXml** MIT, paragraphes). Résultat paginé (`max_chars` 8000/30000, `offset_chars`) |
-| `SearchInFiles(args)` | `search_in_files` — regex échappée insensible à la casse dans les fichiers texte du dossier DataEdge, extraits ±120 caractères, max 2 Mo/fichier |
+| `SearchInFiles(args)` | `search_in_files` — regex échappée insensible à la casse dans les fichiers texte du dossier ciblé (par défaut DataEdge, tout dossier du PC possible), extraits ±120 caractères, max 2 Mo/fichier |
 | `CreateTextFile(args)` | `create_text_file` — txt/md/json sous `DataEdge\Documents` (+sous-dossier), **validation JSON** avant écriture, jamais d'écrasement (suffixe `_2`, `_3`…), max 500 k caractères |
 | `CreatePdfFile(args)` | `create_pdf_file` — délègue à `PdfExportService.ExportDocumentPdf(title, markdown, directory)` : PDF A4 design DataEdge (en-tête sombre, titres cyan/violet, listes, footer numéroté) |
 | `CreateWordFile(args)` | `create_word_file` — délègue à `WordDocumentBuilder.CreateDocument` : `.docx` A4 via OpenXML avec styles `Normal/Heading1-4` (Segoe UI, titres colorés), listes à puces, citations, séparateurs |
-| `OpenFolder(args)` | `open_folder` — ouvre un dossier autorisé dans l'Explorateur (`explorer.exe`) |
+| `OpenFolder(args)` | `open_folder` — ouvre un dossier du PC dans l'Explorateur (`explorer.exe`), tout emplacement accessible en lecture |
 | `SaveImportedFile(sourcePath)` / `OpenAgentFolder()` | **API UI du chat** : copie une pièce jointe choisie dans `DataEdge\Imports` (horodatée, `.doc` refusé) / ouvre `Documents\DataEdge` dans l'Explorateur |
 
-- **Sécurité des chemins** : `ResolvePath` (lecture) n'accepte que les racines `Documents\DataEdge`, `Documents`, `Bureau`, `Téléchargements` (+ `~` et chemins relatifs interprétés depuis DataEdge) ; `ResolveWriteSubfolder` (écriture) n'accepte **que** des chemins sous `Documents\DataEdge`. Tout chemin hors racines → `AiToolResult.Error` explicite.
+- **Sécurité des chemins** : `ResolvePath` (lecture) accepte **tout chemin Windows valide** — absolu (`C:\...`, `~`, `%USERPROFILE%`…) ou relatif à DataEdge — l'agent peut donc lire **tous les dossiers du PC** (Bureau, Documents, Téléchargements, Images…), dans la limite des permissions Windows ; un refus OS réel est remonté tel quel en `AiToolResult.Error`. `ResolveWriteSubfolder` (écriture) n'accepte **que** des chemins sous `Documents\DataEdge`.
 - **`AgentMarkdown`** (internal, partagé) : parseur markdown léger (`#/##/###`, `**gras**`, `*italique*`/`_italique_`, `` `code` ``, `-` listes, `>` citations, `---` règles) utilisé **à la fois** par le PDF (QuestPDF `RenderMarkdownBlocks`) et le Word (`WordDocumentBuilder`).
 - **Licences** : PdfPig (Apache 2.0), ExcelDataReader (MIT), DocumentFormat.OpenXml (MIT), QuestPDF (Community < 1 M$ de CA/an) — **100 % gratuites en usage commercial**.
 
@@ -383,9 +383,9 @@ Définis dans `AgentWorkspaceService.GetToolDefinitions()` et transmis au serveu
 | `create_week` | Mutation | `week` (string), `content` (string markdown, optionnel) | **non** (création directe) | `AgentWeeksService.Create(arguments)` |
 | `write_week` | Mutation | `week` (string), `content` (string markdown), `mode` (string : replace/append/prepend) | **oui** | `AgentWeeksService.Write(arguments)` |
 | `delete_week` | Mutation | `week` (string) | **oui** | `AgentWeeksService.Delete(arguments)` |
-| ➡️ `list_local_folder` | **Lecture locale** | `path` (string, opt — défaut dossier DataEdge), `recursive` (boolean, opt) | non | `AgentFileService.ListFolder(arguments)` |
+| ➡️ `list_local_folder` | **Lecture locale** | `path` (string, opt — tout dossier du PC, défaut dossier DataEdge), `recursive` (boolean, opt) | non | `AgentFileService.ListFolder(arguments)` |
 | ➡️ `read_local_file` | **Lecture locale** | `path` (string, **obligatoire**), `max_chars` (number, opt — défaut 8000, max 30000), `offset_chars` (number, opt — pagination) | non | `AgentFileService.ReadFile(arguments)` |
-| ➡️ `search_in_files` | **Lecture locale** | `query` (string, **obligatoire**), `folder` (string, opt), `max_results` (number, opt) | non | `AgentFileService.SearchInFiles(arguments)` |
+| ➡️ `search_in_files` | **Lecture locale** | `query` (string, **obligatoire**), `folder` (string, opt — tout dossier du PC), `max_results` (number, opt) | non | `AgentFileService.SearchInFiles(arguments)` |
 | ➡️ `create_text_file` | Mutation locale | `name` (string), `content` (string), `format` (string : txt/json/md, opt), `subfolder` (string, opt — relatif à DataEdge) | **oui** | `AgentFileService.CreateTextFile(arguments)` |
 | ➡️ `create_pdf_file` | Mutation locale | `name` (string), `title` (string, opt), `content` (string markdown), `subfolder` (string, opt) | **oui** | `AgentFileService.CreatePdfFile(arguments)` |
 | ➡️ `create_word_file` | Mutation locale | `name` (string), `content` (string markdown), `subfolder` (string, opt) | **oui** | `AgentFileService.CreateWordFile(arguments)` |

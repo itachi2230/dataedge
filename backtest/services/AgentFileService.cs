@@ -14,10 +14,14 @@ namespace backtest.Services
     /// créer des documents (txt, json, md, pdf, docx) dans le dossier DataEdge
     /// de l'utilisateur (Documents\DataEdge).
     ///
-    /// Sécurité : seules des racines autorisées sont accessibles en lecture
-    /// (Documents\DataEdge, Documents, Bureau, Téléchargements). Les écritures
-    /// sont confinées à Documents\DataEdge. Les tools de mutation demandent la
-    /// confirmation de l'utilisateur (RequiresConfirmation côté AgentWorkspaceService).
+    /// Lecture : TOUS les dossiers et fichiers du PC de l'utilisateur courant
+    /// sont accessibles (Bureau, Documents, Téléchargements, Images, Vidéos,
+    /// autres lecteurs C:\... et leurs sous-dossiers) dans la limite des
+    /// permissions Windows de la session — un refus OS réel (dossier protégé,
+    /// fichier verrouillé…) est remonté comme erreur au lieu d'un refus
+    /// arbitraire du logiciel. Les écritures sont confinées à Documents\DataEdge.
+    /// Les tools de mutation demandent la confirmation de l'utilisateur
+    /// (RequiresConfirmation côté AgentWorkspaceService).
     ///
     /// Licences : PdfPig (Apache 2.0), ExcelDataReader (MIT), DocumentFormat.OpenXml (MIT),
     /// QuestPDF (Community — déjà utilisé pour les rapports de statistiques).
@@ -41,14 +45,6 @@ namespace backtest.Services
         /// <summary>Imports : copies des fichiers joints depuis le chat.</summary>
         public static string ImportsRoot => Path.Combine(AgentRoot, "Imports");
 
-        private static readonly string[] ReadableRoots =
-        {
-            AgentRoot,
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
-        };
-
         private const int DefaultReadChars = 8000;
         private const int MaxReadChars = 30000;
         private const int MaxListEntries = 250;
@@ -62,9 +58,13 @@ namespace backtest.Services
         // ------------------------------------------------------------------
 
         /// <summary>
-        /// Résout un chemin passé par le modèle : vide ou relatif → interprété
-        /// depuis Documents\DataEdge ; absolu → accepté uniquement s'il est sous
-        /// une racine autorisée. Retourne null si le chemin est refusé.
+        /// Résout un chemin passé par le modèle :
+        /// - vide ou relatif → interprété depuis Documents\DataEdge ;
+        /// - "~"/"~/…" → profil utilisateur ;
+        /// - chemin absolu Windows → accepté tel quel : l'agent peut lire TOUS
+        ///   les dossiers du PC (Bureau, Documents, Téléchargements, C:\...),
+        ///   seules les permissions Windows de la session peuvent refuser.
+        /// Retourne null si le chemin n'existe pas (mustExist) ou est invalide.
         /// </summary>
         private static string ResolvePath(string rawPath, bool mustExist = false)
         {
@@ -73,8 +73,12 @@ namespace backtest.Services
                 string trimmed = (rawPath ?? string.Empty).Trim().Trim('"');
                 if (trimmed.Length == 0)
                     return AgentRoot;
+                if (trimmed.IndexOf('\0') >= 0)
+                    return null;
 
-                if (trimmed == "~" || trimmed.StartsWith("~/", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("~\\", StringComparison.OrdinalIgnoreCase))
+                if (trimmed == "~")
+                    trimmed = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                else if (trimmed.StartsWith("~/", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("~\\", StringComparison.OrdinalIgnoreCase))
                     trimmed = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), trimmed.Substring(2));
                 else
                     trimmed = Environment.ExpandEnvironmentVariables(trimmed);
@@ -87,19 +91,9 @@ namespace backtest.Services
                 else
                     full = Path.GetFullPath(Path.Combine(AgentRoot, trimmed));
 
-                foreach (var root in ReadableRoots)
-                {
-                    if (string.IsNullOrEmpty(root)) continue;
-                    var normalizedRoot = Path.GetFullPath(root)
-                        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-                    if (full.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (mustExist && !File.Exists(full) && !Directory.Exists(full))
-                            return null;
-                        return full;
-                    }
-                }
-                return null;
+                if (mustExist && !File.Exists(full) && !Directory.Exists(full))
+                    return null;
+                return full;
             }
             catch
             {
@@ -113,9 +107,9 @@ namespace backtest.Services
             resolved = ResolvePath(rawPath, mustExist);
             if (resolved == null)
             {
-                if (mustExist && !string.IsNullOrWhiteSpace(rawPath))
-                    return AiToolResult.Error("Fichier ou dossier introuvable, ou emplacement non autorisé. Racines autorisées en lecture : Documents\\DataEdge, Documents, Bureau, Téléchargements.");
-                return AiToolResult.Error("Chemin refusé. Racines autorisées : Documents\\DataEdge, Documents, Bureau, Téléchargements.");
+                if (mustExist)
+                    return AiToolResult.Error("Fichier ou dossier introuvable, ou accès réellement refusé par Windows (permissions/protection). Vérifie le chemin exact (list_local_folder sur le dossier parent) ou demande confirmation à l'utilisateur.");
+                return AiToolResult.Error("Chemin invalide. Tu peux lire les dossiers du PC : indique un chemin absolu Windows (ex: C:\\Users\\<nom>\\Documents, ~\\Bureau) ou relatif à Documents\\DataEdge.");
             }
             return null;
         }
