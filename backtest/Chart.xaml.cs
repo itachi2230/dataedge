@@ -263,9 +263,33 @@ namespace backtest
         // Dans Chart.xaml.cs
         public async Task LoadYearForBacktest(int year, bool sr = true)
         {
-            if (_isLoadingMore) return;
+            // Loader immédiat AVANT toute attente : l'utilisateur voit que le saut est
+            // en cours (pas d'écran figé/vide sans feedback pendant le téléchargement)
+            await ToggleLoader(true, $"Saut vers {year}...");
+
+            // Un autre chargement (lazy load, etc.) est en cours : on ATTEND la fin
+            // au lieu d'abandonner le saut silencieusement. Le saut patiente le temps
+            // du téléchargement en cours, il n'est jamais perdu ni décalé.
+            int waitCycles = 0;
+            while (_isLoadingMore && waitCycles < 60) // max ~15 s
+            {
+                await Task.Delay(250);
+                waitCycles++;
+                if (_ctsGlobal != null && _ctsGlobal.Token.IsCancellationRequested)
+                {
+                    await ToggleLoader(false);
+                    return;
+                }
+            }
+            if (_isLoadingMore)
+            {
+                // Toujours occupé après 15 s : on abandonne proprement en réarmant le JS
+                // (sinon isProcessingData resterait à true et bloquerait scrolls et sauts)
+                await SafeExecuteJs("window.isProcessingData = false; window.cyberLog('Jump annulé : un chargement est toujours en cours', true);");
+                await ToggleLoader(false);
+                return;
+            }
             _isLoadingMore = true;
-            await ToggleLoader(true, "");
             try
             {
                 // On appelle notre nouvelle fonction

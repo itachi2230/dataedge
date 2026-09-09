@@ -649,7 +649,36 @@ Pendant le déplacement/redimensionnement :
 3. `updateChartData` : calage au plus proche (0 si antérieur, fin si postérieur) au lieu du fallback aveugle.
 4. `setupBacktestData` : ne se cale plus jamais sur `applyJump(0)` par défaut (dernière bougie si pas de date cible).
 
-### Bug : Centrage cassé au changement de Timeframe et au Jump (non-replay + replay)
+### Bug : Jump en replay → atterrissage année par année (2025 → 2024 → 2023 → 2022) + écran vide sans loader
+
+**Symptôme** : En mode replay, taper 10/10/2022 et cliquer sur Go amenait d'abord en 2025 (début du buffer), puis un 2e clic en 2024, un 3e en 2023, et seulement le 4e à la bonne date 2022. De plus, l'écran affichait du vide pendant le téléchargement de l'année, sans feedback.
+
+**Cause racine** (2 problèmes) :
+
+1. **Date antérieure au buffer non détectée** : dans `jumpToReplayDate`, `findIndex(dDate >= dateInput)` retourne `0` (la 1re bougie APRÈS la date, pas `-1`) quand la date demandée est ANTÉRIEURE au buffer chargé. Le code appelait donc `applyJump(0)` → collage au début du buffer (ex. 01/01/2025). Ensuite `ensureLeftContext` détectait le début de buffer dans l'année de la position et préchargeait silencieusement l'année précédente. Au clic suivant, le buffer commençait en 2024 → même mécanique → 2023 → 2022. D'où le schéma année par année, exactement "comme s'il passait par les années intermédiaires". Seul le cas `index === -1` (date AU-DELÀ des données) chargeait l'année cible directement.
+
+2. **Aucun loader pendant le chargement du jump** : `ToggleLoader(true)` n'était appelé côté C# qu'APRÈS la boucle d'attente `_isLoadingMore`, avec un message vide. Pendant le téléchargement du fichier CSV (parfois plusieurs secondes), l'écran restait figé/vide sans feedback.
+
+**Solution** :
+
+1. `jumpToReplayDate` : nouveau test quand `index === 0` — si la date de la 1re bougie du buffer est POSTÉRIEURE à la date demandée (`firstDate > dateInput`), l'année cible n'est pas encore téléchargée → appel direct de `bridge.LoadYearForBacktest(targetYear)` (un seul clic saute directement à la date, plus jamais année par année).
+2. Loader immédiat : `window.showLoader('CHARGEMENT ' + targetYear + '...')` côté JS AVANT l'appel bridge, et côté C# `ToggleLoader(true, $"Saut vers {year}...")` en TÊTE de `LoadYearForBacktest` (avant la boucle d'attente). Le loader est masqué sur tous les chemins de sortie (attente annulée, timeout 15 s, succès, erreur) via le `finally` existant + `ToggleLoader(false)` explicites.
+
+### Bug : Saut vers une date ou scroll → le graphique atterrit à une autre date (TF annuels 1m–1h)
+
+**Symptôme** : Sur les timeframes à fichiers annuels (1m, 5m, 15m, 30m, 1h), faire un saut (Go du replay) ou scroller dans le passé fait atterrir le graphique à une autre date. Le problème n'apparaît pas en 4h/Daily (fichier bloc 10 ans déjà en mémoire, aucun lazy-load).
+
+**Cause racine** (2 problèmes) :
+
+1. **Scroll — vue non restaurée après préchargement** : `prependChartData` (lazy-load côté gauche en mode normal) appelait `setData(getExtendedTimeline(...))` sans repositionner la vue. Or `setData()` réinitialise la position du timescale → le graphique saute à un autre endroit. `mergePrecedingData` (replay) avait déjà la bonne approche (plage logique décalée du delta), mais pas `prependChartData` ni `appendOrPrependData`.
+
+2. **Jump — saut perdu + blocage** : `Chart.xaml.cs → LoadYearForBacktest()` commençait par `if (_isLoadingMore) return;`. Si un lazy-load était en cours, le saut était abandonné silencieusement ET `window.isProcessingData` restait à `true` côté JS (posé dans `jumpToReplayDate`, jamais remis) → tous les scrolls/sauts suivants devenaient inertes.
+
+**Solution** :
+
+1. `prependChartData` et `appendOrPrependData` : capturer `getVisibleLogicalRange()` AVANT le `setData`, puis la restaurer décalée du nombre de bougies insérées à gauche (`delta`). Un append à droite ne décale rien (delta = 0, on restaure tel quel).
+2. `LoadYearForBacktest` : au lieu d'abandonner si `_isLoadingMore`, on ATTEND la fin du chargement en cours (boucle de 250 ms, max ~15 s) puis on exécute le saut. Après 15 s d'attente, on abandonne proprement en réarmant le JS (`isProcessingData = false` + log), ce qui évite le blocage permanent.
+
 
 **Symptôme** : 
 - Changement de timeframe en mode normal → la chart se retrouve collée à gauche (vue décentrée, proportions mauvaises).

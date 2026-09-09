@@ -519,15 +519,38 @@ window.jumpToReplayDate = async function() {
         return dDate >= dateInput;
     });
 
+    const bridge = window.chrome.webview.hostObjects.chartService;
+
     if (index === -1) {
-        // La date demandée est au-delà des données chargées : on charge l'année cible
-        const bridge = window.chrome.webview.hostObjects.chartService;
+        // La date demandée est AU-DELÀ des données chargées : on charge l'année cible
         if (bridge) {
+            window.showLoader('CHARGEMENT ' + targetYear + '...');
             await bridge.LoadYearForBacktest(targetYear);
-            return;
+        }
+        return;
+    }
+
+    if (index === 0) {
+        // Date ANTÉRIEURE au buffer : findIndex retourne 0 (la 1re bougie APRÈS la date)
+        // et non -1. Sans ce test, on sautait au DÉBUT du buffer puis le préchargement
+        // gauche ramenait année par année (2025 → 2024 → 2023...) au lieu de sauter
+        // directement à la date demandée.
+        const first = window.replayState.allData[0];
+        if (first) {
+            const firstDate = typeof first.time === 'string' ? first.time : new Date(first.time * 1000).toISOString().split('T')[0];
+            if (firstDate > dateInput) {
+                // L'année cible n'est pas encore téléchargée : on la charge directement
+                // (un seul clic, loader affiché pendant le téléchargement)
+                if (bridge) {
+                    window.showLoader('CHARGEMENT ' + targetYear + '...');
+                    await bridge.LoadYearForBacktest(targetYear);
+                }
+                return;
+            }
         }
     }
-    applyJump(index !== -1 ? index : 0, dateInput);
+
+    applyJump(index, dateInput);
 };
 
 window.setupBacktestData = function(newData, year) {
@@ -585,6 +608,8 @@ function applyJump(index, dateText) {
 
 window.appendOrPrependData = function(newData, year) {
     const oldData = window.replayState.allData || [];
+    // Vue courante AVANT modification (setData réinitialise la position du timescale)
+    const oldVisibleRange = (window.chart && window.chart.timeScale()) ? window.chart.timeScale().getVisibleLogicalRange() : null;
     const combined = [...oldData, ...newData];
     const uniqueMap = new Map();
     combined.forEach(item => uniqueMap.set(item.time, item));
@@ -608,6 +633,21 @@ window.appendOrPrependData = function(newData, year) {
         window.candleSeries.setData(getExtendedTimeline(history));
     } else {
         window.candleSeries.setData(getExtendedTimeline(sortedUnique));
+    }
+
+    // Conservation de la vue : restaure la plage visible après le setData
+    // (delta = bougies éventuellement insérées à gauche ; un append à droite ne décale rien)
+    if (oldVisibleRange && oldData.length > 0) {
+        const oldFirstTime = oldData[0].time;
+        let delta = 0;
+        for (let i = 0; i < sortedUnique.length; i++) {
+            if (sortedUnique[i].time < oldFirstTime) delta++;
+            else break;
+        }
+        window.chart.timeScale().setVisibleLogicalRange({
+            from: oldVisibleRange.from + delta,
+            to: oldVisibleRange.to + delta
+        });
     }
     window.isProcessingData = false; 
 };
@@ -860,6 +900,10 @@ window.prependChartData = function(newData) {
         window.isProcessingData = false;
         return;
     }
+    // Vue courante AVANT modification (setData réinitialise la position du timescale)
+    const oldVisibleRange = (window.chart && window.chart.timeScale()) ? window.chart.timeScale().getVisibleLogicalRange() : null;
+    const oldFirstTime = currentData.length > 0 ? currentData[0].time : null;
+
     const combined = [...newData, ...currentData];
     const uniqueMap = new Map();
     combined.forEach(item => uniqueMap.set(item.time, item));
@@ -871,6 +915,23 @@ window.prependChartData = function(newData) {
     }
     const finalData = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
     window.candleSeries.setData(getExtendedTimeline(finalData));
+
+    // Conservation de la vue : le contenu a été décalé du nombre de bougies
+    // insérées À GAUCHE => on décale la plage logique du même delta
+    // (sans ça, le graphique saute à une autre date après le préchargement)
+    if (oldVisibleRange && oldFirstTime !== null) {
+        let delta = 0;
+        for (let i = 0; i < finalData.length; i++) {
+            if (finalData[i].time < oldFirstTime) delta++;
+            else break;
+        }
+        if (delta > 0) {
+            window.chart.timeScale().setVisibleLogicalRange({
+                from: oldVisibleRange.from + delta,
+                to: oldVisibleRange.to + delta
+            });
+        }
+    }
     window.isProcessingData = false;
 };
 

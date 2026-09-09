@@ -203,6 +203,7 @@ namespace backtest.services
                 case "4h": return "4hours";
                 case "d": return "daily";
                 case "w": return "weekly";
+                case "m": return "monthly";
                 default: return input;
             }
         }
