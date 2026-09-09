@@ -81,7 +81,7 @@ backtest/
 │   │   ├── AgentStudiesService.cs   → Tools IA « études » (lecture/recherche/création/écriture/suppression .etude, extraction texte sans images)
 │   │   ├── AgentWeeksService.cs     → Tools IA « weeks » : notes hebdo du dashboard (catalogue, lecture, recherche, calendrier mensuel, création/écriture/suppression Notes_*.etude, markdown → FlowDocument Segoe UI 14 #EEEEEE)
 │   │   ├── AgentMarketService.cs     → Tools IA « web & marché » : 7 nouveaux outils de données en direct (calendrier économique réel, FedWatch, sentiment retail, cotations, actualités, recherche web, lecture de page)
-│   │   ├── AgentFileService.cs     → Tools IA « fichiers locaux » : lecture txt/md/json/csv/xml/pdf(PdfPig)/xlsx(ExcelDataReader)/docx(OpenXML) de TOUS les dossiers du PC (Bureau, Documents, Téléchargements, Images, disques…), recherche de texte, création txt/json/md/pdf/word, ouverture dossier ; lecture ouverte aux permissions Windows de la session, écriture confinée à DataEdge ; + AgentMarkdown (parseur partagé) et WordDocumentBuilder (.docx)
+│   │   ├── AgentFileService.cs     → Tools IA « fichiers locaux » : lecture txt/md/json/csv/xml/pdf(PdfPig)/xlsx(ExcelDataReader)/docx(OpenXML) de TOUS les dossiers du PC (Bureau, Documents, Téléchargements, Images, disques…), recherche de texte, création txt/json/md/pdf/word, ouverture dossier, lancement de fichier (open_file → app. par défaut) ; lecture ouverte aux permissions Windows de la session, écriture confinée à DataEdge ; + AgentMarkdown (parseur partagé) et WordDocumentBuilder (.docx)
 │   │   ├── PdfExportService.cs → Génération d’un rapport PDF moderne et structuré de la stratégie + ExportDocumentPdf : génération PDF générique markdown → design DataEdge (utilisée par l’agent IA)
 │   │   └── RichTextService.cs → Service Rich Text (sauvegarde/chargement XamlPackage)
 │   └── RichTextService.cs     → Service Rich Text (sauvegarde/chargement XamlPackage)
@@ -331,13 +331,14 @@ msbuild backtest.csproj /p:Configuration=Release
 
 📄 **Voir le mapping complet et détaillé de l'agent IA (front + back) dans `mapia.md`.**
 
-### Fichiers locaux de l'agent (lecture + création + dossiers)
+### Fichiers locaux de l'agent (lecture + création + ouverture)
 
-L'agent peut **lire et créer des documents sur la machine** via 7 nouveaux tools (`AgentFileService.cs`) et des **boutons dédiés dans le chat** :
+L'agent peut **lire, créer et ouvrir des documents sur la machine** via 8 tools (`AgentFileService.cs`) et des **boutons dédiés dans le chat** :
 
 - **Dossier maître** : `Documents\DataEdge` — `Documents\` (fichiers créés par l'agent), `Rapports\` (PDF statistiques + PDF agent), `Imports\` (copies des pièces jointes du chat).
 - **Lecture locale** (tools `read_local_file`, `list_local_folder`, `search_in_files`) : `.txt/.md/.json/.csv/.xml/.log`, `.pdf` (extraction texte **PdfPig**), `.xlsx/.xls` (**ExcelDataReader**), `.docx` (**OpenXML**). **Accès à tous les dossiers du PC de l'utilisateur courant** (Bureau, Documents, Téléchargements, Images, Vidéos, autres lecteurs…) dans la limite des permissions Windows — plus aucune restriction artificielle par racines.
 - **Création de fichiers** (tools `create_text_file`/`create_pdf_file`/`create_word_file`, avec confirmation) : txt/json (JSON validé)/md, **PDF** au design DataEdge (`PdfExportService.ExportDocumentPdf`, refactor de l'export de statistiques), **Word .docx** (`WordDocumentBuilder`). Écritures confinées à `Documents\DataEdge`, jamais d'écrasement (suffixes `_2`, `_3`…).
+- **Ouverture de fichiers** (tool `open_file`, avec confirmation) : l'agent **lance un fichier local avec son application Windows par défaut** (`Process.Start` + `UseShellExecute` — un `.pdf` s'ouvre dans le lecteur, un `.docx` dans Word, une image dans la visionneuse…). **Consigne donnée au modèle** : après avoir créé un document demandé (PDF/Word/texte), le lancer automatiquement via `open_file` pour l'afficher immédiatement à l'utilisateur.
 - **Pièces jointes du chat** : bouton 📎 → copie dans `DataEdge\Imports` → l'agent lit le contenu en local (`read_local_file`) ; bouton 📂 dans l'en-tête → ouvre `Documents\DataEdge` dans l'Explorateur. Le champ de saisie s'auto-extend jusqu'à 200 px (gros collages) avec un avertissement au-delà de 20 000 caractères.
 - **Sécurité** : `ResolvePath` (lecture) accepte tout chemin Windows valide — les refus constatés correspondent à de vraies permissions OS ; `ResolveWriteSubfolder` (écriture) confine les écritures à `Documents\DataEdge`, jamais d'écrasement (suffixes `_2`, `_3`…). Les erreurs d'accès réelles sont remontées telles quelles à l'agent. Licences gratuites en commercial : PdfPig (Apache 2.0), ExcelDataReader (MIT), OpenXML (MIT), QuestPDF (Community < 1 M$).
 

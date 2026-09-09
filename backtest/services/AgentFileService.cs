@@ -728,6 +728,49 @@ namespace backtest.Services
         }
 
         // ==================================================================
+        // TOOL : open_file
+        // ==================================================================
+
+        /// <summary>
+        /// Lance un fichier local avec l'application Windows associée à son
+        /// extension : un .pdf s'ouvre dans le lecteur PDF par défaut, un .docx
+        /// dans Word, une image dans la visionneuse, etc. À utiliser quand
+        /// l'utilisateur veut VOIR ou OUVRIR un fichier — notamment un document
+        /// PDF / Word / texte que l'agent vient de créer (create_pdf_file,
+        /// create_word_file, create_text_file) : le fichier s'affiche alors
+        /// directement à l'écran. Le lancement est soumis aux associations de
+        /// fichiers et aux permissions Windows de la session.
+        /// </summary>
+        public static AiToolResult OpenFile(JsonElement arguments)
+        {
+            var guard = ResolveOrError(GetString(arguments, "path"), true, out string path);
+            if (guard != null) return guard;
+
+            if (!File.Exists(path))
+                return AiToolResult.Error("Ce chemin est un dossier, pas un fichier. Utilise open_folder pour l'ouvrir dans l'Explorateur.");
+
+            try
+            {
+                using (Process.Start(new ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                })) { }
+            }
+            catch (Exception ex)
+            {
+                return AiToolResult.Error("Ouverture du fichier avec son application par défaut impossible : " + ex.Message);
+            }
+
+            return AiToolResult.Success(JsonSerializer.Serialize(new
+            {
+                opened = true,
+                path = path,
+                message = "Fichier ouvert avec son application par défaut."
+            }));
+        }
+
+        // ==================================================================
         // API utilisée par l'interface du chat (pièces jointes / bouton dossier)
         // ==================================================================
 

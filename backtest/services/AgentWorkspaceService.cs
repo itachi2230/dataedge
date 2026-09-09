@@ -63,9 +63,10 @@ namespace backtest.Services
                     new AiToolParameter("mode", "string", "replace (défaut) pour remplacer tout, append pour ajouter à la fin, prepend pour insérer au début.", false)),
                 new AiToolDefinition("delete_week", "Supprimer définitivement la note hebdomadaire d'une semaine et son fichier local (action définitive).", true,
                     new AiToolParameter("week", "string", "Semaine dont la note doit être supprimée : date ('2026-09-07', '20260907', '07/09/2026') ou 'current'.")),
-                new AiToolDefinition("create_strategy", "Créer une stratégie dans DataEdge.", true,
+                new AiToolDefinition("create_strategy", "Créer une stratégie dans DataEdge, avec sa description et optionnellement ses CHAMPS DE CONFLUENCE PERSONNALISÉS (colonnes de critères propres à la stratégie, ex: RSI, TENDANCE, LIQUIDITY GRAB — leur nom s'affiche en majuscules dans DataEdge).", true,
                     new AiToolParameter("name", "string", "Nom unique de la nouvelle stratégie."),
-                    new AiToolParameter("description", "string", "Description de la stratégie.", false)),
+                    new AiToolParameter("description", "string", "Description de la stratégie.", false),
+                    new AiToolParameter("custom_fields", "string", "Champs de confluence personnalisés à créer pour la stratégie : liste JSON de noms (ex: '[\"RSI\", \"TENDANCE\"]') ou liste séparée par des virgules (ex: 'RSI, TENDANCE'). Optionnel, vide par défaut.", false)),
                 new AiToolDefinition("delete_strategy", "Supprimer une stratégie et ses données locales (action définitive).", true,
                     new AiToolParameter("name", "string", "Nom exact de la stratégie à supprimer.")),
                 new AiToolDefinition("add_journal_trade", "Ajouter un trade au JOURNAL d'une stratégie : réserve aux trades réellement exécutés saisis dans le journal du dashboard (avec profit en devise). Ne PAS utiliser pour les données de backtest : pour des trades de backtest (test/simulés sur le graphique), utiliser add_backtest_trade.", false,
@@ -121,22 +122,24 @@ namespace backtest.Services
                     new AiToolParameter("query", "string", "Texte à rechercher."),
                     new AiToolParameter("folder", "string", "Dossier de départ : DataEdge par défaut, ou chemin absolu Windows (ex: C:\\Users\\<nom>\\Downloads) / relatif.", false),
                     new AiToolParameter("max_results", "number", "Nombre maximum de fichiers renvoyés (défaut 10).", false)),
-                new AiToolDefinition("create_text_file", "Créer un fichier texte (.txt), markdown (.md) ou JSON (.json) dans Documents\\DataEdge\\Documents de l'utilisateur. Le JSON est validé avant écriture. Un fichier existant n'est jamais écrasé (suffixe _2, _3...).", true,
+                new AiToolDefinition("create_text_file", "Créer un fichier texte (.txt), markdown (.md) ou JSON (.json) dans Documents\\DataEdge\\Documents de l'utilisateur. Le JSON est validé avant écriture. Un fichier existant n'est jamais écrasé (suffixe _2, _3...). Après création, si l'utilisateur veut VOIR le fichier (ou qu'il t'a demandé de le créer pour le consulter), lance-le immédiatement avec open_file sur le chemin retourné afin de l'afficher à l'écran.", true,
                     new AiToolParameter("name", "string", "Nom du fichier, avec ou sans extension (ex: 'plan_semaine' ou 'resultats.json')."),
                     new AiToolParameter("content", "string", "Contenu complet à écrire. Pour .json : JSON valide."),
                     new AiToolParameter("format", "string", "txt (défaut), md ou json.", false),
                     new AiToolParameter("subfolder", "string", "Sous-dossier optionnel sous DataEdge (ex: 'Documents\\Analyses'). Créé si absent.", false)),
-                new AiToolDefinition("create_pdf_file", "Générer un PDF mis en page au design DataEdge (titres, listes, gras/italique, pied de page avec numéros) à partir d'un contenu markdown léger, dans Documents\\DataEdge\\Documents. Idéal pour remettre une analyse au format rapport.", true,
+                new AiToolDefinition("create_pdf_file", "Générer un PDF mis en page au design DataEdge (titres, listes, gras/italique, pied de page avec numéros) à partir d'un contenu markdown léger, dans Documents\\DataEdge\\Documents. Idéal pour remettre une analyse au format rapport. Après création, lance le PDF avec open_file sur le chemin retourné pour l'afficher immédiatement à l'utilisateur (sauf si l'utilisateur préfère ne pas l'ouvrir).", true,
                     new AiToolParameter("name", "string", "Nom du fichier sans extension."),
                     new AiToolParameter("title", "string", "Titre affiché en en-tête du PDF (défaut : nom du fichier).", false),
                     new AiToolParameter("content", "string", "Contenu markdown léger : #/##/### titres, **gras**, *italique*, `code`, - listes, > citations, --- séparateur."),
                     new AiToolParameter("subfolder", "string", "Sous-dossier optionnel sous DataEdge. Défaut : Documents.", false)),
-                new AiToolDefinition("create_word_file", "Créer un document Word (.docx) à partir d'un contenu markdown léger (titres stylés, listes, gras/italique, A4), dans Documents\\DataEdge\\Documents.", true,
+                new AiToolDefinition("create_word_file", "Créer un document Word (.docx) à partir d'un contenu markdown léger (titres stylés, listes, gras/italique, A4), dans Documents\\DataEdge\\Documents. Après création, lance le document avec open_file sur le chemin retourné pour l'ouvrir dans Word et l'afficher immédiatement à l'utilisateur (sauf si l'utilisateur préfère ne pas l'ouvrir).", true,
                     new AiToolParameter("name", "string", "Nom du fichier sans extension."),
                     new AiToolParameter("content", "string", "Contenu markdown léger (mêmes règles que create_pdf_file)."),
                     new AiToolParameter("subfolder", "string", "Sous-dossier optionnel sous DataEdge. Défaut : Documents.", false)),
                 new AiToolDefinition("open_folder", "Ouvrir un dossier local dans l'Explorateur Windows (par défaut Documents\\DataEdge, le dossier des fichiers de l'agent). Tout dossier du PC accessible en lecture peut être ouvert. Utile pour montrer à l'utilisateur un fichier ou un emplacement.", true,
-                    new AiToolParameter("path", "string", "Chemin du dossier à ouvrir (absolu Windows, ex: C:\\Users\\<nom>\\Desktop). Vide = dossier DataEdge.", false))
+                    new AiToolParameter("path", "string", "Chemin du dossier à ouvrir (absolu Windows, ex: C:\\Users\\<nom>\\Desktop). Vide = dossier DataEdge.", false)),
+                new AiToolDefinition("open_file", "Lancer un fichier local avec son application Windows par défaut : le PDF s'ouvre dans le lecteur, le .docx dans Word, une image dans la visionneuse, etc. À utiliser quand l'utilisateur veut VOIR ou OUVRIR un fichier — notamment un document PDF/Word/texte que tu viens de créer (create_pdf_file, create_word_file, create_text_file) : appelles open_file sur le chemin retourné par la création pour l'afficher directement à l'écran.", true,
+                    new AiToolParameter("path", "string", "Chemin du fichier à ouvrir (absolu Windows, ex: C:\\Users\\<nom>\\Desktop\\rapport.pdf, ou relatif au dossier DataEdge)."))
             };
         }
 
@@ -294,6 +297,8 @@ namespace backtest.Services
                         return AgentFileService.CreateWordFile(call.Arguments);
                     case "open_folder":
                         return AgentFileService.OpenFolder(call.Arguments);
+                    case "open_file":
+                        return AgentFileService.OpenFile(call.Arguments);
                     default:
                         return AiToolResult.Error("Outil non implémenté.");
                 }
@@ -342,8 +347,21 @@ namespace backtest.Services
                 return AiToolResult.Error("Nom de stratégie invalide.");
             if (utils.getStrategies().Any(item => string.Equals(item.Nom, name, StringComparison.OrdinalIgnoreCase)))
                 return AiToolResult.Error("Cette stratégie existe déjà.");
-            new Strategie(name.Trim(), GetString(arguments, "description"));
-            return AiToolResult.Success($"Stratégie créée: {name.Trim()}");
+
+            var strategy = new Strategie(name.Trim(), GetString(arguments, "description"));
+
+            // Champs de confluence personnalisés (même comportement que la fenêtre
+            // addStrategieWindow : noms isolés, sans doublons, en majuscules via SetStructure).
+            var customFields = GetStringList(arguments, "custom_fields")
+                .Select(f => f.Trim())
+                .Where(f => !string.IsNullOrWhiteSpace(f))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (customFields.Count > 0)
+                strategy.SetStructure(customFields);
+
+            string customFieldsText = customFields.Count > 0 ? " avec champs de confluence personnalisés : " + string.Join(", ", customFields) : "";
+            return AiToolResult.Success($"Stratégie créée: {name.Trim()}{customFieldsText}");
         }
 
         private AiToolResult DeleteStrategy(JsonElement arguments)
@@ -433,6 +451,65 @@ namespace backtest.Services
                 case JsonValueKind.False: return "false";
                 default: return string.Empty;
             }
+        }
+
+        /// <summary>
+        /// Récupère une liste de chaînes depuis un argument JSON. Accepte plusieurs
+        /// formats envoyés par le modèle : un tableau JSON (["A","B"]), une chaîne
+        /// contenant un tableau JSON ("[\"A\",\"B\"]") ou une liste simple séparée
+        /// par des virgules / points-virgules ("A, B; C").
+        /// </summary>
+        private static List<string> GetStringList(JsonElement arguments, string property)
+        {
+            var result = new List<string>();
+            if (!arguments.TryGetProperty(property, out var value)) return result;
+
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Array:
+                    foreach (var item in value.EnumerateArray())
+                    {
+                        switch (item.ValueKind)
+                        {
+                            case JsonValueKind.String: result.Add(item.GetString() ?? string.Empty); break;
+                            case JsonValueKind.Number: result.Add(item.GetRawText()); break;
+                            case JsonValueKind.True: result.Add("true"); break;
+                            case JsonValueKind.False: result.Add("false"); break;
+                            default: break;
+                        }
+                    }
+                    break;
+                case JsonValueKind.String:
+                    string text = (value.GetString() ?? string.Empty).Trim();
+                    if (text.Length == 0) return result;
+                    if (text.StartsWith("[") && text.EndsWith("]"))
+                    {
+                        try
+                        {
+                            using (var doc = JsonDocument.Parse(text))
+                            {
+                                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var item in doc.RootElement.EnumerateArray())
+                                    {
+                                        if (item.ValueKind == JsonValueKind.String) result.Add(item.GetString() ?? string.Empty);
+                                        else if (item.ValueKind == JsonValueKind.Number) result.Add(item.GetRawText());
+                                    }
+                                    return result;
+                                }
+                            }
+                        }
+                        catch { /* JSON invalide : on retombe sur la séparation par virgules */ }
+                    }
+                    result = text.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                    break;
+                case JsonValueKind.Number:
+                    result.Add(value.GetRawText());
+                    break;
+                default:
+                    break;
+            }
+            return result;
         }
 
         private static bool GetBool(JsonElement arguments, string property, bool fallback = false)

@@ -191,18 +191,20 @@ namespace backtest.services
         private string MapTimeframeToServer(string tf)
         {
             string input = tf.ToLower().Replace(" ", "").Trim();
-            return input switch
+            // switch classique (compatibilité compilateur : l'expression switch C# 8
+            // était signalée en erreur par certains contextes Roslyn)
+            switch (input)
             {
-                "1m" => "1min",
-                "5m" => "5mins",
-                "15m" => "15mins",
-                "30m" => "30mins",
-                "1h" => "hourly",
-                "4h" => "4hours",
-                "d" => "daily",
-                "w" => "weekly",
-                _ => input
-            };
+                case "1m": return "1min";
+                case "5m": return "5mins";
+                case "15m": return "15mins";
+                case "30m": return "30mins";
+                case "1h": return "hourly";
+                case "4h": return "4hours";
+                case "d": return "daily";
+                case "w": return "weekly";
+                default: return input;
+            }
         }
 
         #endregion
