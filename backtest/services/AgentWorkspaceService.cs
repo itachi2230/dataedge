@@ -63,10 +63,10 @@ namespace backtest.Services
                     new AiToolParameter("mode", "string", "replace (défaut) pour remplacer tout, append pour ajouter à la fin, prepend pour insérer au début.", false)),
                 new AiToolDefinition("delete_week", "Supprimer définitivement la note hebdomadaire d'une semaine et son fichier local (action définitive).", true,
                     new AiToolParameter("week", "string", "Semaine dont la note doit être supprimée : date ('2026-09-07', '20260907', '07/09/2026') ou 'current'.")),
-                new AiToolDefinition("create_strategy", "Créer une stratégie dans DataEdge, avec sa description et optionnellement ses CHAMPS DE CONFLUENCE PERSONNALISÉS (colonnes de critères propres à la stratégie, ex: RSI, TENDANCE, LIQUIDITY GRAB — leur nom s'affiche en majuscules dans DataEdge).", true,
+                new AiToolDefinition("create_strategy", "Créer une stratégie dans DataEdge, avec sa description et optionnellement ses CHAMPS DE CONFLUENCE PERSONNALISÉS (colonnes de critères propres à la stratégie, ex: RSI, TENDANCE, LIQUIDITY GRAB — leur nom s'affiche en majuscules dans DataEdge). Les champs de confluence sont transmis UNIQUEMENT via le paramètre custom_fields : ne les écris JAMAIS dans la description, qui reste un texte libre décrivant la logique du setup.", true,
                     new AiToolParameter("name", "string", "Nom unique de la nouvelle stratégie."),
-                    new AiToolParameter("description", "string", "Description de la stratégie.", false),
-                    new AiToolParameter("custom_fields", "string", "Champs de confluence personnalisés à créer pour la stratégie : liste JSON de noms (ex: '[\"RSI\", \"TENDANCE\"]') ou liste séparée par des virgules (ex: 'RSI, TENDANCE'). Optionnel, vide par défaut.", false)),
+                    new AiToolParameter("description", "string", "Description de la stratégie (texte libre). Ne contient JAMAIS les champs de confluence.", false),
+                    new AiToolParameter("custom_fields", "string", "Champs de confluence personnalisés à créer pour la stratégie : liste JSON de noms (ex: '[\"RSI\", \"TENDANCE\"]'), liste séparée par des virgules (ex: 'RSI, TENDANCE') ou objet JSON (ex: '{\"RSI\": \"\"}'). Optionnel, vide par défaut.", false)),
                 new AiToolDefinition("delete_strategy", "Supprimer une stratégie et ses données locales (action définitive).", true,
                     new AiToolParameter("name", "string", "Nom exact de la stratégie à supprimer.")),
                 new AiToolDefinition("add_journal_trade", "Ajouter un trade au JOURNAL d'une stratégie : réserve aux trades réellement exécutés saisis dans le journal du dashboard (avec profit en devise). Ne PAS utiliser pour les données de backtest : pour des trades de backtest (test/simulés sur le graphique), utiliser add_backtest_trade.", false,
@@ -78,7 +78,8 @@ namespace backtest.Services
                     new AiToolParameter("exit", "string", "Date/heure de sortie, ex: 2026-09-03 16:45.", false),
                     new AiToolParameter("rr", "number", "Ratio risque/rendement, ex: 2.5.", false),
                     new AiToolParameter("profit", "number", "Profit en devise du compte (négatif si perte).", false),
-                    new AiToolParameter("description", "string", "Notes sur le trade (setup, contexte...).", false)),
+                    new AiToolParameter("description", "string", "Notes sur le trade (setup, contexte...).", false),
+                    new AiToolParameter("custom_fields", "string", "Valeurs des champs de confluence personnalisés de la stratégie pour ce trade : objet JSON mappant chaque nom de champ à sa valeur (ex: '{\"TENDANCE\": \"HAUSSIERE\", \"FVG\": \"OUI\"}'). Les noms doivent correspondre aux champs de confluence de la stratégie (visibles via get_strategy_details). Optionnel.", false)),
                 new AiToolDefinition("add_backtest_trade", "Ajouter un trade aux données de BACKTEST d'une stratégie (trades de test/simulés, l'historique rejoué sur le graphique, sans profit en devise). À utiliser quand l'utilisateur fournit des données de backtest. Les stats de la stratégie sont recalculées automatiquement. Pour un trade réellement exécuté (journal), utiliser add_journal_trade.", false,
                     new AiToolParameter("strategy_name", "string", "Nom exact de la stratégie cible."),
                     new AiToolParameter("pair", "string", "Paire tradée, ex: EURUSD, XAUUSD."),
@@ -87,7 +88,8 @@ namespace backtest.Services
                     new AiToolParameter("entry", "string", "Date/heure d'entrée, ex: 2026-09-03 14:30.", false),
                     new AiToolParameter("exit", "string", "Date/heure de sortie, ex: 2026-09-03 16:45.", false),
                     new AiToolParameter("rr", "number", "Ratio risque/rendement, ex: 2.5 (obligatoire pour le backtest).", false),
-                    new AiToolParameter("description", "string", "Notes sur le trade de backtest (setup, contexte...).", false)),
+                    new AiToolParameter("description", "string", "Notes sur le trade de backtest (setup, contexte...).", false),
+                    new AiToolParameter("custom_fields", "string", "Valeurs des champs de confluence personnalisés de la stratégie pour ce trade : objet JSON mappant chaque nom de champ à sa valeur (ex: '{\"TENDANCE\": \"HAUSSIERE\", \"FVG\": \"OUI\"}'). Les noms doivent correspondre aux champs de confluence de la stratégie (visibles via get_strategy_details). Optionnel.", false)),
                 new AiToolDefinition("get_economic_calendar", "Récupérer le VRAI calendrier économique : dates, heures, impact (High/Medium/Low), prévisions et chiffres précédents pour toutes les grandes devises (USD, EUR, GBP, JPY...). Source réelle par défaut : ForexFactory (flux officiel) puis TradingView en repli. À utiliser systématiquement quand l'utilisateur demande les news de la semaine, ce qui sort cette semaine, ou pour planifier les trades autour des rendez-vous.", false,
                     new AiToolParameter("from", "string", "Date de début au format AAAA-MM-JJ (défaut : aujourd'hui).", false),
                     new AiToolParameter("to", "string", "Date de fin au format AAAA-MM-JJ (défaut : from + 7 jours).", false),
@@ -193,6 +195,7 @@ namespace backtest.Services
                 {
                     name = strategy.Nom,
                     description = strategy.description,
+                    custom_fields = strategy.GetStructure(),
                     journal_trades = strategy.GetJournal().Count,
                     backtest_trades = strategy.GetTrades().Count,
                     statistics = strategy.GetStatistics()
@@ -345,13 +348,17 @@ namespace backtest.Services
             string name = GetString(arguments, "name");
             if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
                 return AiToolResult.Error("Nom de stratégie invalide.");
+            // Même convention que la fenêtre addStrategieWindow (ajout interne) : nom en majuscules.
+            name = name.Trim().ToUpper();
             if (utils.getStrategies().Any(item => string.Equals(item.Nom, name, StringComparison.OrdinalIgnoreCase)))
                 return AiToolResult.Error("Cette stratégie existe déjà.");
 
-            var strategy = new Strategie(name.Trim(), GetString(arguments, "description"));
+            var strategy = new Strategie(name, GetString(arguments, "description"));
 
             // Champs de confluence personnalisés (même comportement que la fenêtre
             // addStrategieWindow : noms isolés, sans doublons, en majuscules via SetStructure).
+            // Ils transitent UNIQUEMENT par le paramètre custom_fields — jamais dans la
+            // description, qui reste un texte libre décrivant la logique du setup.
             var customFields = GetStringList(arguments, "custom_fields")
                 .Select(f => f.Trim())
                 .Where(f => !string.IsNullOrWhiteSpace(f))
@@ -361,7 +368,7 @@ namespace backtest.Services
                 strategy.SetStructure(customFields);
 
             string customFieldsText = customFields.Count > 0 ? " avec champs de confluence personnalisés : " + string.Join(", ", customFields) : "";
-            return AiToolResult.Success($"Stratégie créée: {name.Trim()}{customFieldsText}");
+            return AiToolResult.Success($"Stratégie créée: {name}{customFieldsText}");
         }
 
         private AiToolResult DeleteStrategy(JsonElement arguments)
@@ -384,13 +391,19 @@ namespace backtest.Services
             DateTime.TryParse(GetString(arguments, "exit"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var exit);
             float rr = (float)GetNumber(arguments, "rr");
             double profit = GetNumber(arguments, "profit");
-            strategy.AddJournal(new Trade
+            var trade = new Trade
             {
                 Paire = GetString(arguments, "pair"), Result = result, TypeOrdre = orderType,
                 DateEntree = entry, DateSortie = exit, RR = rr, Profit = profit,
-                description = GetString(arguments, "description"), strategie = strategy.Nom
-            });
-            return AiToolResult.Success($"Trade ajouté au journal de {strategy.Nom}.");
+                description = GetString(arguments, "description"), strategie = strategy.Nom,
+                // Champs de confluence renseignés exactement comme l'ajout interne
+                // (fenêtre AjoutTrade) : une entrée par champ de la structure.
+                ChampsPersonnalises = BuildConfluences(strategy, GetCustomFieldValues(arguments, "custom_fields"))
+            };
+            strategy.AddJournal(trade);
+            string confluenceText = trade.ChampsPersonnalises.Any(c => !string.IsNullOrWhiteSpace(c.Valeur?.ToString()))
+                ? " (champs de confluence renseignés)" : "";
+            return AiToolResult.Success($"Trade ajouté au journal de {strategy.Nom}{confluenceText}.");
         }
 
         private AiToolResult AddBacktestTrade(JsonElement arguments)
@@ -403,13 +416,122 @@ namespace backtest.Services
             DateTime.TryParse(GetString(arguments, "entry"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var entry);
             DateTime.TryParse(GetString(arguments, "exit"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var exit);
             float rr = (float)GetNumber(arguments, "rr");
-            strategy.AddTrade(new Trade
+            var trade = new Trade
             {
                 Paire = GetString(arguments, "pair"), Result = result, TypeOrdre = orderType,
                 DateEntree = entry, DateSortie = exit, RR = rr,
-                description = GetString(arguments, "description"), strategie = strategy.Nom
-            });
-            return AiToolResult.Success($"Trade ajouté au backtest de {strategy.Nom}.");
+                description = GetString(arguments, "description"), strategie = strategy.Nom,
+                // Champs de confluence renseignés exactement comme l'ajout interne
+                // (fenêtre AjoutTrade / onglet backtest du Chart) : une entrée par
+                // champ de la structure de la stratégie.
+                ChampsPersonnalises = BuildConfluences(strategy, GetCustomFieldValues(arguments, "custom_fields"))
+            };
+            strategy.AddTrade(trade);
+            string confluenceText = trade.ChampsPersonnalises.Any(c => !string.IsNullOrWhiteSpace(c.Valeur?.ToString()))
+                ? " (champs de confluence renseignés)" : "";
+            return AiToolResult.Success($"Trade ajouté au backtest de {strategy.Nom}{confluenceText}.");
+        }
+
+        /// <summary>
+        /// Construit les ChampsPersonnalises d'un trade exactement comme la fenêtre
+        /// AjoutTrade (ajout interne au logiciel) : une entrée par champ de la
+        /// structure de la stratégie (ChampsCustomConfig), avec la valeur fournie
+        /// par l'agent ou une chaîne vide si absente.
+        /// </summary>
+        private static List<ChampPersonnalise> BuildConfluences(Strategie strategy, Dictionary<string, string> values)
+        {
+            var confluences = new List<ChampPersonnalise>();
+            var structure = strategy.GetStructure();
+
+            if (structure == null || structure.Count == 0)
+            {
+                // Stratégie sans champ personnalisé configuré : on conserve les
+                // valeurs fournies telles quelles plutôt que de les perdre.
+                foreach (var item in values)
+                    confluences.Add(new ChampPersonnalise(item.Key, item.Value));
+                return confluences;
+            }
+
+            foreach (var field in structure)
+            {
+                string value = values.TryGetValue(NormalizeFieldName(field), out var v) ? v : string.Empty;
+                confluences.Add(new ChampPersonnalise(field, value));
+            }
+            return confluences;
+        }
+
+        private static string ReadScalarValue(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.String: return element.GetString() ?? string.Empty;
+                case JsonValueKind.Number: return element.GetRawText();
+                case JsonValueKind.True: return "true";
+                case JsonValueKind.False: return "false";
+                default: return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Récupère les valeurs des champs de confluence d'un trade depuis un
+        /// argument JSON. Formats acceptés (tolérance au modèle) : un objet JSON
+        /// {"TENDANCE":"HAUSSIERE","FVG":"OUI"}, une chaîne contenant cet objet, ou
+        /// une chaîne de paires "CHAMP: valeur; CHAMP2: valeur2".
+        /// </summary>
+        private static Dictionary<string, string> GetCustomFieldValues(JsonElement arguments, string property)
+        {
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!arguments.TryGetProperty(property, out var value)) return values;
+
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var item in value.EnumerateObject())
+                        values[NormalizeFieldName(item.Name)] = ReadScalarValue(item.Value);
+                    break;
+                case JsonValueKind.String:
+                    string text = (value.GetString() ?? string.Empty).Trim();
+                    if (text.Length == 0) break;
+                    if (text.StartsWith("{") && text.EndsWith("}"))
+                    {
+                        try
+                        {
+                            using (var doc = JsonDocument.Parse(text))
+                            {
+                                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                                {
+                                    foreach (var item in doc.RootElement.EnumerateObject())
+                                        values[NormalizeFieldName(item.Name)] = ReadScalarValue(item.Value);
+                                    break;
+                                }
+                            }
+                        }
+                        catch { /* JSON invalide : on retombe sur les paires CHAMP: valeur */ }
+                    }
+                    foreach (var pair in text.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        int sep = pair.IndexOfAny(new[] { ':', '=' });
+                        if (sep <= 0) continue;
+                        string pairName = pair.Substring(0, sep).Trim();
+                        string pairValue = pair.Substring(sep + 1).Trim().Trim('"');
+                        if (pairName.Length > 0) values[NormalizeFieldName(pairName)] = pairValue;
+                    }
+                    break;
+            }
+            return values;
+        }
+
+        /// <summary>
+        /// Normalise un nom de champ personnalisé pour la comparaison (même règle
+        /// que ChampPersonnalise.NettoyerNom : majuscules, espaces remplacés par
+        /// des underscores, seuls lettres/chiffres/underscore conservés).
+        /// </summary>
+        private static string NormalizeFieldName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+            string normalized = System.Text.RegularExpressions.Regex.Replace(name.Trim(), @"\s+", "_");
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^a-zA-Z0-9_]", "");
+            return normalized.ToUpperInvariant();
         }
 
         private static object ToTradeSummary(dynamic item)
@@ -456,8 +578,9 @@ namespace backtest.Services
         /// <summary>
         /// Récupère une liste de chaînes depuis un argument JSON. Accepte plusieurs
         /// formats envoyés par le modèle : un tableau JSON (["A","B"]), une chaîne
-        /// contenant un tableau JSON ("[\"A\",\"B\"]") ou une liste simple séparée
-        /// par des virgules / points-virgules ("A, B; C").
+        /// contenant un tableau JSON ("[\"A\",\"B\"]"), une liste simple séparée
+        /// par des virgules / points-virgules ("A, B; C") ou un objet JSON dont on
+        /// retient les NOMS des propriétés ({"A":"", "B":""}).
         /// </summary>
         private static List<string> GetStringList(JsonElement arguments, string property)
         {
@@ -478,6 +601,11 @@ namespace backtest.Services
                             default: break;
                         }
                     }
+                    break;
+                case JsonValueKind.Object:
+                    // Objet JSON : seuls les noms des champs ont du sens ici.
+                    foreach (var item in value.EnumerateObject())
+                        result.Add(item.Name);
                     break;
                 case JsonValueKind.String:
                     string text = (value.GetString() ?? string.Empty).Trim();
