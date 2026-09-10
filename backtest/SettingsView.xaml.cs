@@ -8,7 +8,9 @@ using System.Windows.Media.Animation;
 using Microsoft.Win32;
 using System.Threading.Tasks;
 using System.IO;
+using System.Linq; // Any/Count sur les rapports de synchro
 using System.Text.Json; // Intégré à .NET pour gérer le fichier local
+using System.Collections.Generic; // Listes fichiers/backups cloud
 using backtest.Services;
 
 namespace backtest
@@ -51,6 +53,7 @@ namespace backtest
             PanelLogin.Visibility = Visibility.Collapsed;
             PanelProfile.Visibility = Visibility.Collapsed;
             PanelRegister.Visibility = Visibility.Collapsed;
+            PanelCloud.Visibility = Visibility.Collapsed;
         }
 
         private async Task ShowNotification(string message, bool isError = false, bool keepOpen = false)
@@ -102,23 +105,66 @@ namespace backtest
             if (Application.Current.MainWindow is MainWindow mw)
                 mw.UpdateAgentFabVisibility();
         }
+
+        // Toggle cacheimage/ : appliqué immédiatement en mémoire + config.txt
+        // (partagé avec l'instance de MainWindow via le champ statique).
+        private void ChkSyncCacheImage_Click(object sender, RoutedEventArgs e)
+        {
+            FxCloudService.SetSyncCacheImageEnabled(ChkSyncCacheImageLegacy.IsChecked ?? true);
+        }
+
+        // Bouton « Synchroniser maintenant » : lance la synchro complète depuis
+        // les paramètres et affiche un résumé.
+        private async void BtnSyncNow_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(FxCloudService.CurrentToken))
+            {
+                await ShowNotification("Connectez-vous d'abord (onglet Compte Global)", true);
+                return;
+            }
+
+            BtnSyncNow.IsEnabled = false;
+            TxtSyncStatus.Text = "SYNCHRONISATION EN COURS...";
+            await ShowNotification("Synchronisation...", false, true);
+            try
+            {
+                var results = await _cloudService.FullSyncAsync();
+                FxCloudService.Log(String.Join("\n", results));
+                bool hasError = results.Any(l => l.Contains("Erreur") || l.Contains("inaccessible"));
+                int syncedCount = results.Count(r => r.Contains("success") || r.Contains("mis à jour"));
+                TxtSyncStatus.Text = hasError
+                    ? $"Échec en partie — {DateTime.Now:HH:mm:ss} (voir les journaux)"
+                    : $"Dernière synchronisation : {DateTime.Now:HH:mm:ss} — {syncedCount} élément(s).";
+                await ShowNotification(hasError ? "Synchro terminée avec erreurs." : "Synchronisation terminée !", hasError);
+            }
+            catch (Exception ex)
+            {
+                TxtSyncStatus.Text = "Erreur : " + ex.Message;
+                await ShowNotification("Erreur de synchronisation", true);
+            }
+            finally
+            {
+                BtnSyncNow.IsEnabled = true;
+            }
+        }
         
         private void BtnAccountTab_Click(object sender, RoutedEventArgs e) => ShowAccountPanel();
 
         public void ShowAppPanel()
         {
             HideAllPanels();
-            UpdateTabVisuals(false);
+            UpdateTabVisuals("app");
             PanelApp.Visibility = Visibility.Visible;
             TxtPassword.Clear();
             // Synchroniser le contrôle avec le paramètre persistant
             ChkAgentEnabled.IsChecked = Properties.Settings.Default.IsAgentEnabled;
+            ChkSyncCacheImageLegacy.IsChecked = FxCloudService.SyncCacheImageEnabled;
         }
 
         public void ShowAccountPanel()
         {
             HideAllPanels();
-            UpdateTabVisuals(true);
+            UpdateTabVisuals("account");
 
             if (_isLoggedIn)
             {
@@ -131,6 +177,49 @@ namespace backtest
                 BtnLogout.Visibility = Visibility.Collapsed;
             }
         }
+
+        // ==================================================================
+        // ONGLET CLOUD : fichiers distants, sauvegardes .bak, stockage.
+        // ==================================================================
+
+        private List<CloudFileInfo> _cloudFiles = new List<CloudFileInfo>();
+        private List<CloudBackupInfo> _cloudBackups = new List<CloudBackupInfo>();
+        private List<CloudBackupInfo> _backupsForSelection = new List<CloudBackupInfo>();
+
+        public void ShowCloudPanel()
+        {
+            HideAllPanels();
+            UpdateTabVisuals("cloud");
+            PanelCloud.Visibility = Visibility.Visible;
+            SynchronizeSyncFolderChecks();
+            _ = RefreshCloudPanelAsync();
+        }
+
+        // Réflète l'état des exclusions de synchro (config.txt) sur les checkboxes.
+        private void SynchronizeSyncFolderChecks()
+        {
+            ChkSyncData.IsChecked = !FxCloudService.IsCloudFolderExcluded("data/");
+            ChkSyncEtudes.IsChecked = !FxCloudService.IsCloudFolderExcluded("etudes/");
+            ChkSyncNotes.IsChecked = !FxCloudService.IsCloudFolderExcluded("Notes/");
+            ChkSyncCacheImage.IsChecked = !FxCloudService.IsCloudFolderExcluded("cacheimage/");
+            ChkSyncMetadata.IsChecked = !FxCloudService.IsCloudFolderExcluded("metadata/");
+        }
+
+        private void ChkSyncFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var chk = (CheckBox)sender;
+            string folder = null;
+            if (chk == ChkSyncData) folder = "data";
+            else if (chk == ChkSyncEtudes) folder = "etudes";
+            else if (chk == ChkSyncNotes) folder = "Notes";
+            else if (chk == ChkSyncCacheImage) folder = "cacheimage";
+            else if (chk == ChkSyncMetadata) folder = "metadata";
+            if (folder == null) return;
+
+            FxCloudService.SetCloudFolderSyncEnabled(folder, chk.IsChecked ?? true);
+            _ = ShowNotification(folder + " : synchronisation " + ((chk.IsChecked ?? true) ? "activée" : "désactivée") + ".");
+        }
+
 
         public async void chargerprofile()
         {
@@ -345,18 +434,173 @@ namespace backtest
             }
         }
 
-        private void UpdateTabVisuals(bool isAccount)
+        private void UpdateTabVisuals(string activeTab)
         {
-            BtnAccountTab.Foreground = isAccount ? Brushes.Cyan : Brushes.Gray;
-            BtnAccountTab.BorderBrush = isAccount ? Brushes.Cyan : new SolidColorBrush(Color.FromRgb(34, 34, 34));
-            BtnAppTab.Foreground = !isAccount ? Brushes.Cyan : Brushes.Gray;
-            BtnAppTab.BorderBrush = !isAccount ? Brushes.Cyan : new SolidColorBrush(Color.FromRgb(34, 34, 34));
+            // Onglet actif : Cyan ; inactifs : gris (#222)
+            BtnAppTab.Foreground = activeTab == "app" ? Brushes.Cyan : Brushes.Gray;
+            BtnAppTab.BorderBrush = activeTab == "app" ? Brushes.Cyan : new SolidColorBrush(Color.FromRgb(34, 34, 34));
+            BtnAccountTab.Foreground = activeTab == "account" ? Brushes.Cyan : Brushes.Gray;
+            BtnAccountTab.BorderBrush = activeTab == "account" ? Brushes.Cyan : new SolidColorBrush(Color.FromRgb(34, 34, 34));
+            BtnCloudTab.Foreground = activeTab == "cloud" ? Brushes.Cyan : Brushes.Gray;
+            BtnCloudTab.BorderBrush = activeTab == "cloud" ? Brushes.Cyan : new SolidColorBrush(Color.FromRgb(34, 34, 34));
         }
 
         private void BtnRetour_Click(object sender, RoutedEventArgs e)
         {
             if (Application.Current.MainWindow is MainWindow mw) mw.ShowDashboard();
 
+        }
+
+        // ==================================================================
+        // ONGLET CLOUD : chargement / restauration / suppression distantes.
+        // ==================================================================
+
+        private async Task RefreshCloudPanelAsync()
+        {
+            if (string.IsNullOrEmpty(FxCloudService.CurrentToken))
+            {
+                TxtCloudStorage.Text = "Connectez-vous (onglet Compte Global).";
+                LstCloudFiles.Items.Clear();
+                LstCloudBackups.Items.Clear();
+                return;
+            }
+
+            BtnCloudRefresh.IsEnabled = false;
+            TxtCloudStorage.Text = "Chargement...";
+
+            var storageTask = _cloudService.GetCloudStorageInfoAsync();
+            var filesTask = _cloudService.FetchCloudManifestPublicAsync();
+            var backupsTask = _cloudService.GetCloudBackupsAsync();
+            await Task.WhenAll(storageTask, filesTask, backupsTask);
+
+            var storage = storageTask.Result;
+            TxtCloudStorage.Text = storage != null
+                ? FormatBytes(storage.total_bytes) + " — " + storage.file_count + " fichier(s)  |  Sauvegardes : "
+                    + FormatBytes(storage.backup_bytes) + " (" + storage.backup_count + ")"
+                : "Serveur inaccessible.";
+
+            LstCloudFiles.Items.Clear();
+            _cloudFiles = filesTask.Result ?? new List<CloudFileInfo>();
+            foreach (var f in _cloudFiles)
+                LstCloudFiles.Items.Add(f.path + "  —  " + FormatBytes(f.size) + "  —  " + FormatServerDate(f.last_modified));
+
+            _cloudBackups = backupsTask.Result ?? new List<CloudBackupInfo>();
+            FillBackupsForSelection();
+
+            BtnCloudRefresh.IsEnabled = true;
+        }
+
+        private void FillBackupsForSelection()
+        {
+            LstCloudBackups.Items.Clear();
+            _backupsForSelection.Clear();
+
+            int sel = LstCloudFiles.SelectedIndex;
+            if (sel < 0 || sel >= _cloudFiles.Count)
+            {
+                LstCloudBackups.Items.Add("— Sélectionnez un fichier ci-dessus —");
+                return;
+            }
+
+            string path = _cloudFiles[sel].path;
+            string prefix = path + ".";
+            foreach (var b in _cloudBackups)
+            {
+                if (!b.path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                _backupsForSelection.Add(b);
+                LstCloudBackups.Items.Add(b.path + "  —  " + FormatBytes(b.size) + "  —  " + FormatServerDate(b.last_modified));
+            }
+            if (_backupsForSelection.Count == 0)
+                LstCloudBackups.Items.Add("— Aucune sauvegarde pour ce fichier —");
+        }
+
+        private void LstCloudFiles_SelectionChanged(object sender, SelectionChangedEventArgs e)
+            => FillBackupsForSelection();
+
+        private void BtnCloudTab_Click(object sender, RoutedEventArgs e) => ShowCloudPanel();
+
+        private void BtnCloudRefresh_Click(object sender, RoutedEventArgs e)
+            => _ = RefreshCloudPanelAsync();
+
+        // Télécharge la version serveur du fichier sélectionné (écrase la copie
+        // locale — utile quand la copie locale est corrompue/perdue).
+        private async void BtnCloudRestoreFile_Click(object sender, RoutedEventArgs e)
+        {
+            int sel = LstCloudFiles.SelectedIndex;
+            if (sel < 0 || sel >= _cloudFiles.Count)
+            {
+                await ShowNotification("Sélectionnez d'abord un fichier", true);
+                return;
+            }
+
+            string path = _cloudFiles[sel].path;
+            string localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path.Replace('/', Path.DirectorySeparatorChar));
+
+            if (MessageBox.Show("Écraser la copie locale de \"" + path + "\" par la version du serveur ?",
+                "Restaurer depuis le cloud", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            bool ok = await _cloudService.DownloadFileAsync(path, localPath);
+            await ShowNotification(ok ? "Fichier restauré en local !" : "Erreur de téléchargement", !ok);
+            if (ok) FxCloudService.Log("Cloud: restauration locale de " + path);
+        }
+
+        // Supprime le fichier sélectionné du cloud (fichier + backups .bak).
+        private async void BtnCloudDeleteFile_Click(object sender, RoutedEventArgs e)
+        {
+            int sel = LstCloudFiles.SelectedIndex;
+            if (sel < 0 || sel >= _cloudFiles.Count)
+            {
+                await ShowNotification("Sélectionnez d'abord un fichier", true);
+                return;
+            }
+
+            string path = _cloudFiles[sel].path;
+            if (MessageBox.Show("Supprimer \"" + path + "\" du cloud (et ses sauvegardes) ?\nLa copie locale est conservée.",
+                "Supprimer du cloud", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+
+            var (success, message) = await _cloudService.DeleteCloudFileAsync(path);
+            await ShowNotification(message, !success);
+            if (success)
+            {
+                FxCloudService.Log("Cloud: suppression distante de " + path);
+                await RefreshCloudPanelAsync();
+            }
+        }
+
+        // Restaure la sauvegarde .bak sélectionnée comme version courante du
+        // serveur (cas : version récente corrompue, on récupère une ancienne).
+        private async void BtnCloudRestoreBackup_Click(object sender, RoutedEventArgs e)
+        {
+            int sel = LstCloudBackups.SelectedIndex;
+            if (sel < 0 || sel >= _backupsForSelection.Count)
+            {
+                await ShowNotification("Sélectionnez d'abord une sauvegarde", true);
+                return;
+            }
+
+            CloudBackupInfo backup = _backupsForSelection[sel];
+            if (MessageBox.Show("Restaurer \"" + backup.path + "\" comme version actuelle sur le serveur ?",
+                "Restaurer une sauvegarde", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            var (success, message) = await _cloudService.RestoreCloudBackupAsync(backup.path);
+            await ShowNotification(success ? "Sauvegarde restaurée ! Relancez une synchro pour la récupérer en local." : message, !success);
+            if (success) FxCloudService.Log("Cloud: restauration serveur de " + backup.path);
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return bytes + " o";
+            if (bytes < 1024 * 1024) return (bytes / 1024.0).ToString("F1") + " Ko";
+            return (bytes / 1024.0 / 1024.0).ToString("F2") + " Mo";
+        }
+
+        private static string FormatServerDate(long serverTime)
+        {
+            try { return DateTimeOffset.FromUnixTimeSeconds(serverTime).LocalDateTime.ToString("dd/MM/yyyy HH:mm"); }
+            catch { return "---"; }
         }
     }
 }

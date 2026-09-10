@@ -45,7 +45,10 @@
                 <Button x:Name="BtnAppTab" Content="APPLICATION" Style="{StaticResource CyberButton}" Click="BtnAppTab_Click"
             Height="30" Margin="0,8" HorizontalAlignment="Stretch" FontSize="14"/>
 
-                <Button x:Name="BtnAccountTab" Content="COMPTE GLOBAL" Style="{StaticResource CyberButton}" Click="BtnAccountTab_Click" 
+                <Button x:Name="BtnAccountTab" Content="COMPTE GLOBAL" Style="{StaticResource CyberButton}" Click="BtnAccountTab_Click"
+            Height="30" Margin="0,8" Foreground="Gray" BorderBrush="#222" HorizontalAlignment="Stretch" FontSize="14"/>
+
+                <Button x:Name="BtnCloudTab" Content="CLOUD" Style="{StaticResource CyberButton}" Click="BtnCloudTab_Click"
             Height="30" Margin="0,8" Foreground="Gray" BorderBrush="#222" HorizontalAlignment="Stretch" FontSize="14"/>
             </StackPanel>
 
@@ -71,6 +74,57 @@
                                     <ComboBoxItem Content="Français (FR)"/>
                                     <ComboBoxItem Content="English (US)"/>
                                 </ComboBox>
+
+                                <Separator Margin="0,15,0,5" Background="#333"/>
+                                <TextBlock Text="SYNCHRONISATION CLOUD" Foreground="Cyan" FontSize="13" FontWeight="Bold" Margin="0,0,0,5"/>
+                                <CheckBox x:Name="ChkSyncCacheImageLegacy" Content="Synchroniser le dossier cacheimage/ (captures d'écran re-générables)"
+                                          Foreground="White" Margin="0,5"
+                                          Click="ChkSyncCacheImage_Click"/>
+                                <TextBlock Text="Désactiver ce dossier accélère fortement la synchro : les captures sont des caches qui peuvent être recréés sur chaque appareil."
+                                          Foreground="Gray" FontSize="10" Margin="0,0,0,15" TextWrapping="Wrap" TextAlignment="Justify"/>
+                                <Button x:Name="BtnSyncNow" Content="SYNCHRONISER MAINTENANT" Click="BtnSyncNow_Click"
+                                        Style="{StaticResource CyberButton}" Height="40" Margin="0,5"/>
+                                <TextBlock x:Name="TxtSyncStatus" Text="Aucune synchronisation récente." Foreground="Gray" FontSize="10" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel x:Name="PanelCloud" Visibility="Collapsed">
+                                <TextBlock Text="MON CLOUD" Foreground="White" FontSize="24" Margin="0,0,0,10" FontWeight="Bold"/>
+                                <TextBlock Text="Fichiers synchronisés, sauvegardes .bak et gestion du stockage distant." Foreground="Gray" FontSize="12" Margin="0,0,0,20"/>
+
+                                <Border Background="#050505" BorderBrush="#1A1A1A" BorderThickness="1" Padding="15" CornerRadius="8" Margin="0,0,0,15">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="STOCKAGE : " Foreground="Gray" FontSize="12" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtCloudStorage" Text="---" Foreground="Cyan" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="DOSSIERS SYNCHRONISÉS" Foreground="Cyan" FontSize="13" FontWeight="Bold" Margin="0,0,0,5"/>
+                                <TextBlock Text="Décochez un dossier pour l'exclure de la synchronisation (fichiers déjà sur le serveur : conservés mais plus mis à jour)."
+                                           Foreground="Gray" FontSize="10" Margin="0,0,0,10" TextWrapping="Wrap"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <CheckBox x:Name="ChkSyncData" Content="data" Foreground="White" Margin="0,0,20,0" Click="ChkSyncFolder_Click"/>
+                                    <CheckBox x:Name="ChkSyncEtudes" Content="etudes" Foreground="White" Margin="0,0,20,0" Click="ChkSyncFolder_Click"/>
+                                    <CheckBox x:Name="ChkSyncNotes" Content="Notes" Foreground="White" Margin="0,0,20,0" Click="ChkSyncFolder_Click"/>
+                                    <CheckBox x:Name="ChkSyncCacheImage" Content="cacheimage" Foreground="White" Margin="0,0,20,0" Click="ChkSyncFolder_Click"/>
+                                    <CheckBox x:Name="ChkSyncMetadata" Content="metadata" Foreground="White" Click="ChkSyncFolder_Click"/>
+                                </StackPanel>
+
+                                <TextBlock Text="FICHIERS DU CLOUD" Foreground="Cyan" FontSize="13" FontWeight="Bold" Margin="0,10,0,5"/>
+                                <Button x:Name="BtnCloudRefresh" Content="RAFRAÎCHIR LA LISTE" Style="{StaticResource CyberButton}" Height="35" Margin="0,0,0,10" Click="BtnCloudRefresh_Click"/>
+                                <ListBox x:Name="LstCloudFiles" Height="150" Background="#050505" BorderBrush="#1A1A1A" BorderThickness="1"
+                                         Foreground="White" FontSize="11" SelectionChanged="LstCloudFiles_SelectionChanged"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button x:Name="BtnCloudRestoreFile" Content="RESTAURER LA VERSION SERVEUR EN LOCAL" Style="{StaticResource CyberButton}" Height="35" Margin="0,0,10,0" Click="BtnCloudRestoreFile_Click"/>
+                                    <Button x:Name="BtnCloudDeleteFile" Content="SUPPRIMER DU CLOUD" Style="{StaticResource CyberButton}" Height="35" Foreground="#FF4545" BorderBrush="#331111" Click="BtnCloudDeleteFile_Click"/>
+                                </StackPanel>
+
+                                <TextBlock Text="SAUVEGARDES .BAK DISPONIBLES (fichier sélectionné)" Foreground="Cyan" FontSize="13" FontWeight="Bold" Margin="0,20,0,5"/>
+                                <ListBox x:Name="LstCloudBackups" Height="120" Background="#050505" BorderBrush="#1A1A1A" BorderThickness="1"
+                                         Foreground="White" FontSize="11"/>
+                                <Button x:Name="BtnCloudRestoreBackup" Content="RESTAURER CETTE SAUVEGARDE SUR LE SERVEUR" Style="{StaticResource CyberButton}"
+                                        Height="40" Margin="0,10,0,0" Click="BtnCloudRestoreBackup_Click"/>
+                                <TextBlock Text="Une restauration écrase la version actuelle du fichier sur le serveur (la sauvegarde est conservée)."
+                                           Foreground="Gray" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
 
                             <StackPanel x:Name="PanelLogin" Visibility="Collapsed">

@@ -34,6 +34,15 @@ namespace backtest.Services
         public static string RefreshToken { get; private set; }
         public string AppId { get; private set; }
 
+        // ---- Paramètres de synchronisation (modifiables depuis Settings) ----
+        // false => le dossier cacheimage/ (cache d'images re-générable, souvent
+        // volumineux) est exclu du manifest de synchronisation.
+        public static bool SyncCacheImageEnabled = true;
+        // Nombre de fichiers par requête batch (endpoint /api/cloud/sync-batch).
+        private static readonly int BatchFileCount = 8;
+        // Passe à false si le serveur ne connaît pas encore sync-batch (repli unitaire).
+        private bool _batchSupported = true;
+
         static FxCloudService()
         {
             // Réglages réseau de .NET Framework (ServicePoint) — sans eux, les défauts
@@ -81,6 +90,31 @@ namespace backtest.Services
             if (!Directory.Exists(_localProfileCache)) Directory.CreateDirectory(_localProfileCache);
         }
         public static string getServeur() { return defaultUrl; }
+
+        /// <summary>
+        /// Active/désactive la synchronisation du dossier cacheimage/ et persiste
+        /// le choix dans config.txt (partagé par toutes les instances du service).
+        /// </summary>
+        public static void SetSyncCacheImageEnabled(bool enabled)
+        {
+            SyncCacheImageEnabled = enabled;
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.txt");
+                var lines = new List<string>();
+                if (File.Exists(path))
+                {
+                    foreach (var line in File.ReadAllLines(path))
+                    {
+                        if (line.Trim().StartsWith("sync_cacheimage=", StringComparison.OrdinalIgnoreCase)) continue;
+                        lines.Add(line);
+                    }
+                }
+                lines.Add("sync_cacheimage=" + (enabled ? "true" : "false"));
+                File.WriteAllText(path, String.Join("\r\n", lines));
+            }
+            catch { /* Réglage non persistant : l'appli continue avec la valeur en mémoire */ }
+        }
         private string LoadConfiguration()
         {
             
@@ -102,6 +136,22 @@ namespace backtest.Services
                     {
                         string id = cleanLine.Substring(7).Trim();
                         if (!string.IsNullOrEmpty(id)) AppId = id;
+                    }
+                    else if (cleanLine.StartsWith("sync_cacheimage=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string v = cleanLine.Substring(16).Trim().ToLowerInvariant();
+                        SyncCacheImageEnabled = v == "true" || v == "1" || v == "oui";
+                    }
+                    else if (cleanLine.StartsWith("sync_folder_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // sync_folder_<nom>=false → dossier exclu de la synchro
+                        int eq = cleanLine.IndexOf('=');
+                        string folder = cleanLine.Substring(12, eq - 12).Trim();
+                        string val = cleanLine.Substring(eq + 1).Trim().ToLowerInvariant();
+                        if (val != "true" && val != "1" && val != "oui")
+                            SyncExcludedFolders.Add(folder);
+                        else
+                            SyncExcludedFolders.Remove(folder);
                     }
                 }
             }
@@ -276,77 +326,255 @@ namespace backtest.Services
 
         #region SYNCHRONISATION CLOUD
 
-        public async Task<List<string>> FullSyncAsync()
+public async Task<List<string>> FullSyncAsync()
         {
             var reports = new List<string> { $"--- Début synchro ({DateTime.Now:HH:mm}) ---" };
             try
             {
-                reports.Add("Envoi des modifications locales...");
-                var uploadReports = await SyncEverythingAsync();
-                reports.AddRange(uploadReports);
+                reports.Add("Récupération du manifest serveur...");
 
-                reports.Add("Récupération des fichiers distants...");
-                var downloadResult = await SyncFromServerAsync();
-                reports.Add(downloadResult);
+                // 1. Manifest serveur UNIQUE : liste des fichiers distants + hash
+                //    (une seule requête au lieu d'un file-info par fichier).
+                var remoteFiles = await FetchCloudManifestAsync();
+                if (remoteFiles == null)
+                {
+                    reports.Add("!!! Erreur : liste serveur inaccessible");
+                    return reports;
+                }
 
+                var cache = LoadSyncCache();
+                _batchSupported = true;
+
+                // 2. Inventaire local : hash md5 calculé une seule fois par synchro.
+                var localFiles = ScanLocalFiles();
+                var toUpload = new List<SyncLocalFile>();
+                foreach (var lf in localFiles)
+                {
+                    var rf = FindRemote(remoteFiles, lf.RelativePath);
+                    // Fichier absent côté serveur OU contenu différent = à pousser.
+                    if (rf == null || rf.hash != lf.Hash) toUpload.Add(lf);
+                }
+
+                // 3. Upload par lots (endpoint batch : 1 requête pour N fichiers).
+                await UploadFilesAsync(toUpload, remoteFiles, cache, reports);
+
+                // 4. Téléchargement des fichiers absents / modifiés côté serveur,
+                //    avec résolution de conflits (plus aucun écrasement silencieux).
+                int downloadCount = await DownloadFromServerAsync(remoteFiles, cache, reports);
+                reports.Add($"Récupération des fichiers distants : {downloadCount} fichier(s) mis à jour.");
+
+                SaveSyncCache(cache);
                 UpdateLocalLastSync(DateTime.Now);
                 reports.Add("--- Synchronisation terminée ---");
             }
-            catch (Exception ex) { reports.Add($"!!! Erreur : {ex.Message}"); }
-            return reports;
-        }
-
-        public async Task<List<string>> SyncEverythingAsync()
-        {
-            var reports = new List<string>();
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-
-            foreach (var item in GetAppSyncManifest())
+            catch (Exception ex)
             {
-                string fullPath = Path.Combine(baseDir, item.LocalPath);
-                if (item.IsDirectory && Directory.Exists(fullPath))
-                {
-                    foreach (var file in Directory.GetFiles(fullPath, "*.*", SearchOption.AllDirectories))
-                    {
-                        string relative = file.Replace(fullPath, "").Replace("\\", "/").TrimStart('/');
-                        string remote = Path.Combine(item.RemoteRelativePath, relative).Replace("\\", "/");
-                        string res = await SyncFileAsync(file, remote);
-                        reports.Add($"{Path.GetFileName(file)}: {res}");
-                    }
-                }
-                else if (File.Exists(fullPath))
-                {
-                    string res = await SyncFileAsync(fullPath, item.RemoteRelativePath);
-                    reports.Add($"{item.LocalPath}: {res}");
-                }
+                reports.Add("!!! Erreur : " + ex.Message);
             }
             return reports;
         }
 
-        public async Task<string> SyncFromServerAsync()
+        // ------------------------------------------------------------------
+        // Récupère la liste des fichiers distants (GET /api/cloud/list)
+        // ------------------------------------------------------------------
+        private async Task<List<CloudFileInfo>> FetchCloudManifestAsync()
         {
             try
             {
                 var response = await SecureRequestAsync(() => _httpClient.GetAsync($"api/cloud/list?app_id={AppId}"));
-                if (!response.IsSuccessStatusCode) return "Erreur liste serveur";
-
+                if (!response.IsSuccessStatusCode) return null;
                 var manifest = JsonSerializer.Deserialize<CloudManifest>(await response.Content.ReadAsStringAsync());
-                int count = 0;
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-
-                foreach (var remote in manifest.files)
-                {
-                    string local = Path.Combine(baseDir, remote.path);
-                    if (!File.Exists(local) || GetFileHash(local) != remote.hash)
-                    {
-                        if (await DownloadFileAsync(remote.path, local)) count++;
-                    }
-                }
-                return $"Synchro : {count} fichiers mis à jour.";
+                return manifest != null ? manifest.files : null;
             }
-            catch (Exception ex) { return $"Erreur: {ex.Message}"; }
+            catch { return null; }
         }
 
+        // Version publique (onglet CLOUD des paramètres) du manifest distant.
+        public async Task<List<CloudFileInfo>> FetchCloudManifestPublicAsync()
+            => await FetchCloudManifestAsync();
+
+        // ------------------------------------------------------------------
+        // Pousse les fichiers locaux vers le serveur par lots de BatchFileCount.
+        // Repli automatique sur l'endpoint unitaire (sync-file) si le serveur
+        // ne connaît pas encore /api/cloud/sync-batch ou si un lot échoue.
+        // ------------------------------------------------------------------
+        private async Task UploadFilesAsync(List<SyncLocalFile> files, List<CloudFileInfo> remoteFiles, Dictionary<string, string> cache, List<string> reports)
+        {
+            if (files.Count == 0) return;
+            reports.Add($"Envoi de {files.Count} fichier(s)...");
+
+            int i = 0;
+            while (i < files.Count)
+            {
+                int end = i + BatchFileCount;
+                if (end > files.Count) end = files.Count;
+
+                var batch = new List<SyncLocalFile>();
+                for (int j = i; j < end; j++) batch.Add(files[j]);
+
+                bool ok = false;
+                if (_batchSupported)
+                {
+                    ok = await TryUploadBatchAsync(batch, remoteFiles, cache, reports);
+                }
+
+                if (!ok)
+                {
+                    // Repli unitaire : isole les erreurs fichier par fichier.
+                    foreach (var f in batch)
+                    {
+                        string res = await SyncFileAsync(f.LocalFullPath, f.RelativePath);
+                        if (res == "success")
+                        {
+                            cache[f.RelativePath] = f.Hash;
+                            MarkServerHash(remoteFiles, f.RelativePath, f.Hash);
+                            reports.Add(f.RelativePath + ": success");
+                        }
+                        else
+                        {
+                            reports.Add($"{f.RelativePath}: {res}");
+                        }
+                    }
+                }
+
+                i = end;
+            }
+        }
+
+        private async Task<bool> TryUploadBatchAsync(List<SyncLocalFile> batch, List<CloudFileInfo> remoteFiles, Dictionary<string, string> cache, List<string> reports)
+        {
+            try
+            {
+                var content = new MultipartFormDataContent();
+                content.Add(new StringContent(AppId), "app_id");
+                foreach (var f in batch)
+                {
+                    content.Add(new StringContent(f.RelativePath), "paths");
+                    content.Add(new StringContent(f.Hash), "hashes");
+                    content.Add(new ByteArrayContent(File.ReadAllBytes(f.LocalFullPath)), "files", Path.GetFileName(f.LocalFullPath));
+                }
+
+                var res = await SecureRequestAsync(() => _httpClient.PostAsync("api/cloud/sync-batch", content));
+
+                // Route absente sur le serveur (backend pas encore déployé) : repli unitaire.
+                if (res.StatusCode == System.Net.HttpStatusCode.NotFound
+                    || res.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed)
+                {
+                    _batchSupported = false;
+                    return false;
+                }
+
+                if (res.IsSuccessStatusCode)
+                {
+                    foreach (var f in batch)
+                    {
+                        cache[f.RelativePath] = f.Hash;
+                        MarkServerHash(remoteFiles, f.RelativePath, f.Hash);
+                        reports.Add(f.RelativePath + ": success");
+                    }
+                    return true;
+                }
+
+                return false; // 400 / 413 / 5xx → repli unitaire
+            }
+            catch
+            {
+                return false; // erreur réseau → repli unitaire
+            }
+        }
+
+        // Met à jour le hash dans le manifest local : la phase download ne
+        // re-télécharge pas le contenu qu'on vient de pousser.
+        private void MarkServerHash(List<CloudFileInfo> remoteFiles, string path, string hash)
+        {
+            var rf = FindRemote(remoteFiles, path);
+            if (rf != null) rf.hash = hash;
+        }
+
+        // ------------------------------------------------------------------
+        // Téléchargement des fichiers absents ou modifiés, avec résolution de
+        // conflits basée sur le cache du dernier hash serveur vu (pas besoin
+        // d'horodatage : on compare les états « vus » des deux côtés).
+        // ------------------------------------------------------------------
+        private async Task<int> DownloadFromServerAsync(List<CloudFileInfo> remoteFiles, Dictionary<string, string> cache, List<string> reports)
+        {
+            int count = 0;
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+            foreach (var remote in remoteFiles)
+            {
+                if (IsSyncInternalPath(remote.path)) continue;
+                if (!SyncCacheImageEnabled && remote.path.StartsWith("cacheimage/", StringComparison.OrdinalIgnoreCase)) continue;
+                if (IsCloudFolderExcluded(remote.path)) continue;
+
+                string local = Path.Combine(baseDir, remote.path);
+                bool exists = File.Exists(local);
+                string localHash = exists ? GetFileHash(local) : null;
+
+                if (exists && localHash == remote.hash) continue; // déjà à jour
+
+                if (!exists)
+                {
+                    if (await DownloadFileAsync(remote.path, local))
+                    {
+                        count++;
+                        cache[remote.path] = remote.hash;
+                        reports.Add(remote.path + ": success");
+                    }
+                    else
+                    {
+                        reports.Add(remote.path + ": Erreur téléchargement");
+                    }
+                    continue;
+                }
+
+                // Conflit local/distant : on tranche grâce au cache du dernier état serveur vu.
+                string cachedHash = cache.ContainsKey(remote.path) ? cache[remote.path] : null;
+
+                if (cachedHash == null)
+                {
+                    // Jamais synchronisé avec le serveur : la version locale est conservée
+                    // (elle vient d'être poussée par la phase upload, aucun écrasement).
+                    cache[remote.path] = localHash;
+                    reports.Add(remote.path + ": conservé (premier passage)");
+                }
+                else if (cachedHash == remote.hash)
+                {
+                    // Le serveur n'a pas bougé depuis notre dernière sync : la modification
+                    // est locale (elle a déjà été poussée ci-dessus) → on garde local.
+                    cache[remote.path] = localHash;
+                    reports.Add(remote.path + ": mis à jour (local)");
+                }
+                else if (cachedHash == localHash)
+                {
+                    // Local inchangé depuis notre dernière sync ET serveur modifié → on récupère.
+                    if (await DownloadFileAsync(remote.path, local))
+                    {
+                        count++;
+                        cache[remote.path] = remote.hash;
+                        reports.Add(remote.path + ": success");
+                    }
+                    else
+                    {
+                        reports.Add(remote.path + ": Erreur téléchargement");
+                    }
+                    }
+                    else
+                    {
+                        // Conflit réel (les deux ont changé) : version locale conservée,
+                        // ancienne version distante préservée côté serveur (.bak).
+                        cache[remote.path] = localHash;
+                        reports.Add(remote.path + ": conflit, version locale conservée");
+                    }
+                }
+
+            return count;
+        }
+        
+// ------------------------------------------------------------------
+        // Endpoint unitaire : vérifie le hash distant puis pousse le fichier.
+        // Utilisé uniquement en repli (serveur sans sync-batch, lot en erreur).
+        // ------------------------------------------------------------------
         private async Task<string> SyncFileAsync(string localPath, string remotePath)
         {
             try
@@ -375,7 +603,7 @@ namespace backtest.Services
             catch (Exception ex) { return "erreur: " + ex.Message; }
         }
 
-        private async Task<bool> DownloadFileAsync(string remotePath, string localPath)
+        public async Task<bool> DownloadFileAsync(string remotePath, string localPath)
         {
             try
             {
@@ -393,7 +621,86 @@ namespace backtest.Services
             return false;
         }
 
-        public async Task<string> DownloadProfileImageAsync(string fileName)
+        // ------------------------------------------------------------------
+        // Inventaire local : liste les fichiers du manifest applicatif et calcule
+        // leur hash md5 (une seule passe par synchro).
+        // ------------------------------------------------------------------
+        private List<SyncLocalFile> ScanLocalFiles()
+        {
+            var result = new List<SyncLocalFile>();
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+            foreach (var item in GetAppSyncManifest())
+            {
+                string fullPath = Path.Combine(baseDir, item.LocalPath);
+                if (item.IsDirectory && Directory.Exists(fullPath))
+                {
+                    foreach (var file in Directory.GetFiles(fullPath, "*.*", SearchOption.AllDirectories))
+                    {
+                        string relative = file.Replace(fullPath, "").Replace("\\", "/").TrimStart('/');
+                        string remote = Path.Combine(item.RemoteRelativePath, relative).Replace("\\", "/");
+                        AddLocalFile(result, file, remote);
+                    }
+                }
+                else if (File.Exists(fullPath))
+                {
+                    AddLocalFile(result, fullPath, item.RemoteRelativePath);
+                }
+            }
+            return result;
+        }
+        private void AddLocalFile(List<SyncLocalFile> result, string fullPath, string remotePath)
+        {
+            if (IsSyncInternalPath(remotePath)) return;
+            if (!SyncCacheImageEnabled && remotePath.StartsWith("cacheimage/", StringComparison.OrdinalIgnoreCase)) return;
+            if (IsCloudFolderExcluded(remotePath)) return;
+            result.Add(new SyncLocalFile { LocalFullPath = fullPath, RelativePath = remotePath, Hash = GetFileHash(fullPath) });
+        }
+
+        private CloudFileInfo FindRemote(List<CloudFileInfo> remoteFiles, string path)
+        {
+            foreach (var f in remoteFiles)
+                if (f.path == path) return f;
+            return null;
+        }
+
+        // Fichier interne de suivi de synchro : jamais envoyé ni téléchargé.
+        private bool IsSyncInternalPath(string rel)
+        {
+            return rel == "metadata/synccache.json" || rel == "metadata/hashcache.json";
+        }
+
+        // ------------------------------------------------------------------
+        // Cache du dernier hash serveur par fichier. Il départage un conflit :
+        // état serveur inchangé depuis la dernière sync → modif locale ;
+        // état serveur changé alors que le local ne bougeait pas → serveur gagne.
+        // Persisté dans metadata/synccache.json (exclu de la synchro).
+        // ------------------------------------------------------------------
+        private string GetSyncCachePath()
+            => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "metadata", "synccache.json");
+
+        private Dictionary<string, string> LoadSyncCache()
+        {
+            try
+            {
+                string path = GetSyncCachePath();
+                if (!File.Exists(path)) return new Dictionary<string, string>();
+                var root = JsonSerializer.Deserialize<SyncCacheRoot>(File.ReadAllText(path));
+                return (root != null && root.hashes != null) ? root.hashes : new Dictionary<string, string>();
+            }
+            catch { return new Dictionary<string, string>(); }
+        }
+
+        private void SaveSyncCache(Dictionary<string, string> cache)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(GetSyncCachePath()));
+                File.WriteAllText(GetSyncCachePath(), JsonSerializer.Serialize(new SyncCacheRoot { hashes = cache }));
+            }
+            catch { }
+        }
+public async Task<string> DownloadProfileImageAsync(string fileName)
         {
             if (string.IsNullOrEmpty(fileName)) return null;
             string local = Path.Combine(_localProfileCache, fileName);
@@ -410,6 +717,145 @@ namespace backtest.Services
             }
             catch { }
             return null;
+        }
+
+        #endregion
+
+        #region GESTION CLOUD (Settings > onglet CLOUD)
+
+        // ------------------------------------------------------------------
+        // Exclusions de synchronisation par dossier de premier niveau
+        // (ex. "cacheimage", "Notes"). Persistées dans config.txt sous la
+        // forme sync_folder_<nom>=false. Le toggle cacheimage historique
+        // reste maitrisé par SyncCacheImageEnabled (config sync_cacheimage=).
+        // ------------------------------------------------------------------
+        public static readonly HashSet<string> SyncExcludedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public static bool IsCloudFolderExcluded(string remoteRelativePath)
+        {
+            if (string.IsNullOrEmpty(remoteRelativePath)) return false;
+            int slash = remoteRelativePath.IndexOf('/');
+            string folder = slash > 0 ? remoteRelativePath.Substring(0, slash) : remoteRelativePath;
+            if (folder.Equals("cacheimage", StringComparison.OrdinalIgnoreCase))
+                return !SyncCacheImageEnabled;
+            return SyncExcludedFolders.Contains(folder);
+        }
+
+        /// <summary>
+        /// Active/désactive la synchronisation d'un dossier de premier niveau
+        /// ("data", "etudes", "Notes", "cacheimage", "metadata") et persiste
+        /// le choix dans config.txt (partagé par toutes les instances).
+        /// </summary>
+        public static void SetCloudFolderSyncEnabled(string folder, bool enabled)
+        {
+            if (string.IsNullOrEmpty(folder)) return;
+
+            if (folder.Equals("cacheimage", StringComparison.OrdinalIgnoreCase))
+            {
+                SetSyncCacheImageEnabled(enabled);
+                return;
+            }
+
+            string key = "sync_folder_" + folder.ToLowerInvariant() + "=";
+            if (enabled) SyncExcludedFolders.Remove(folder);
+            else SyncExcludedFolders.Add(folder);
+
+            PersistConfigKey(key, enabled ? "true" : "false");
+        }
+
+        // Écrit une clé dans config.txt en supprimant l'ancienne ligne (pattern
+        // identique à SetSyncCacheImageEnabled, factorisé ici).
+        private static void PersistConfigKey(string key, string value)
+        {
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.txt");
+                var lines = new List<string>();
+                if (File.Exists(path))
+                {
+                    foreach (var line in File.ReadAllLines(path))
+                    {
+                        if (line.Trim().StartsWith(key, StringComparison.OrdinalIgnoreCase)) continue;
+                        lines.Add(line);
+                    }
+                }
+                lines.Add(key + value);
+                File.WriteAllText(path, String.Join("\r\n", lines));
+            }
+            catch { /* Réglage non persistant : l'appli continue avec la valeur en mémoire */ }
+        }
+
+        // ------------------------------------------------------------------
+        // API « gestion cloud » (onglet CLOUD des paramètres) : backups,
+        // restauration, suppression, quota. Endpoints /api/cloud/* du backend.
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Liste les sauvegardes .bak du compte (serveur), les plus récentes d'abord.
+        /// </summary>
+        public async Task<List<CloudBackupInfo>> GetCloudBackupsAsync()
+        {
+            try
+            {
+                var res = await SecureRequestAsync(() => _httpClient.GetAsync($"api/cloud/list-backups?app_id={AppId}"));
+                if (!res.IsSuccessStatusCode) return null;
+                var root = JsonSerializer.Deserialize<CloudBackupList>(await res.Content.ReadAsStringAsync());
+                return root != null ? root.backups : null;
+            }
+            catch (Exception ex) { Log("GetCloudBackupsAsync: " + ex.Message); return null; }
+        }
+
+        /// <summary>
+        /// Restaure une sauvegarde .bak sur le fichier principal (côté serveur).
+        /// Retour : (succès, message).
+        /// </summary>
+        public async Task<(bool success, string message)> RestoreCloudBackupAsync(string backupPath)
+        {
+            try
+            {
+                var content = new MultipartFormDataContent();
+                content.Add(new StringContent(AppId), "app_id");
+                content.Add(new StringContent(backupPath), "backup_path");
+
+                var res = await SecureRequestAsync(() => _httpClient.PostAsync("api/cloud/restore-backup", content));
+                if (res.IsSuccessStatusCode) return (true, "Sauvegarde restaurée !");
+                return (false, "Erreur serveur (" + (int)res.StatusCode + ")");
+            }
+            catch (Exception ex) { return (false, "Erreur réseau : " + ex.Message); }
+        }
+
+        /// <summary>
+        /// Supprime un fichier distant (et ses backups .bak associés).
+        /// Retour : (succès, message).
+        /// </summary>
+        public async Task<(bool success, string message)> DeleteCloudFileAsync(string targetPath)
+        {
+            try
+            {
+                var content = new MultipartFormDataContent();
+                content.Add(new StringContent(AppId), "app_id");
+                content.Add(new StringContent(targetPath), "target_path");
+
+                var res = await SecureRequestAsync(() => _httpClient.PostAsync("api/cloud/delete-file", content));
+                if (res.IsSuccessStatusCode) return (true, "Fichier supprimé du cloud.");
+                if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return (false, "Fichier introuvable côté serveur.");
+                return (false, "Erreur serveur (" + (int)res.StatusCode + ")");
+            }
+            catch (Exception ex) { return (false, "Erreur réseau : " + ex.Message); }
+        }
+
+        /// <summary>
+        /// Résumé du stockage cloud : taille totale, nb fichiers, taille des backups.
+        /// </summary>
+        public async Task<CloudStorageInfo> GetCloudStorageInfoAsync()
+        {
+            try
+            {
+                var res = await SecureRequestAsync(() => _httpClient.GetAsync($"api/cloud/storage?app_id={AppId}"));
+                if (!res.IsSuccessStatusCode) return null;
+                return JsonSerializer.Deserialize<CloudStorageInfo>(await res.Content.ReadAsStringAsync());
+            }
+            catch (Exception ex) { Log("GetCloudStorageInfoAsync: " + ex.Message); return null; }
         }
 
         #endregion
@@ -684,8 +1130,13 @@ namespace backtest.Services
 
     #region CLASSES DE DONNÉES
     public class SyncItem { public string LocalPath { get; set; } public string RemoteRelativePath { get; set; } public bool IsDirectory { get; set; } }
+    public class SyncLocalFile { public string LocalFullPath { get; set; } public string RelativePath { get; set; } public string Hash { get; set; } }
+    public class SyncCacheRoot { public Dictionary<string, string> hashes { get; set; } = new Dictionary<string, string>(); }
     public class CloudManifest { public string app_id { get; set; } public List<CloudFileInfo> files { get; set; } }
     public class CloudFileInfo { public string path { get; set; } public string hash { get; set; } public long size { get; set; } public long last_modified { get; set; } }
+    public class CloudBackupInfo { public string path { get; set; } public long size { get; set; } public long last_modified { get; set; } }
+    public class CloudBackupList { public string app_id { get; set; } public List<CloudBackupInfo> backups { get; set; } = new List<CloudBackupInfo>(); public long server_time { get; set; } }
+    public class CloudStorageInfo { public string app_id { get; set; } public long total_bytes { get; set; } public long file_count { get; set; } public long backup_count { get; set; } public long backup_bytes { get; set; } }
     public class UserSession{ public string FullName { get; set; }public string Email { get; set; }public string Phone { get; set; }public string Bio { get; set; } public string LocalImagePath { get; set; } public DateTime? LastSyncDate { get; set; } }
     public class UserSessionData{public bool IsLoggedIn { get; set; }public string FullName { get; set; }public string Email { get; set; }public string Phone { get; set; }public string Bio { get; set; } public DateTime? LastSyncDate { get; set; }public string ImagePath { get; set; }}
     public class HandshakeResponse

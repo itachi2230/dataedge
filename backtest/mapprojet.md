@@ -55,7 +55,7 @@ backtest/
 ├── 📄 Contrôles Utilisateur (UserControls)
 │   ├── StatisticsControl.xaml / .cs → Vue stats d'une stratégie (DataGrid + Graphiques)
 │   ├── StatisticsView.xaml / .cs    → Visualisation avancée (OxyPlot, équité, audit)
-│   ├── SettingsView.xaml / .cs      → Panneau paramètres (compte cloud, profil)
+│   ├── SettingsView.xaml / .cs      → Panneau paramètres (3 onglets : Application, Compte Global, Cloud — fichiers distants, sauvegardes .bak, restauration/suppression)
 │   ├── ControlStat.xaml / .cs       → Badge/vignette de performance d'une stratégie
 │   ├── EtudesView.xaml / .cs        → Module d'études (éditeur riche .etude)
 │   ├── TradeVisualizerControl.xaml / .cs → Affiche les screenshots (HTF/LTF) d'un trade
@@ -232,14 +232,42 @@ Tokens      → session.bin
 ### Synchronisation Cloud
 ```
 FxCloudService.FullSyncAsync()
-  ├── SyncEverythingAsync()   → Upload local → serveur
-  │     ├── data/
-  │     ├── etudes/
-  │     ├── Notes/
-  │     ├── cacheimage/
-  │     └── metadata/
-  └── SyncFromServerAsync()   → Download serveur → local
+  ├── FetchCloudManifestAsync()      → GET /api/cloud/list (1 requête : manifest distant complet)
+  ├── ScanLocalFiles()               → Inventaire local + hash md5 (une seule passe)
+  │     ├── data/ · etudes/ · Notes/ · metadata/
+  │     └── cacheimage/              → exclu si SyncCacheImageEnabled = false (toggle Settings)
+  ├── UploadFilesAsync()             → POST /api/cloud/sync-batch (lots de 8 fichiers)
+  │     └── repli unitaire sync-file si le serveur ne connaît pas sync-batch
+  └── DownloadFromServerAsync()      → Download des fichiers absents/modifiés
+        └── Résolution de conflits via metadata/synccache.json (cache du dernier
+            hash serveur vu) : serveur inchangé → version locale conservée ;
+            local inchangé → version serveur récupérée ; conflit réel → local
+            conservé (ancienne version distante préservée en .bak serveur).
 ```
+Paramètres de sync (Settings > APPLICATION > SYNCHRONISATION CLOUD) : toggle
+`sync_cacheimage=` (persisté dans config.txt via `FxCloudService.SetSyncCacheImageEnabled`)
++ bouton « Synchroniser maintenant » avec résumé dans `SettingsView`.
+
+### Onglet CLOUD (Settings > CLOUD)
+
+Panneau de gestion du stockage distant (`SettingsView`, `PanelCloud`), alimenté par
+`RefreshCloudPanelAsync()` (3 appels en parallèle : storage + manifest + backups) :
+
+- **Résumé du stockage** : `GET /api/cloud/storage` → taille totale, nb fichiers,
+  taille/nombre des sauvegardes `.bak` (`TxtCloudStorage`).
+- **Liste des fichiers du compte** : manifest distant (`FetchCloudManifestPublicAsync`)
+  affiché avec taille + date (path, size, last_modified).
+- **Sauvegardes `.bak` par fichier** : `GET /api/cloud/list-backups` ; sélectionner un
+  fichier filtre ses `.bak` (motif `{chemin}.{YYYYMMDD_HHMMSS}.bak`).
+- **Actions** :
+  - « Restaurer la version serveur en local » : écrase la copie locale corrompue/perdue
+    par le téléchargement du fichier distant ;
+  - « Supprimer du cloud » : `POST /api/cloud/delete-file` (fichier + ses `.bak`, la
+    copie locale est conservée) ;
+  - « Restaurer cette sauvegarde sur le serveur » : `POST /api/cloud/restore-backup`
+    (copie le `.bak` sur le fichier principal serveur, `.bak` conservé ; relancer une
+    synchro ensuite pour récupérer la version restaurée en local).
+- Hors connexion : message « Connectez-vous (onglet Compte Global) ».
 
 ### API Server Endpoints (Symfony - fxdataedge.com)
 ```
@@ -256,10 +284,15 @@ POST /api/ai/chat                         → Chat IA authentifié, réponse str
                                           → Interrupteurs admin : 503 si agent désactivé, 429 si quota utilisateur dépassé (software_config)
 GET  /api/ai/history?limit=...            → Historique de conversation IA (affichage client, sans rappel Gemini)
 DELETE /api/ai/history                     → Efface tout l'historique IA de l'utilisateur (bouton 🗑 du chat : serveur + mémoire du modèle remise à zéro)
-POST /api/cloud/sync-file                 → Upload fichier
+POST /api/cloud/sync-batch                → Upload groupé (lots de fichiers, 1 flush lastSyncAt)
+POST /api/cloud/sync-file                 → Upload fichier (repli unitaire)
 POST /api/cloud/file-info                 → Vérification hash
 GET  /api/cloud/list?app_id=...           → Liste fichiers distants
 GET  /api/cloud/download?app_id=...       → Download fichier
+GET  /api/cloud/storage?app_id=...        → Résumé stockage (taille, nb fichiers, sauvegardes .bak)
+GET  /api/cloud/list-backups?app_id=...   → Liste des sauvegardes .bak (onglet CLOUD)
+POST /api/cloud/restore-backup            → Restaure une sauvegarde .bak sur le fichier principal (serveur)
+POST /api/cloud/delete-file               → Supprime un fichier distant (et ses .bak)
 GET  /api/public/data/fetch?pair=&tf=&year= → Données CSV historiques
 GET  /api/public/data/pairs               → Liste paires disponibles
 GET  /admin/software/dashboard            → Back-office software (builds, notifs, quota IA)
