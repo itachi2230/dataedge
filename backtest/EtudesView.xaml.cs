@@ -9,6 +9,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using backtest.Services;
 
 namespace backtest
 {
@@ -538,16 +539,33 @@ private async void StudiesTreeView_SelectedItemChanged(object sender, RoutedProp
             if (!(StudiesTreeView.SelectedItem is TreeViewItem selectedItem)) return;
             string path = selectedItem.Tag.ToString();
             if (path == StudiesRootPath) return;
-            if (MessageBox.Show("Supprimer ?", "Confirmation", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            if (MessageBox.Show("Supprimer ?\nLe fichier sera conserv\u00e9 en .bak (r\u00e9cup\u00e9rable via l\u2019onglet CLOUD).", "Confirmation", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                return;
+
+            // Safe-delete : backup .bak au lieu de suppression directe.
+            // La suppression serveur est mise en file d-attente (executee a la prochaine sync).
+            if (Directory.Exists(path))
             {
-                if (Directory.Exists(path)) Directory.Delete(path, true);
-                else File.Delete(path);
-                LoadStudiesTree();
-                StudyContentRichTextBox.Document.Blocks.Clear();
-                CurrentStudyPath = null;
-                UpdateEmptyPlaceholder();
-                UpdateStatusInfo();
+                // Pour un dossier : backup + queue chaque fichier qu-il contient
+                foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+                {
+                    FxCloudService.SafeDeleteToLocalBackup(file);
+                    string rel = file.Replace(AppDomain.CurrentDomain.BaseDirectory, "").Replace(Path.DirectorySeparatorChar, '/');
+                    FxCloudService.QueueServerDeletion(rel);
+                }
+                Directory.Delete(path, true);
             }
+            else if (File.Exists(path))
+            {
+                FxCloudService.SafeDeleteToLocalBackup(path);
+                string rel = path.Replace(AppDomain.CurrentDomain.BaseDirectory, "").Replace(Path.DirectorySeparatorChar, '/');
+                FxCloudService.QueueServerDeletion(rel);
+            }
+            LoadStudiesTree();
+            StudyContentRichTextBox.Document.Blocks.Clear();
+            CurrentStudyPath = null;
+            UpdateEmptyPlaceholder();
+            UpdateStatusInfo();
         }
 
         private void Rename_Click(object sender, RoutedEventArgs e)

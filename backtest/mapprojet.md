@@ -231,23 +231,34 @@ Tokens      → session.bin
 
 ### Synchronisation Cloud
 ```
-FxCloudService.FullSyncAsync()
+FxCloudService.FullSyncAsync(IProgress<SyncProgressInfo> progress = null)
   ├── FetchCloudManifestAsync()      → GET /api/cloud/list (1 requête : manifest distant complet)
   ├── ScanLocalFiles()               → Inventaire local + hash md5 (une seule passe)
   │     ├── data/ · etudes/ · Notes/ · metadata/
   │     └── cacheimage/              → exclu si SyncCacheImageEnabled = false (toggle Settings)
   ├── UploadFilesAsync()             → POST /api/cloud/sync-batch (lots de 8 fichiers)
   │     └── repli unitaire sync-file si le serveur ne connaît pas sync-batch
-  └── DownloadFromServerAsync()      → Download des fichiers absents/modifiés
-        └── Détection « restauration initiale » : si aucun fichier local ET fichiers
-            distants présents (nouveau PC), message explicite dans le rapport +
-            téléchargement de tout le cloud (les fichiers absents localement ne sont
-            jamais écrasés : ils sont récupérés).
-        └── Résolution de conflits via metadata/synccache.json (cache du dernier
-            hash serveur vu) : serveur inchangé → version locale conservée ;
-            local inchangé → version serveur récupérée ; conflit réel → local
-            conservé (ancienne version distante préservée en .bak serveur).
+  ├── DownloadFromServerAsync()      → Download des fichiers absents/modifiés
+  │     └── Détection « restauration initiale » : si aucun fichier local ET fichiers
+  │      distants présents (nouveau PC), message explicite dans le rapport +
+  │      téléchargement de tout le cloud (les fichiers absents localement ne sont
+  │      jamais écrasés : ils sont récupérés).
+  │     └── Résolution de conflits via metadata/synccache.json (cache du dernier
+  │      hash serveur vu) : serveur inchangé → version locale conservée ;
+  │      local inchangé → version serveur récupérée ; conflit réel → local
+  │      conservé (ancienne version distante préservée en .bak serveur).
+  ├── ProcessDeletionQueueAsync()    → Traite les suppressions serveurs en attente
+  │     (safe-delete local .bak → file metadata/cloud_pending_deletions.json)
+  ├── SaveSyncCache() + UpdateLocalLastSync()
+  └── ReportSyncProgress()           → IProgress<SyncProgressInfo> → UI (barre de progression)
 ```
+
+> 📊 **Progression synchro** : `SyncProgressInfo` (Phase, FilesProcessed, TotalFiles,
+> PercentComplete, CurrentFile, IsIndeterminate) est reporté en temps réel à l'UI via
+> `Progress<T>`. La `ProgressBar` cyber (Settings > APPLICATION) affiche la phase en cours
+> (Connecting / Scanning / Upload / Download / Done) avec pourcentage et fichier courant.
+> Après une sync réussie, `loadStrategies()` et `ReloadCurrentWeekNotes()` sont appelés
+> automatiquement → le dashboard reflète les changements **sans redémarrage**.
 
 > 🔒 **Sécurité tokens** : `session.bin` (JWT + refresh) est désormais **chiffré en DPAPI**
 > (`ProtectedData.Protect`, scope `CurrentUser`) — les tokens ne sont plus stockés en
@@ -266,11 +277,14 @@ Panneau de gestion du stockage distant (`SettingsView`, `PanelCloud`), alimenté
 
 - **Résumé du stockage** : `GET /api/cloud/storage` → taille totale, nb fichiers,
   taille/nombre des sauvegardes `.bak` (`TxtCloudStorage`).
-- **Recherche / filtrage** : champ texte au-dessus de la liste des fichiers — filtre
-  en direct sur le chemin (`RefreshCloudFilesList()`), la liste est triée
-  alphabétiquement. La sélection et les index restent alignés sur `_cloudFiles`
+- **Recherche / filtrage** : champ texte au-dessus de la liste — filtre en direct
+  sur le chemin, appliqué aussi bien à la vue groupée qu'à la liste cachée (`_cloudFiles`).
   (triée) pour les actions (restauration / suppression / `.bak`).
-- **Liste des fichiers du compte** : manifest distant (`FetchCloudManifestPublicAsync`)
+- **Liste des fichiers groupée par dossier** : au lieu d'une liste plate, les fichiers
+  sont organisés par dossier (`data/`, `Notes/`, `etudes/`, `cacheimage/`, `metadata/`)
+  via `CloudFolderGroups` (ItemsControl avec Expanders). Chaque groupe affiche le
+  nombre de fichiers et la taille totale. Les classes `CloudFolderGroup` et
+  `CloudFileItem` (dans `SettingsView.xaml.cs`) structurent les données.
   affiché avec taille + date (path, size, last_modified), tri alphabétique.
 - **Sauvegardes `.bak` par fichier** : `GET /api/cloud/list-backups` ; sélectionner un
   fichier filtre ses `.bak` (motif `{chemin}.{YYYYMMDD_HHMMSS}.bak`).
@@ -283,6 +297,21 @@ Panneau de gestion du stockage distant (`SettingsView`, `PanelCloud`), alimenté
     (copie le `.bak` sur le fichier principal serveur, `.bak` conservé ; relancer une
     synchro ensuite pour récupérer la version restaurée en local).
 - Hors connexion : message « Connectez-vous (onglet Compte Global) ».
+
+### Safe-Delete (suppression → backup .bak)
+
+Quand l'utilisateur supprime un élément local (stratégie, trade, étude) :
+
+- **Local** : au lieu de `File.Delete()`, le fichier est renommé en
+  `{chemin}.{YYYYMMDD_HHMMSS}.bak` via `FxCloudService.SafeDeleteToLocalBackup()`.
+  Le `.bak` devient la dernière version avant suppression — récupérable via l'onglet CLOUD.
+- **Serveur (offline-friendly)** : la suppression du fichier distant est mise en file
+  d'attente dans `metadata/cloud_pending_deletions.json` via
+  `FxCloudService.QueueServerDeletion(remotePath)`. Pas besoin d'internet :
+  `ProcessDeletionQueueAsync()` les traite à la prochaine sync réussie.
+- **Fichiers concernés** : stratégies (`SupprimerStrategie`), trades
+  (`RemoveJournalById`/`RemoveTradeById` → backup du `.json` avant modification),
+  études (`Delete_Click` → backup + queue serveur).
 
 ### API Server Endpoints (Symfony - fxdataedge.com)
 ```

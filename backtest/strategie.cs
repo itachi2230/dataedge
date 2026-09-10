@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Windows.Data;
+using backtest.Services;
 
 namespace backtest
 {
@@ -192,6 +193,8 @@ namespace backtest
         }
         public void RemoveTradeById(long tradeId)
         {
+            // Backup avant modification : le .bak conserve la version avec le trade
+            FxCloudService.SafeDeleteToLocalBackup(filePath);
             var data = LoadData();
             data.Trades.RemoveAll(t => t.Id == tradeId);
             CalculateStatistics(data);
@@ -199,6 +202,8 @@ namespace backtest
         }
         public void RemoveJournalById(long tradeId)
         {
+            // Backup avant modification : le .bak conserve la version avec le trade
+            FxCloudService.SafeDeleteToLocalBackup(filePath);
             var data = LoadData();
             data.Journal.RemoveAll(t => t.Id == tradeId);
             CalculateStatistics(data);
@@ -207,9 +212,19 @@ namespace backtest
 
         public void SupprimerStrategie()
         {
-            if (File.Exists(filePath)) File.Delete(filePath);
+            // Safe-delete : on renomme en .bak au lieu de supprimer.
+            // Le fichier .bak devient la derniere version avant suppression.
+            // La suppression serveur est mise en file d-attente (executee a la prochaine sync).
+            if (File.Exists(filePath))
+            {
+                string backup = FxCloudService.SafeDeleteToLocalBackup(filePath);
+                if (backup != null)
+                    FxCloudService.QueueServerDeletion("data/" + Nom + ".json");
+            }
             if (File.Exists(strategiesFile))
             {
+                // Backup du registre des strategies avant modification
+                FxCloudService.SafeDeleteToLocalBackup(strategiesFile);
                 string contenu = File.ReadAllText(strategiesFile);
                 File.WriteAllText(strategiesFile, contenu.Replace($"{Nom}%", string.Empty));
             }

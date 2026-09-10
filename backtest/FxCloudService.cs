@@ -42,6 +42,77 @@ namespace backtest.Services
         private static readonly int BatchFileCount = 8;
         // Passe à false si le serveur ne connaît pas encore sync-batch (repli unitaire).
         private bool _batchSupported = true;
+        /// <summary>
+        /// Renomme un fichier local en .bak avec timestamp au lieu de le supprimer.
+        /// Retourne le chemin du .bak cree, ou null si le fichier n-existe pas.
+        /// </summary>
+        public static string SafeDeleteToLocalBackup(string filePath)
+        {
+            try
+            {
+                if (!File.Exists(filePath)) return null;
+                string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string backup = filePath + "." + stamp + ".bak";
+                int n = 1;
+                while (File.Exists(backup)) backup = filePath + "." + stamp + "_" + n++ + ".bak";
+                File.Move(filePath, backup);
+                Log("Cloud: safe-delete -> " + backup);
+                return backup;
+            }
+            catch (Exception ex) { Log("SafeDeleteToLocalBackup: " + ex.Message); return null; }
+        }
+
+        /// <summary>
+        /// Ajoute un chemin distant a la file d-attente de suppression serveur.
+        /// Persistee dans metadata/cloud_pending_deletions.json.
+        /// </summary>
+        public static void QueueServerDeletion(string remotePath)
+        {
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "metadata", "cloud_pending_deletions.json");
+                List<string> queue;
+                if (File.Exists(path))
+                    queue = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(path)) ?? new List<string>();
+                else
+                    queue = new List<string>();
+                if (!queue.Contains(remotePath)) queue.Add(remotePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, JsonSerializer.Serialize(queue));
+                Log("Cloud: suppression serveur mise en file d-attente pour " + remotePath);
+            }
+            catch (Exception ex) { Log("QueueServerDeletion: " + ex.Message); }
+        }
+
+        /// <summary>
+        /// Traite la file d-attente de suppression serveur (appele pendant la sync).
+        /// Retourne (tentees, reussies).
+        /// </summary>
+        private async Task<(int attempted, int succeeded)> ProcessDeletionQueueAsync(List<string> reports)
+        {
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "metadata", "cloud_pending_deletions.json");
+            if (!File.Exists(path)) return (0, 0);
+            List<string> queue = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(path)) ?? new List<string>();
+            if (queue.Count == 0) return (0, 0);
+            int succeeded = 0;
+            var remaining = new List<string>();
+            foreach (var remotePath in queue)
+            {
+                try
+                {
+                    var reqContent = new MultipartFormDataContent();
+                    reqContent.Add(new StringContent(AppId), "app_id");
+                    reqContent.Add(new StringContent(remotePath), "target_path");
+                    var res = await SecureRequestAsync(() => _httpClient.PostAsync("api/cloud/delete-file", reqContent));
+                    if (res.IsSuccessStatusCode) { succeeded++; reports.Add("Suppression serveur : " + remotePath); }
+                    else { remaining.Add(remotePath); }
+                }
+                catch { remaining.Add(remotePath); }
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllText(path, JsonSerializer.Serialize(remaining));
+            return (queue.Count, succeeded);
+        }
 
         static FxCloudService()
         {
@@ -326,7 +397,7 @@ namespace backtest.Services
 
         #region SYNCHRONISATION CLOUD
 
-public async Task<List<string>> FullSyncAsync()
+public async Task<List<string>> FullSyncAsync(IProgress<SyncProgressInfo> progress = null)
         {
             var reports = new List<string> { $"--- Début synchro ({DateTime.Now:HH:mm}) ---" };
             try
@@ -335,6 +406,7 @@ public async Task<List<string>> FullSyncAsync()
 
                 // 1. Manifest serveur UNIQUE : liste des fichiers distants + hash
                 //    (une seule requête au lieu d'un file-info par fichier).
+                ReportSyncProgress(progress, "Connecting...", 0, 0);
                 var remoteFiles = await FetchCloudManifestAsync();
                 if (remoteFiles == null)
                 {
@@ -342,10 +414,12 @@ public async Task<List<string>> FullSyncAsync()
                     return reports;
                 }
 
+
                 var cache = LoadSyncCache();
                 _batchSupported = true;
 
                 // 2. Inventaire local : hash md5 calculé une seule fois par synchro.
+                ReportSyncProgress(progress, "Scanning...", 0, 0);
                 var localFiles = ScanLocalFiles();
                 bool isInitialRestore = localFiles.Count == 0 && remoteFiles.Count > 0;
                 var toUpload = new List<SyncLocalFile>();
@@ -360,15 +434,25 @@ public async Task<List<string>> FullSyncAsync()
                     reports.Add("Restauration initiale : aucune donnée locale, récupération de tout le cloud...");
 
                 // 3. Upload par lots (endpoint batch : 1 requête pour N fichiers).
+                ReportSyncProgress(progress, "Upload", 0, toUpload.Count);
                 await UploadFilesAsync(toUpload, remoteFiles, cache, reports);
 
                 // 4. Téléchargement des fichiers absents / modifiés côté serveur,
                 //    avec résolution de conflits (plus aucun écrasement silencieux).
+                ReportSyncProgress(progress, "Download", 0, remoteFiles.Count);
                 int downloadCount = await DownloadFromServerAsync(remoteFiles, cache, reports);
+                ReportSyncProgress(progress, "Download", downloadCount, remoteFiles.Count);
                 reports.Add($"Récupération des fichiers distants : {downloadCount} fichier(s) mis à jour.");
+
+                // Traite la file d-attente de suppressions locales (safe-delete) :
+                // supprime les fichiers cotes serveur maintenant qu-on est connecte.
+                var delResult = await ProcessDeletionQueueAsync(reports);
+                if (delResult.attempted > 0)
+                    reports.Add($"Suppressions serveur : {delResult.succeeded}/{delResult.attempted} traitees");
 
                 SaveSyncCache(cache);
                 UpdateLocalLastSync(DateTime.Now);
+                ReportSyncProgress(progress, "Done", 100, 100);
                 reports.Add("--- Synchronisation terminée ---");
             }
             catch (Exception ex)
@@ -376,6 +460,14 @@ public async Task<List<string>> FullSyncAsync()
                 reports.Add("!!! Erreur : " + ex.Message);
             }
             return reports;
+        }
+
+        /// <summary>
+        /// Envoie un rapport de progression a l-UI via IProgress<T>.
+        /// </summary>
+        private void ReportSyncProgress(IProgress<SyncProgressInfo> progress, string phase, int processed, int total, string current = "")
+        {
+            progress?.Report(new SyncProgressInfo { Phase = phase, FilesProcessed = processed, TotalFiles = total, CurrentFile = current });
         }
 
         // ------------------------------------------------------------------
@@ -1172,6 +1264,20 @@ public async Task<string> DownloadProfileImageAsync(string fileName)
     }
 
     #region CLASSES DE DONNÉES
+    /// <summary>
+    /// Information de progression de la synchronisation, reportee en temps reel
+    /// a l-UI via IProgress lessSyncProgressInfo>.
+    /// </summary>
+    public class SyncProgressInfo
+    {
+        public string Phase { get; set; } = "";          // Scan / Upload / Download / Cleanup
+        public int FilesProcessed { get; set; } = 0;
+        public int TotalFiles { get; set; } = 0;
+        public string CurrentFile { get; set; } = "";
+        public bool IsIndeterminate { get; set; } = false;
+        public int PercentComplete => TotalFiles > 0 ? (int)((double)FilesProcessed / TotalFiles * 100) : 0;
+    }
+
     public class SyncItem { public string LocalPath { get; set; } public string RemoteRelativePath { get; set; } public bool IsDirectory { get; set; } }
     public class SyncLocalFile { public string LocalFullPath { get; set; } public string RelativePath { get; set; } public string Hash { get; set; } }
     public class SyncCacheRoot { public Dictionary<string, string> hashes { get; set; } = new Dictionary<string, string>(); }

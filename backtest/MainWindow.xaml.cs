@@ -791,11 +791,22 @@ namespace backtest
                 RichTextService.LoadPackage(richTextBoxNotesWeeks, currentFile);
                 RichTextService.FormatImagesInDocument(richTextBoxNotesWeeks, 200);
             }
+
             catch
             {
-                // Le rafraîchissement est un confort, jamais un chemin critique.
+                // Le rafraichissement est un confort, jamais un chemin critique.
             }
         }
+
+        /// <summary>
+        /// Recharge les notes de la semaine actuelle depuis le disque.
+        /// Appele apres une sync pour refleter les fichiers potentiellement mis a jour.
+        /// </summary>
+        public void ReloadCurrentWeekNotes()
+        {
+            try { LoadNotesForCurrentWeek(); } catch { /* confort */ }
+        }
+
         #endregion
 
         #region ACTIONS BOUTONS & EVENTS
@@ -810,52 +821,58 @@ namespace backtest
         {
             var btn = sender as Button;
             btn.IsEnabled = false;
-            // 1. Démarrer l'animation
             Storyboard sb = (Storyboard)this.FindResource("RotationSyncAnim");
             sb.Begin();
 
             try
             {
-                // 2. Lancer la synchronisation
-                List<string> results = await _cloudService.FullSyncAsync();
+                // Progression
+                var progress = new Progress<SyncProgressInfo>(p =>
+                {
+                    if (!string.IsNullOrEmpty(p.Phase)) txtLastSync.Text = p.Phase;
+                });
+
+                List<string> results = await _cloudService.FullSyncAsync(progress);
                 FxCloudService.Log(String.Join("\n", results));
-                // 3. Analyse intelligente des résultats
-                // On vérifie si une ligne contient "success" ou "mis à jour"
-                int changeCount = results.Count(line => line.Contains("success") || line.Contains("mis à jour") && !line.Contains("0"));
+                int changeCount = results.Count(line => line.Contains("success") || line.Contains("mis a jour") || line.Contains("traitees") || line.Contains("Jour"));
                 bool hasCriticalError = results.Any(line => line.Contains("Erreur") || line.Contains("inaccessible"));
-                // Construction du message de notification
                 string messageFinal;
                 bool isError = hasCriticalError;
                 if (hasCriticalError)
                 {
-                    messageFinal = "La synchronisation a échoué. Vérifiez votre connexion.";
+                    messageFinal = "La synchronisation a echoue.";
                 }
                 else if (changeCount > 0)
                 {
-                    messageFinal = $"Synchro réussie : {changeCount} éléments synchronisés.";
-                    // Mise à jour de l'UI pour la date
+                    messageFinal = $"Synchro reussie : {changeCount} element(s).";
                     DateTime now = DateTime.Now;
                     _cloudService.UpdateLocalLastSync(now);
                     txtLastSync.Text = "SYNC: " + now.ToString("g");
                 }
                 else
                 {
-                    messageFinal = "Tout est déjà à jour.";
+                    messageFinal = "Tout est deja a jour.";
                 }
                 await ShowNotification(messageFinal, isError, false, 0.5);
+
+                // RAAFRICHIR l-UI apres une sync reussie
+                if (!isError)
+                {
+                    try { loadStrategies(); } catch { /* confort */ }
+                    try { ReloadCurrentWeekNotes(); } catch { /* confort */ }
+                }
             }
             catch (Exception ex)
             {
-                await ShowNotification("Erreur imprévue : " + ex.Message, true, true, 0.5);
+                await ShowNotification("Erreur imprevue : " + ex.Message, true, true, 0.5);
             }
             finally
             {
-                // 3. Arrêter l'animation à la fin (même si erreur)
                 sb.Stop();
                 btn.IsEnabled = true;
             }
-
         }
+
         public void Logout()
         {
             // On efface le fichier comme dans Settings

@@ -8,6 +8,8 @@ using System.Windows.Media.Animation;
 using Microsoft.Win32;
 using System.Threading.Tasks;
 using System.IO;
+using System.ComponentModel;
+using System.Collections.Specialized;
 using System.Linq; // Any/Count sur les rapports de synchro
 using System.Text.Json; // Intégré à .NET pour gérer le fichier local
 using System.Collections.Generic; // Listes fichiers/backups cloud
@@ -25,6 +27,41 @@ namespace backtest
         public string Bio { get; set; }
         public DateTime? LastSyncDate { get; set; }
         public string ImagePath { get; set; }
+    }
+
+    /// <summary>
+    /// Utilitaire de formatage (partage entre SettingsView et les modeles de données cloud).
+    /// </summary>
+    internal static class CloudFormatHelper
+    {
+        public static string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return bytes + " o";
+            if (bytes < 1024 * 1024) return (bytes / 1024.0).ToString("F1") + " Ko";
+            return (bytes / 1024.0 / 1024.0).ToString("F2") + " Mo";
+        }
+    }
+
+    /// <summary>
+    /// Groupe de fichiers du cloud par dossier (pour l-affichage groupe de l-onglet CLOUD).
+    /// </summary>
+    public class CloudFolderGroup
+    {
+        public string FolderName { get; set; }
+        public List<CloudFileItem> Files { get; set; } = new List<CloudFileItem>();
+        public bool IsExpanded { get; set; } = false;
+        public int FileCount => Files.Count;
+        public long TotalSize => Files.Sum(f => f.Size);
+        public string TotalSizeText => CloudFormatHelper.FormatBytes(TotalSize);
+    }
+
+    public class CloudFileItem
+    {
+        public string FilePath { get; set; }
+        public string FileName { get; set; }
+        public long Size { get; set; }
+        public long LastModified { get; set; }
+        public string SizeText => CloudFormatHelper.FormatBytes(Size);
     }
 
     public partial class SettingsView : UserControl
@@ -117,36 +154,71 @@ namespace backtest
         // les paramètres et affiche un résumé.
         private async void BtnSyncNow_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(FxCloudService.CurrentToken))
-            {
-                await ShowNotification("Connectez-vous d'abord (onglet Compte Global)", true);
-                return;
-            }
-
             BtnSyncNow.IsEnabled = false;
-            TxtSyncStatus.Text = "SYNCHRONISATION EN COURS...";
-            await ShowNotification("Synchronisation...", false, true);
+            BorderSyncProgress.Visibility = Visibility.Visible;
+            ProgSync.Value = 0;
+            TxtSyncPercent.Text = "0%";
+            TxtSyncPhase.Text = "Preparation...";
+            TxtSyncCurrentFile.Text = "";
+
+            var progress = new Progress<SyncProgressInfo>(p =>
+            {
+                if (p.IsIndeterminate) { 
+                    TxtSyncPhase.Text = p.Phase;
+                    ProgSync.IsIndeterminate = true;
+                } else {
+                    ProgSync.IsIndeterminate = false;
+                    TxtSyncPhase.Text = p.Phase;
+                    ProgSync.Value = p.PercentComplete;
+                    TxtSyncPercent.Text = p.PercentComplete + "%";
+                    if (!string.IsNullOrEmpty(p.CurrentFile)) TxtSyncCurrentFile.Text = p.CurrentFile;
+                }
+            });
+
             try
             {
-                var results = await _cloudService.FullSyncAsync();
+                List<string> results = await _cloudService.FullSyncAsync(progress);
                 FxCloudService.Log(String.Join("\n", results));
-                bool hasError = results.Any(l => l.Contains("Erreur") || l.Contains("inaccessible"));
-                int syncedCount = results.Count(r => r.Contains("success") || r.Contains("mis à jour"));
-                TxtSyncStatus.Text = hasError
-                    ? $"Échec en partie — {DateTime.Now:HH:mm:ss} (voir les journaux)"
-                    : $"Dernière synchronisation : {DateTime.Now:HH:mm:ss} — {syncedCount} élément(s).";
-                await ShowNotification(hasError ? "Synchro terminée avec erreurs." : "Synchronisation terminée !", hasError);
+                int changeCount = results.Count(line => line.Contains("success") || line.Contains("mis a jour") || line.Contains("traitees") || line.Contains("Jour"));
+                bool hasCriticalError = results.Any(line => line.Contains("Erreur") || line.Contains("inaccessible"));
+                string messageFinal;
+                bool isError = hasCriticalError;
+                if (hasCriticalError)
+                {
+                    messageFinal = "La synchronisation a echoue. Verifiez votre connexion.";
+                }
+                else if (changeCount > 0)
+                {
+                    messageFinal = $"Synchro reussie : {changeCount} element(s) synchronises.";
+                    TxtSyncStatus.Text = "Derniere sync : " + DateTime.Now.ToString("g");
+                }
+                else
+                {
+                    messageFinal = "Tout est deja a jour.";
+                    TxtSyncStatus.Text = "Derniere sync : " + DateTime.Now.ToString("g") + " (aucun changement)";
+                }
+                await ShowNotification(messageFinal, isError);
+
+                // RAICHIR l-UI apres la sync :Strategies, trades, etudes
+                if (!isError && Application.Current.MainWindow is MainWindow mw)
+                {
+                    try { mw.loadStrategies(); } catch { }
+                    try { mw.ReloadCurrentWeekNotes(); } catch { }
+                }
             }
             catch (Exception ex)
             {
                 TxtSyncStatus.Text = "Erreur : " + ex.Message;
-                await ShowNotification("Erreur de synchronisation", true);
+                await ShowNotification("Erreur imprevue : " + ex.Message, true);
             }
             finally
             {
                 BtnSyncNow.IsEnabled = true;
+                await System.Threading.Tasks.Task.Delay(1500);
+                BorderSyncProgress.Visibility = Visibility.Collapsed;
             }
         }
+
         
         private void BtnAccountTab_Click(object sender, RoutedEventArgs e) => ShowAccountPanel();
 
@@ -185,6 +257,8 @@ namespace backtest
         private List<CloudFileInfo> _cloudFiles = new List<CloudFileInfo>();
         private List<CloudBackupInfo> _cloudBackups = new List<CloudBackupInfo>();
         private List<CloudBackupInfo> _backupsForSelection = new List<CloudBackupInfo>();
+        private List<CloudFolderGroup> _folderGroups = new List<CloudFolderGroup>();
+        private string _selectedCloudFilePath = null;
 
         public void ShowCloudPanel()
         {
@@ -504,13 +578,51 @@ namespace backtest
             foreach (var f in _cloudFiles)
             {
                 if (filter.Length > 0 && f.path.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                LstCloudFiles.Items.Add(f.path + "  —  " + FormatBytes(f.size) + "  —  " + FormatServerDate(f.last_modified));
+                LstCloudFiles.Items.Add(f.path + "  -  " + FormatBytes(f.size) + "  -  " + FormatServerDate(f.last_modified));
             }
             if (LstCloudFiles.Items.Count == 0)
                 LstCloudFiles.Items.Add(filter.Length > 0
-                    ? "— Aucun fichier ne correspond à \"" + filter + "\" —"
-                    : "— Aucun fichier sur le cloud —");
+                    ? "- Aucun fichier ne correspond a \"" + filter + "\" -"
+                    : "- Aucun fichier sur le cloud -");
+
+            _folderGroups.Clear();
+            foreach (var f in _cloudFiles)
+            {
+                if (filter.Length > 0 && f.path.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                string folder = "";
+                int slash = f.path.IndexOf('/');
+                if (slash > 0) folder = f.path.Substring(0, slash);
+                else folder = "(racine)";
+                var grp = _folderGroups.FirstOrDefault(g => g.FolderName == folder);
+                if (grp == null) { grp = new CloudFolderGroup { FolderName = folder }; _folderGroups.Add(grp); }
+                grp.Files.Add(new CloudFileItem { FilePath = f.path, FileName = f.path.Substring(slash + 1), Size = f.size, LastModified = f.last_modified });
+            }
+            _folderGroups.Sort((a, b) => string.Compare(a.FolderName, b.FolderName, StringComparison.OrdinalIgnoreCase));
+            CloudFolderGroups.ItemsSource = null;
+            CloudFolderGroups.ItemsSource = _folderGroups;
         }
+
+        private void FolderGroupHeader_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is string folder)
+            {
+                var grp = _folderGroups.FirstOrDefault(g => g.FolderName == folder);
+                if (grp != null) { grp.IsExpanded = !grp.IsExpanded; CloudFolderGroups.ItemsSource = null; CloudFolderGroups.ItemsSource = _folderGroups; }
+            }
+        }
+
+        private void CloudFileItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is string filePath)
+            {
+                _selectedCloudFilePath = filePath;
+                for (int i = 0; i < _cloudFiles.Count; i++)
+                {
+                    if (_cloudFiles[i].path == filePath) { LstCloudFiles.SelectedIndex = i; return; }
+                }
+            }
+        }
+
 
         // Filtre en direct pendant la saisie de recherche.
         private void TxtCloudSearch_TextChanged(object sender, TextChangedEventArgs e)
