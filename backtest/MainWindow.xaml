@@ -22,7 +22,21 @@
              Le bouton Copilote est un design statique (double anneau néon). -->
     </Window.Resources>
 
-    <Border Background="{StaticResource BgDark}" CornerRadius="7" BorderBrush="#222" BorderThickness="5">
+    <Border Background="{StaticResource BgDark}" BorderBrush="#222">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="CornerRadius" Value="7"/>
+                <Setter Property="BorderThickness" Value="5"/>
+                <!-- Maximisé : coins droits et cadre supprimé pour occuper
+                     exactement la zone de travail sans rien masquer aux bords -->
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                        <Setter Property="CornerRadius" Value="0"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>

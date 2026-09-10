@@ -74,6 +74,7 @@ backtest/
 ├── 📄 Services
 │   ├── services/
 │   │   ├── FxCloudService.cs  → Service cloud (auth, sync, profil, support, crash reports)
+│   │   ├── MaximizeHelper.cs  → Fenêtres sans bordure : hook WM_GETMINMAXINFO qui force la taille maximisée à la zone de travail exacte du moniteur (taskbar visible, multi-écrans, contenu jamais coupé aux bords) ; utilisé par MainWindow et backtesteur
 │   │   ├── ChartBridge.cs     → Bridge C# ↔ JavaScript (WebView2 graphique)
 │   │   ├── ReplayPositionStore.cs → Persistance JSON de la dernière position replay par paire/timeframe
 │   │   ├── Dataservice.cs     → Récupération données marché (API Symfony, cache CSV)

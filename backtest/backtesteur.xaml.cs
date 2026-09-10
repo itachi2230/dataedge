@@ -40,9 +40,10 @@ namespace backtest
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            // Limite la fenêtre à la WorkArea pour ne pas cacher la taskbar
-            this.MaxWidth = SystemParameters.WorkArea.Width;
-            this.MaxHeight = SystemParameters.WorkArea.Height;
+            // Maximisation correcte : sans ce hook, WindowChrome (GlassFrameThickness=0)
+            // agrandit la fenêtre à la zone de travail + bordure système → contenu
+            // coupé d'environ 8 px sur les 4 bords. Le hook force la taille exacte.
+            backtest.Services.MaximizeHelper.Hook(this);
         }
         private void MinimizeClick(object sender, RoutedEventArgs e)
         {

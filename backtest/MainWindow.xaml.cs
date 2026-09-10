@@ -1108,9 +1108,9 @@ namespace backtest
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            // Limite la fenêtre à la WorkArea pour ne pas cacher la taskbar
-            this.MaxWidth = SystemParameters.WorkArea.Width;
-            this.MaxHeight = SystemParameters.WorkArea.Height;
+            // Maximisation correcte : taille exacte de la zone de travail du
+            // moniteur (taskbar visible, multi-écrans, plus rien de coupé aux bords).
+            MaximizeHelper.Hook(this);
         }
         // Quand l'utilisateur clique sur l'en-tête du popup
         private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

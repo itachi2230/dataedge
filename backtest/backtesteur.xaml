@@ -17,7 +17,21 @@
                       ResizeBorderThickness="6" />
     </WindowChrome.WindowChrome>
 
-    <Border  CornerRadius="7" BorderThickness="1" Background="{StaticResource BgDark}">
+    <Border Background="{StaticResource BgDark}">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="CornerRadius" Value="7"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <!-- Maximisé : coins droits pour occuper exactement la zone
+                     de travail sans rien masquer aux bords -->
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                        <Setter Property="CornerRadius" Value="0"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
