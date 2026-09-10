@@ -321,9 +321,6 @@ namespace backtest
                         Process.Start("explorer.exe", "/select,\"" + pdfPath + "\"");
                     }
                     catch { }
-
-                    MessageBox.Show("Rapport PDF généré et enregistré dans votre dossier Documents :\n" + pdfPath,
-                        "Export PDF", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else
                 {

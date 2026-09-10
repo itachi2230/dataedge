@@ -67,27 +67,11 @@ namespace backtest
                     page.DefaultTextStyle(x => x.FontFamily("Segoe UI").FontSize(9).FontColor(TextDark));
                     page.PageColor(Colors.White);
 
-                    page.Header().Element(header =>
-                    {
-                        header.Background(Dark).Padding(12).Row(row =>
-                        {
-                            row.RelativeItem().Column(col =>
-                            {
-                                col.Item().Text("DATAEDGE").FontSize(8).Bold().FontColor(Accent);
-                                col.Item().PaddingTop(2).Text(strategie.Nom.ToUpperInvariant()).FontSize(18).Bold().FontColor(White);
-                            });
-                            row.RelativeItem().AlignRight().Column(col =>
-                            {
-                                col.Item().AlignRight().Text("RAPPORT DE PERFORMANCE").FontSize(8).Bold().FontColor(White);
-                                col.Item().AlignRight().PaddingTop(2).Text(DateTime.Now.ToString("dd/MM/yyyy à HH:mm", Fr)).FontSize(8).FontColor("#B7C5D3");
-                            });
-                        });
-                    });
-
                     page.Content().Element(content =>
                     {
                         content.Column(col =>
                         {
+                            col.Item().Element(BuildHeaderBanner(strategie.Nom, "RAPPORT DE PERFORMANCE"));
                             col.Item().PaddingTop(12).Element(StatsSummary(strategie, stats, advanced, trades));
                             col.Item().PaddingTop(14).Element(SectionHeader("1", "SYNTHÈSE STRATÉGIE"));
                             col.Item().PaddingTop(8).Element(StrategyCard(strategie, trades));
@@ -102,9 +86,6 @@ namespace backtest
                             col.Item().PaddingTop(8).Element(ExecutiveAudit(stats, trades));
                             col.Item().PaddingTop(12).Element(SectionHeader("5", "SIMULATION MONÉTAIRE"));
                             col.Item().PaddingTop(8).Element(MoneyProjection(trades));
-                            col.Item().PaddingTop(12).Element(SectionHeader("6", "HISTORIQUE DES TRADES"));
-                            col.Item().PaddingTop(8).Element(TradeTable(trades));
-                            col.Item().PaddingTop(12).Element(TradeDetailsTable(trades));
                         });
                     });
 
@@ -116,6 +97,7 @@ namespace backtest
                             col.Item().PaddingTop(6).Row(row =>
                             {
                                 row.RelativeItem().Text("Généré par DataEdge — Trading Analytics").FontSize(7).FontColor(TextGray);
+                                row.RelativeItem().AlignCenter().Text("www.fxdataedge.com").FontSize(7).FontColor(TextGray);
                                 row.RelativeItem().AlignRight().Text(t =>
                                 {
                                     t.Span("Page ").FontSize(7).FontColor(TextGray);
@@ -130,6 +112,49 @@ namespace backtest
             }).GeneratePdf(filePath);
 
             return filePath;
+        }
+
+        /// <summary>
+        /// Retourne le nom complet de l'utilisateur connecté (fichier de session local
+        /// session_v1.json, écrit par FxCloudService), ou null si non connecté / illisible.
+        /// </summary>
+        private static string GetConnectedUserName()
+        {
+            try
+            {
+                string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "session_v1.json");
+                if (!File.Exists(path)) return null;
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+                if (!doc.RootElement.TryGetProperty("FullName", out var name)) return null;
+                var value = name.GetString();
+                return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Bandeau d'en-tête affiché uniquement en haut de la première page du rapport
+        /// (inséré dans le contenu, pas dans page.Header(), qui se répète à chaque page).
+        /// Inclut le nom du trader connecté (si une session cloud existe).
+        /// </summary>
+        private static Action<IContainer> BuildHeaderBanner(string title, string rightLabel)
+        {
+            var owner = GetConnectedUserName();
+            return h => h.Background(Dark).Padding(12).Row(row =>
+            {
+                row.RelativeItem().Column(col =>
+                {
+                    col.Item().Text("DATAEDGE").FontSize(8).Bold().FontColor(Accent);
+                    col.Item().PaddingTop(2).Text((string.IsNullOrWhiteSpace(title) ? "document" : title).ToUpperInvariant()).FontSize(18).Bold().FontColor(White);
+                });
+                row.RelativeItem().AlignRight().Column(col =>
+                {
+                    col.Item().AlignRight().Text(rightLabel ?? "RAPPORT").FontSize(8).Bold().FontColor(White);
+                    if (!string.IsNullOrWhiteSpace(owner))
+                        col.Item().AlignRight().PaddingTop(2).Text("par " + owner).FontSize(7.5f).SemiBold().FontColor("#8FD6F5");
+                    col.Item().AlignRight().PaddingTop(2).Text(DateTime.Now.ToString("dd/MM/yyyy à HH:mm", Fr)).FontSize(8).FontColor("#B7C5D3");
+                });
+            });
         }
 
         /// <summary>
@@ -162,24 +187,14 @@ namespace backtest
                     page.DefaultTextStyle(x => x.FontFamily("Segoe UI").FontSize(10).FontColor(TextDark));
                     page.PageColor(Colors.White);
 
-                    page.Header().Element(header =>
+                    page.Content().Element(content =>
                     {
-                        header.Background(Dark).Padding(12).Row(row =>
+                        content.Column(col =>
                         {
-                            row.RelativeItem().Column(col =>
-                            {
-                                col.Item().Text("DATAEDGE").FontSize(8).Bold().FontColor(Accent);
-                                col.Item().PaddingTop(2).Text((title ?? "Document").ToUpperInvariant()).FontSize(16).Bold().FontColor(White);
-                            });
-                            row.RelativeItem().AlignRight().Column(col =>
-                            {
-                                col.Item().AlignRight().Text("DOCUMENT").FontSize(8).Bold().FontColor(White);
-                                col.Item().AlignRight().PaddingTop(2).Text(DateTime.Now.ToString("dd/MM/yyyy à HH:mm", Fr)).FontSize(8).FontColor("#B7C5D3");
-                            });
+                            col.Item().Element(BuildHeaderBanner(title ?? "Document", "DOCUMENT"));
+                            col.Item().PaddingTop(8).Element(c => c.Column(cc => RenderMarkdownBlocks(cc, blocks)));
                         });
                     });
-
-                    page.Content().Element(content => content.Column(col => RenderMarkdownBlocks(col, blocks)));
 
                     page.Footer().Element(footer =>
                     {
@@ -189,6 +204,7 @@ namespace backtest
                             col.Item().PaddingTop(4).Row(row =>
                             {
                                 row.RelativeItem().Text("Généré par l'agent DataEdge").FontSize(7).FontColor(TextGray);
+                                row.RelativeItem().AlignCenter().Text("www.fxdataedge.com").FontSize(7).FontColor(TextGray);
                                 row.RelativeItem().AlignRight().Text(t =>
                                 {
                                     t.CurrentPageNumber().FontSize(7).Bold().FontColor(TextGray);
@@ -223,27 +239,11 @@ namespace backtest
                     page.DefaultTextStyle(x => x.FontFamily("Segoe UI").FontSize(9).FontColor(TextDark));
                     page.PageColor(Colors.White);
 
-                    page.Header().Element(header =>
-                    {
-                        header.Background(Dark).Padding(12).Row(row =>
-                        {
-                            row.RelativeItem().Column(col =>
-                            {
-                                col.Item().Text("DATAEDGE").FontSize(8).Bold().FontColor(Accent);
-                                col.Item().PaddingTop(2).Text((statName ?? strategie.Nom ?? "STRATÉGIE").ToUpperInvariant()).FontSize(18).Bold().FontColor(White);
-                            });
-                            row.RelativeItem().AlignRight().Column(col =>
-                            {
-                                col.Item().AlignRight().Text("RAPPORT DE PERFORMANCE").FontSize(8).Bold().FontColor(White);
-                                col.Item().AlignRight().PaddingTop(2).Text(DateTime.Now.ToString("dd/MM/yyyy à HH:mm", Fr)).FontSize(8).FontColor("#B7C5D3");
-                            });
-                        });
-                    });
-
                     page.Content().Element(content =>
                     {
                         content.Column(col =>
                         {
+                            col.Item().Element(BuildHeaderBanner(statName ?? strategie.Nom ?? "STRATÉGIE", "RAPPORT DE PERFORMANCE"));
                             col.Item().PaddingTop(8).Element(StatsSummary(strategie, finalStats, finalAdvanced, trades));
                             col.Item().PaddingTop(12).Element(StrategyCard(strategie, trades));
                             col.Item().PaddingTop(12).Element(KpiGrid(finalStats, finalAdvanced, trades));
@@ -253,8 +253,26 @@ namespace backtest
                             col.Item().PaddingTop(12).Element(DynamicBreakdown(finalAdvanced));
                             col.Item().PaddingTop(12).Element(ExecutiveAudit(finalStats, trades));
                             col.Item().PaddingTop(12).Element(MoneyProjection(trades));
-                            col.Item().PaddingTop(12).Element(TradeTable(trades));
-                            col.Item().PaddingTop(12).Element(TradeDetailsTable(trades));
+                        });
+                    });
+
+                    page.Footer().Element(footer =>
+                    {
+                        footer.Column(col =>
+                        {
+                            col.Item().LineHorizontal(0.5f).LineColor(CardBorder);
+                            col.Item().PaddingTop(4).Row(row =>
+                            {
+                                row.RelativeItem().Text("Généré par DataEdge — Trading Analytics").FontSize(7).FontColor(TextGray);
+                                row.RelativeItem().AlignCenter().Text("www.fxdataedge.com").FontSize(7).FontColor(TextGray);
+                                row.RelativeItem().AlignRight().Text(t =>
+                                {
+                                    t.Span("Page ").FontSize(7).FontColor(TextGray);
+                                    t.CurrentPageNumber().FontSize(7).Bold().FontColor(TextGray);
+                                    t.Span(" / ").FontSize(7).FontColor(TextGray);
+                                    t.TotalPages().FontSize(7).Bold().FontColor(TextGray);
+                                });
+                            });
                         });
                     });
                 });
@@ -674,98 +692,6 @@ namespace backtest
             };
         }
 
-        private static Action<IContainer> TradeTable(List<Trade> trades)
-        {
-            return c =>
-            {
-                c.Border(1).BorderColor(CardBorder).Padding(8).Column(col =>
-                {
-                    col.Item().Text("HISTORIQUE DES TRADES").FontSize(8).Bold().FontColor(TextDark);
-
-                    var items = trades ?? new List<Trade>();
-                    col.Item().PaddingTop(8).Table(tbl =>
-                    {
-                        tbl.ColumnsDefinition(def =>
-                        {
-                            def.RelativeColumn(1.2f);
-                            def.RelativeColumn();
-                            def.RelativeColumn();
-                            def.RelativeColumn();
-                            def.RelativeColumn();
-                            def.RelativeColumn();
-                            def.RelativeColumn();
-                        });
-
-                        tbl.Header(header =>
-                        {
-                            header.Cell().Element(Th).Text("PAIRE");
-                            header.Cell().Element(Th).Text("RESULT");
-                            header.Cell().Element(Th).Text("R:R");
-                            header.Cell().Element(Th).Text("DATE");
-                            header.Cell().Element(Th).Text("TYPE");
-                            header.Cell().Element(Th).Text("PROFIT");
-                            header.Cell().Element(Th).Text("SESSION");
-                        });
-
-                        foreach (var trade in items)
-                        {
-                            tbl.Cell().Element(Td).Text(trade.Paire ?? "—");
-                            tbl.Cell().Element(Td).Text(ResultLabel(trade.Result));
-                            tbl.Cell().Element(Td).Text(trade.RR.ToString("N2", Fr));
-                            tbl.Cell().Element(Td).Text(trade.DateEntree.ToString("dd/MM/yy", Fr));
-                            tbl.Cell().Element(Td).Text(trade.TypeOrdre.ToString());
-                            tbl.Cell().Element(Td).Text(FormatR(TradeR(trade))).FontColor(TradeR(trade) >= 0 ? Green : Red);
-                            tbl.Cell().Element(Td).Text(GetSessionLabel(trade.DateEntree.Hour));
-                        }
-                    });
-                });
-            };
-        }
-
-        private static Action<IContainer> TradeDetailsTable(List<Trade> trades)
-        {
-            return c => c.Border(1).BorderColor(CardBorder).Padding(8).Column(col =>
-            {
-                col.Item().Text("ANNEXE — DONNÉES COMPLÈTES DES TRADES").FontSize(8).Bold().FontColor(TextDark);
-                col.Item().PaddingTop(6).Table(table =>
-                {
-                    table.ColumnsDefinition(def =>
-                    {
-                        def.RelativeColumn(1.2f);
-                        def.RelativeColumn();
-                        def.RelativeColumn();
-                        def.RelativeColumn();
-                        def.RelativeColumn();
-                        def.RelativeColumn(2.5f);
-                    });
-                    table.Header(header =>
-                    {
-                        header.Cell().Element(Th).Text("ID / PAIRE");
-                        header.Cell().Element(Th).Text("ENTRÉE");
-                        header.Cell().Element(Th).Text("SORTIE");
-                        header.Cell().Element(Th).Text("PRIX OUV.");
-                        header.Cell().Element(Th).Text("PRIX FERM.");
-                        header.Cell().Element(Th).Text("PROFIT / NOTES / CHAMPS");
-                    });
-                    foreach (var trade in trades ?? new List<Trade>())
-                    {
-                        var custom = trade.ChampsPersonnalises == null ? "" : string.Join(" | ", trade.ChampsPersonnalises.Select(x =>
-                            (x.Nom ?? "Champ") + "=" + (x.Valeur == null ? "—" : x.Valeur.ToString())));
-                        var notes = string.IsNullOrWhiteSpace(trade.description) ? "" : trade.description.Trim();
-                        var detail = "Profit: " + trade.Profit.ToString("N2", Fr) + "\n" + notes +
-                                     (string.IsNullOrWhiteSpace(custom) ? "" : "\n" + custom);
-
-                        table.Cell().Element(Td).Text(trade.Id.ToString() + "\n" + (trade.Paire ?? "—"));
-                        table.Cell().Element(Td).Text(trade.DateEntree.ToString("dd/MM/yyyy HH:mm", Fr));
-                        table.Cell().Element(Td).Text(trade.DateSortie == default(DateTime) ? "—" : trade.DateSortie.ToString("dd/MM/yyyy HH:mm", Fr));
-                        table.Cell().Element(Td).Text(trade.prixOpen.ToString("N5", Fr));
-                        table.Cell().Element(Td).Text(trade.prixClose.ToString("N5", Fr));
-                        table.Cell().Element(Td).Text(detail);
-                    }
-                });
-            });
-        }
-
         private static Action<IContainer> MetricCard(string label, string value, string sub, string color)
         {
             return c => c.Border(1).BorderColor(CardBorder).Background("#FBFCFE").Padding(9).Column(col =>
@@ -777,7 +703,7 @@ namespace backtest
             });
         }
 
-        private static IContainer Th(IContainer c) => c.Background(DarkSoft).Padding(4).BorderBottom(1).BorderColor(CardBorder);
+        private static IContainer Th(IContainer c) => c.Background(DarkSoft).Padding(4).BorderBottom(1).BorderColor(CardBorder).DefaultTextStyle(x => x.FontColor(White));
         private static IContainer Td(IContainer c) => c.Padding(4).BorderBottom(0.5f).BorderColor("#E5E7EB");
 
         private static double TryDouble(Dictionary<string, object> stats, string key)
@@ -791,19 +717,6 @@ namespace backtest
 
         private static string FormatPercent(double value) => value.ToString("N1", Fr) + " %";
         private static string FormatR(double value) => (value >= 0 ? "+" : "") + value.ToString("N2", Fr) + "R";
-        private static string ResultLabel(Resultat r)
-        {
-            switch (r)
-            {
-                case Resultat.TP: return "TP";
-                case Resultat.SL: return "SL";
-                case Resultat.TR: return "TR";
-                case Resultat.BE: return "BE";
-                case Resultat.PARTIAL: return "PARTIEL";
-                default: return r.ToString();
-            }
-        }
-
         private static double TradeR(Trade trade)
         {
             if (trade == null) return 0;
@@ -827,14 +740,6 @@ namespace backtest
             }
 
             return maxDd;
-        }
-
-        private static string GetSessionLabel(int hour)
-        {
-            if (hour >= 0 && hour < 8) return "TOKYO";
-            if (hour >= 8 && hour < 13) return "LONDRES";
-            if (hour >= 13 && hour < 20) return "NEW YORK";
-            return "HORS SESSION";
         }
 
         private static string GetMostActiveSession(AdvancedStats advanced)
