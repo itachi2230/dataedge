@@ -61,6 +61,39 @@ window.cyberLog = function(msg, isError = false) {
     el.innerHTML = `<div style="${style}">[${time}] ${msg}</div>` + el.innerHTML;
 };
 
+// ── Notification utilisateur (toast cyber) ───────────────────────────
+// La console de debug (#debug-console) étant masquée, cyberLog ne suffit plus
+// pour informer l'utilisateur. cyberNotify affiche un toast VISIBLE dans le
+// chart : année sans données sur le serveur, début/fin d'historique, erreur
+// de récupération... type : 'info' | 'warn' | 'error'.
+// Le toast se ferme au clic ou automatiquement après `duration` ms.
+window._cyberNotifyTimer = null;
+window.cyberNotify = function(message, type = 'warn', duration = 8000) {
+    // Trace conservée dans la console de debug (masquée) pour le débogage
+    window.cyberLog(message, type === 'error');
+
+    const el = document.getElementById('cyber-notify');
+    if (!el) return;
+    const msgEl = document.getElementById('cyber-notify-message');
+    const iconEl = document.getElementById('cyber-notify-icon');
+    if (msgEl) msgEl.textContent = message;
+    if (iconEl) iconEl.textContent = (type === 'error') ? '⛔' : (type === 'warn' ? '⚠' : 'ℹ');
+    el.className = 'cyber-notify-visible ' +
+        (type === 'error' ? 'cyber-notify-error' : (type === 'warn' ? 'cyber-notify-warn' : 'cyber-notify-info'));
+
+    if (window._cyberNotifyTimer) clearTimeout(window._cyberNotifyTimer);
+    window._cyberNotifyTimer = setTimeout(window.cyberNotifyDismiss, duration);
+};
+
+window.cyberNotifyDismiss = function() {
+    const el = document.getElementById('cyber-notify');
+    if (el) el.className = '';
+    if (window._cyberNotifyTimer) {
+        clearTimeout(window._cyberNotifyTimer);
+        window._cyberNotifyTimer = null;
+    }
+};
+
 window.initChart = function() {
     if (window.chart) return;
     window.loadPrefs();

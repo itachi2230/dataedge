@@ -126,7 +126,12 @@ namespace backtest.services
 
         #region Récupération de Données (Historical)
 
-        public async Task<(bool success, string message, string filePath)> GetMarketDataAsync(string pair, string timeframe, string year, CancellationToken cts)
+        /// <summary>
+        /// Récupère les données historiques (cache local → API).
+        /// notFound = true quand le serveur répond 404 : le fichier (paire/TF/année) n'existe pas.
+        /// Permet à l'UI d'afficher "données inexistantes" au lieu d'un échec générique.
+        /// </summary>
+        public async Task<(bool success, bool notFound, string message, string filePath)> GetMarketDataAsync(string pair, string timeframe, string year, CancellationToken cts)
         {
             string cleanPair = pair.ToUpper().Trim();
             string serverTf = MapTimeframeToServer(timeframe);
@@ -141,7 +146,7 @@ namespace backtest.services
             {
                 var info = new FileInfo(localPath);
                 if (info.Length > 0)
-                    return (true, "DATA_LOCAL_READY", localPath);
+                    return (true, false, "DATA_LOCAL_READY", localPath);
 
                 File.Delete(localPath); // Nettoyage si fichier invalide
             }
@@ -155,7 +160,12 @@ namespace backtest.services
                 var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts);
 
                 if (!response.IsSuccessStatusCode)
-                    return (false, $"SERVER_ERROR: {response.StatusCode}", null);
+                {
+                    // 404 : le fichier (paire/TF/année) n'existe pas sur le serveur
+                    // → notFound = true pour que l'UI affiche "données inexistantes"
+                    bool notFound = response.StatusCode == System.Net.HttpStatusCode.NotFound;
+                    return (false, notFound, $"SERVER_ERROR: {response.StatusCode}", null);
+                }
 
                 // 3. Décompression vers fichier TEMPORAIRE
                 using (var compressedStream = await response.Content.ReadAsStreamAsync())
@@ -172,12 +182,12 @@ namespace backtest.services
                 if (File.Exists(localPath)) File.Delete(localPath);
                 File.Move(tempPath, localPath);
 
-                return (true, "DOWNLOAD_SUCCESS", localPath);
+                return (true, false, "DOWNLOAD_SUCCESS", localPath);
             }
             catch (Exception ex)
             {
                 if (File.Exists(tempPath)) try { File.Delete(tempPath); } catch { }
-                return (false, $"EXCEPTION: {ex.Message}", null);
+                return (false, false, $"EXCEPTION: {ex.Message}", null);
             }
         }
         public bool IsDataAvailableLocally(string pair, string tf, string year)

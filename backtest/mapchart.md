@@ -568,6 +568,47 @@ Exemples :
 
 ---
 
+## Notifications Utilisateur (cyber-notify)
+
+La console de debug (`#debug-console`, alimentée par `cyberLog`) étant **masquée** (`visibility: hidden`
+dans `style.css`), les événements « données inexistantes » sont signalés à l'utilisateur par un
+**toast visible** dans le chart, dans le style cyber de l'application (au lieu d'un graphique vide
+inexplicable).
+
+### Composants
+
+| Élément | Fichier | Rôle |
+|---|---|---|
+| `#cyber-notify` (+ `#cyber-notify-icon` / `#cyber-notify-message`) | `index.html` | Conteneur du toast (haut, centré sous la toolbar, fermable au clic) |
+| Styles `#cyber-notify` (+ variantes `.cyber-notify-warn` / `.cyber-notify-error`) | `style.css` | Apparition/disparition animée, glow néon, masqué par défaut |
+| `window.cyberNotify(msg, type, duration)` / `window.cyberNotifyDismiss()` | `chart_engine.js` | Affiche/ferme le toast (`info`/`warn`/`error`) ; trace aussi dans `cyberLog` pour le débogage |
+
+### Détection côté C# (`Dataservice.GetMarketDataAsync`)
+
+Le tuple de retour inclut désormais `notFound` : `(bool success, bool notFound, string message, string filePath)`,
+posé à `true` quand le serveur répond **404** (fichier paire/TF/année inexistant). Un fichier récupéré
+mais vide (0 bougie exploitable) est traité comme « données inexistantes ». Les autres échecs
+(réseau, 500...) restent `notFound = false` → message « impossible de récupérer les données ».
+
+### Déclencheurs (Chart.xaml.cs)
+
+| Situation | Méthode C# | Message toast |
+|---|---|---|
+| Saut (jump) vers une année/pack absent du serveur | `LoadYearForBacktest` | `{SYM} {TF} : aucune donnée pour {année} sur le serveur` |
+| Chargement initial / **changement de TF** / changement de paire sans fichier (ex. backtest Daily en 2006 → passage en H1 sans fichier H1 2006) | `LoadBacktestData` | `{SYM} {TF} : aucune donnée pour {année} sur le serveur` |
+| Scroll / replay au-delà du plus vieil historique disponible | `LoadMoreData` (isPrevious) / `LoadPreviousYearForReplay` | `{SYM} {TF} : début de l'historique — aucune donnée antérieure sur le serveur` |
+| Scroll / replay au-delà de la donnée la plus récente | `LoadMoreData` (isNext) | `{SYM} {TF} : fin des données — aucune donnée postérieure sur le serveur` |
+| Erreur réseau/serveur (≠ 404) | toutes | `{SYM} {TF} ... : impossible de récupérer les données ({détail})` |
+
+Notes :
+- Helpers côté C# : `ShowNoticeAsync(message, type, duration)` (toast générique), `ShowNoDataNotice(année)`
+  (message « aucune donnée » — sans année pour **W/M**, fichier unique regroupant tout l'historique) et
+  `EscapeJs` (échappement apostrophes/backslashes pour injection JS sûre).
+- Le graphique vidé (changement de TF sans données) reste vide, mais la raison est affichée ; le toast
+  se ferme au clic ou automatiquement (6-10 s selon le cas). Les statuts WPF `TxtStatus` existants sont conservés.
+
+---
+
 ## Capture d'Écran
 
 ```javascript

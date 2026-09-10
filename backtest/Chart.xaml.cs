@@ -309,11 +309,23 @@ namespace backtest
 
                         // Envoi au JS
                         await SafeExecuteJs($"window.setupBacktestData({json}, {year});");
+                        return;
                     }
+                }
+
+                // Données absentes (fichier introuvable sur le serveur OU récupéré mais
+                // vide) ou erreur réseau/serveur : on prévient l'utilisateur via un toast
+                // visible au lieu d'un échec silencieux (l'ancien cyberLog partait dans
+                // la console de debug désormais masquée → "vide" incompréhensible).
+                if (result.success || result.notFound)
+                {
+                    await ShowNoDataNotice(year);
+                    await SafeExecuteJs($"window.cyberLog('Fichier {fileToRequest} introuvable ou vide sur le serveur', true);");
                 }
                 else
                 {
-                    await SafeExecuteJs($"window.cyberLog('Fichier {fileToRequest} introuvable sur le serveur', true);");
+                    await ShowNoticeAsync($"{_currentSymbol} {_currentTF.ToUpper()} {year} : impossible de récupérer les données ({EscapeJs(result.message)})", "error", 10000);
+                    await SafeExecuteJs($"window.cyberLog('Erreur Jump {year}: {EscapeJs(result.message)}', true);");
                 }
             }
             catch (Exception ex)
@@ -362,6 +374,20 @@ namespace backtest
                         SaveUserSettings();
                         return;
                     }
+                }
+
+                // Aucune donnée exploitable : on prévient l'utilisateur AVANT de vider le
+                // graphique. Cas typique : changement de TF vers une année sans fichier
+                // (ex. backtest Daily en 2006 → passage en H1 sans fichier H1 2006),
+                // ou année absente du serveur au démarrage / changement de paire.
+                if (result.success || result.notFound)
+                {
+                    await ShowNoDataNotice(_currentYear);
+                    await SafeExecuteJs($"window.cyberLog('Fichier {fileToRequest} introuvable ou vide sur le serveur', true);");
+                }
+                else
+                {
+                    await ShowNoticeAsync($"{_currentSymbol} {_currentTF.ToUpper()} : impossible de récupérer les données ({EscapeJs(result.message)})", "error", 10000);
                 }
 
                 await SafeExecuteJs($"updateChartData([], '{_currentSymbol}', null, '{_currentTF}');");
@@ -449,7 +475,23 @@ namespace backtest
 
                 // Fin d'historique des DEUX côtés (avant : plus de fichier antérieur, après : plus de fichier postérieur)
                 _endOfDataReached = true;
-                SetStatus(isPrevious ? "DÉBUT DE L'HISTORIQUE" : "FIN DES DONNÉES", "#FF4B4B");
+
+                // Notification visible : on distingue "données réellement absentes du
+                // serveur" (fichier introuvable/vide) d'une erreur réseau/serveur.
+                if (result.success || result.notFound)
+                {
+                    SetStatus(isPrevious ? "DÉBUT DE L'HISTORIQUE" : "FIN DES DONNÉES", "#FF4B4B");
+                    await ShowNoticeAsync(
+                        isPrevious
+                            ? $"{_currentSymbol} {_currentTF.ToUpper()} : début de l'historique — aucune donnée antérieure sur le serveur"
+                            : $"{_currentSymbol} {_currentTF.ToUpper()} : fin des données — aucune donnée postérieure sur le serveur",
+                        "warn", 6000);
+                }
+                else
+                {
+                    SetStatus(isPrevious ? "DÉBUT DE L'HISTORIQUE" : "FIN DES DONNÉES", "#FF4B4B");
+                    await ShowNoticeAsync($"{_currentSymbol} {_currentTF.ToUpper()} {targetYear} : impossible de récupérer les données ({EscapeJs(result.message)})", "error", 8000);
+                }
             }
             catch (Exception ex)
             {
@@ -529,6 +571,18 @@ namespace backtest
                 // Plus aucun fichier antérieur disponible : on stoppe les tentatives
                 _endOfDataReached = true;
                 SetStatus("DÉBUT DE L'HISTORIQUE", "#FF4B4B");
+
+                // Notification visible (replay) : l'utilisateur sait pourquoi il ne peut
+                // pas remonter plus loin, au lieu d'un arrêt silencieux du préchargement.
+                if (result.success || result.notFound)
+                {
+                    await ShowNoticeAsync($"{_currentSymbol} {_currentTF.ToUpper()} : début de l'historique — aucune donnée antérieure sur le serveur", "warn", 6000);
+                }
+                else
+                {
+                    await ShowNoticeAsync($"{_currentSymbol} {_currentTF.ToUpper()} : impossible de récupérer l'historique antérieur ({EscapeJs(result.message)})", "error", 8000);
+                }
+
                 await SafeExecuteJs("window._leftEndReached = true; window.isProcessingData = false; window._leftContextLoading = false;");
             }
             catch (OperationCanceledException)
@@ -589,6 +643,43 @@ namespace backtest
                 }
             }
         }
+
+        /// <summary>
+        /// Affiche une notification VISIBLE dans le chart (toast cyber-notify).
+        /// Contrairement à cyberLog (console de debug désormais masquée), ce canal
+        /// est destiné à l'utilisateur : année sans données, fin d'historique, etc.
+        /// type : "info" | "warn" | "error" — durée en ms avant fermeture auto.
+        /// </summary>
+        private async Task ShowNoticeAsync(string message, string type = "warn", int durationMs = 8000)
+        {
+            await SafeExecuteJs($"window.cyberNotify('{EscapeJs(message)}', '{type}', {durationMs});");
+        }
+
+        /// <summary>
+        /// Notifie l'utilisateur qu'aucune donnée n'existe pour le symbole/timeframe
+        /// courant à l'année demandée (fichier introuvable sur le serveur ou vide).
+        /// Pour W/M (fichier unique regroupant tout l'historique), le message ne
+        /// mentionne pas d'année.
+        /// </summary>
+        private Task ShowNoDataNotice(int requestedYear)
+        {
+            string tfLow = _currentTF.ToLower();
+            string msg = (tfLow == "w" || tfLow == "m")
+                ? $"{_currentSymbol} {_currentTF.ToUpper()} : aucune donnée sur le serveur"
+                : $"{_currentSymbol} {_currentTF.ToUpper()} : aucune donnée pour {requestedYear} sur le serveur";
+            return ShowNoticeAsync(msg, "warn", 10000);
+        }
+
+        /// <summary>
+        /// Échappe une chaîne pour injection sûre dans un script JS
+        /// (backslashes, apostrophes, retours ligne).
+        /// </summary>
+        private static string EscapeJs(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            return s.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\r", " ").Replace("\n", " ");
+        }
+
         public async void ExitReplayAndGoToPresent()
         {
             try

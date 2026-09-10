@@ -133,6 +133,7 @@ button.active {
 #debug-console { 
     position: absolute; 
     bottom: 10px; 
+	visibility: hidden;
     left: 65px; 
     width: 300px; 
     max-height: 120px;
@@ -144,6 +145,63 @@ button.active {
     font-size: 11px; 
     opacity: 0.8;
     background: linear-gradient(transparent, rgba(0,0,0,0.5));
+}
+
+/* --- NOTIFICATION UTILISATEUR (TOAST CYBER) --- */
+/* Message visible destiné à l'utilisateur : année sans données sur le serveur,
+   début/fin d'historique, erreur de récupération. Masqué par défaut, s'affiche
+   via la classe .cyber-notify-visible posée par window.cyberNotify(). */
+#cyber-notify {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translate(-50%, -12px);
+    z-index: 10000; /* sous le cyber-loader (99999), au-dessus du reste */
+    max-width: 540px;
+    padding: 10px 18px;
+    background: rgba(19, 23, 34, 0.95);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    box-shadow: 0 0 14px rgba(0, 255, 255, 0.25);
+    color: var(--text-dark);
+    font-family: 'Consolas', monospace;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#cyber-notify.cyber-notify-visible {
+    opacity: 1;
+    pointer-events: auto; /* cliquable pour fermer */
+    cursor: pointer;
+    transform: translate(-50%, 0);
+}
+
+#cyber-notify.cyber-notify-warn {
+    border-color: #FFB900;
+    box-shadow: 0 0 14px rgba(255, 185, 0, 0.3);
+}
+
+#cyber-notify.cyber-notify-error {
+    border-color: #FF4B4B;
+    box-shadow: 0 0 14px rgba(255, 75, 75, 0.35);
+}
+
+#cyber-notify-icon {
+    font-size: 15px;
+    color: var(--accent);
+}
+
+#cyber-notify.cyber-notify-warn #cyber-notify-icon { color: #FFB900; }
+#cyber-notify.cyber-notify-error #cyber-notify-icon { color: #FF4B4B; }
+
+#cyber-notify-message {
+    text-align: left;
+    line-height: 1.4;
 }
 
 /* ZONE DE SCALE (P-L-A) */
