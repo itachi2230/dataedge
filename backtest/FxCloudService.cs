@@ -347,6 +347,7 @@ public async Task<List<string>> FullSyncAsync()
 
                 // 2. Inventaire local : hash md5 calculé une seule fois par synchro.
                 var localFiles = ScanLocalFiles();
+                bool isInitialRestore = localFiles.Count == 0 && remoteFiles.Count > 0;
                 var toUpload = new List<SyncLocalFile>();
                 foreach (var lf in localFiles)
                 {
@@ -354,6 +355,9 @@ public async Task<List<string>> FullSyncAsync()
                     // Fichier absent côté serveur OU contenu différent = à pousser.
                     if (rf == null || rf.hash != lf.Hash) toUpload.Add(lf);
                 }
+
+                if (isInitialRestore)
+                    reports.Add("Restauration initiale : aucune donnée locale, récupération de tout le cloud...");
 
                 // 3. Upload par lots (endpoint batch : 1 requête pour N fichiers).
                 await UploadFilesAsync(toUpload, remoteFiles, cache, reports);
@@ -1042,7 +1046,31 @@ public async Task<string> DownloadProfileImageAsync(string fileName)
 
         public void DeleteSessionFromDisk() { if (File.Exists(_sessionFilePath)) File.Delete(_sessionFilePath); }
 
-        private void SaveTokens() { File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TokenFileName), new[] { CurrentToken ?? "", RefreshToken ?? "" }); }
+        // ------------------------------------------------------------------
+        // Persistance des tokens (session.bin) CHIFFRÉE via DPAPI
+        // (ProtectedData.CurrentUser) : le fichier n'est lisible que par le
+        // compte Windows qui l'a créé — plus aucun JWT / refresh en clair.
+        // Migration automatique depuis l'ancien format en clair au premier
+        // lancement (lecture → re-sauvegarde chiffrée).
+        // ------------------------------------------------------------------
+        private string GetTokenFilePath()
+            => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TokenFileName);
+
+        private void SaveTokens()
+        {
+            try
+            {
+                byte[] plain = Encoding.UTF8.GetBytes((CurrentToken ?? "") + "\n" + (RefreshToken ?? ""));
+                byte[] encrypted = ProtectedData.Protect(plain, null, DataProtectionScope.CurrentUser);
+                File.WriteAllText(GetTokenFilePath(), Convert.ToBase64String(encrypted));
+            }
+            catch
+            {
+                // Secours : si le chiffrement échoue, on conserve l'ancien format
+                // plutôt que de perdre la session de l'utilisateur.
+                File.WriteAllLines(GetTokenFilePath(), new[] { CurrentToken ?? "", RefreshToken ?? "" });
+            }
+        }
 
         private void LoadTokens()
         {
@@ -1051,13 +1079,28 @@ public async Task<string> DownloadProfileImageAsync(string fileName)
             // potentiellement périmé du disque lors d'une construction d'instance.
             if (!string.IsNullOrEmpty(CurrentToken)) return;
 
-            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TokenFileName);
-            if (File.Exists(path))
+            string path = GetTokenFilePath();
+            if (!File.Exists(path)) return;
+
+            string content = File.ReadAllText(path);
+            bool migrated = false;
+            try
             {
-                var lines = File.ReadAllLines(path);
-                if (lines.Length > 0) CurrentToken = lines[0];
-                if (lines.Length > 1) RefreshToken = lines[1];
+                byte[] plain = ProtectedData.Unprotect(Convert.FromBase64String(content), null, DataProtectionScope.CurrentUser);
+                string[] parts = Encoding.UTF8.GetString(plain).Split('\n');
+                if (parts.Length > 0) CurrentToken = parts[0];
+                if (parts.Length > 1) RefreshToken = parts[1];
             }
+            catch
+            {
+                // Ancien format en clair (session pré-migration) : lecture directe,
+                // puis re-sauvegarde immédiate au format chiffré.
+                string[] lines = content.Split('\n');
+                if (lines.Length > 0) CurrentToken = lines[0].Trim();
+                if (lines.Length > 1) RefreshToken = lines[1].Trim();
+                migrated = true;
+            }
+            if (migrated && !string.IsNullOrEmpty(CurrentToken)) SaveTokens();
         }
 
         #endregion

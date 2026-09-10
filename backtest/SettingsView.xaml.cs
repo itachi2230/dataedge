@@ -481,13 +481,44 @@ namespace backtest
 
             LstCloudFiles.Items.Clear();
             _cloudFiles = filesTask.Result ?? new List<CloudFileInfo>();
-            foreach (var f in _cloudFiles)
-                LstCloudFiles.Items.Add(f.path + "  —  " + FormatBytes(f.size) + "  —  " + FormatServerDate(f.last_modified));
+            // Tri alphabétique pour une navigation plus lisible.
+            _cloudFiles.Sort((a, b) => string.Compare(a.path, b.path, StringComparison.OrdinalIgnoreCase));
+            RefreshCloudFilesList();
 
             _cloudBackups = backupsTask.Result ?? new List<CloudBackupInfo>();
             FillBackupsForSelection();
 
             BtnCloudRefresh.IsEnabled = true;
+        }
+
+        // ==================================================================
+        // Recherche / filtrage de la liste des fichiers du cloud.
+        // La sélection et les index restent alignés sur _cloudFiles (triée) :
+        // le filtre n'affiche qu'un sous-ensemble mais conserve les index
+        // d'origine pour les actions (restauration / suppression / .bak).
+        // ==================================================================
+        private void RefreshCloudFilesList()
+        {
+            string filter = (TxtCloudSearch.Text ?? "").Trim();
+            LstCloudFiles.Items.Clear();
+            foreach (var f in _cloudFiles)
+            {
+                if (filter.Length > 0 && f.path.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                LstCloudFiles.Items.Add(f.path + "  —  " + FormatBytes(f.size) + "  —  " + FormatServerDate(f.last_modified));
+            }
+            if (LstCloudFiles.Items.Count == 0)
+                LstCloudFiles.Items.Add(filter.Length > 0
+                    ? "— Aucun fichier ne correspond à \"" + filter + "\" —"
+                    : "— Aucun fichier sur le cloud —");
+        }
+
+        // Filtre en direct pendant la saisie de recherche.
+        private void TxtCloudSearch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (TxtCloudSearchPlaceholder != null)
+                TxtCloudSearchPlaceholder.Visibility = string.IsNullOrEmpty(TxtCloudSearch.Text)
+                    ? Visibility.Visible : Visibility.Collapsed;
+            RefreshCloudFilesList();
         }
 
         private void FillBackupsForSelection()

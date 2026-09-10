@@ -239,11 +239,22 @@ FxCloudService.FullSyncAsync()
   ├── UploadFilesAsync()             → POST /api/cloud/sync-batch (lots de 8 fichiers)
   │     └── repli unitaire sync-file si le serveur ne connaît pas sync-batch
   └── DownloadFromServerAsync()      → Download des fichiers absents/modifiés
+        └── Détection « restauration initiale » : si aucun fichier local ET fichiers
+            distants présents (nouveau PC), message explicite dans le rapport +
+            téléchargement de tout le cloud (les fichiers absents localement ne sont
+            jamais écrasés : ils sont récupérés).
         └── Résolution de conflits via metadata/synccache.json (cache du dernier
             hash serveur vu) : serveur inchangé → version locale conservée ;
             local inchangé → version serveur récupérée ; conflit réel → local
             conservé (ancienne version distante préservée en .bak serveur).
 ```
+
+> 🔒 **Sécurité tokens** : `session.bin` (JWT + refresh) est désormais **chiffré en DPAPI**
+> (`ProtectedData.Protect`, scope `CurrentUser`) — les tokens ne sont plus stockés en
+> clair sur le disque. Migration automatique de l'ancien format en clair au premier
+> lancement (`FxCloudService.SaveTokens` / `LoadTokens`). En cas d'échec du chiffrement,
+> repli temporaire sur le format en clair (la session n'est jamais perdue).
+
 Paramètres de sync (Settings > APPLICATION > SYNCHRONISATION CLOUD) : toggle
 `sync_cacheimage=` (persisté dans config.txt via `FxCloudService.SetSyncCacheImageEnabled`)
 + bouton « Synchroniser maintenant » avec résumé dans `SettingsView`.
@@ -255,8 +266,12 @@ Panneau de gestion du stockage distant (`SettingsView`, `PanelCloud`), alimenté
 
 - **Résumé du stockage** : `GET /api/cloud/storage` → taille totale, nb fichiers,
   taille/nombre des sauvegardes `.bak` (`TxtCloudStorage`).
+- **Recherche / filtrage** : champ texte au-dessus de la liste des fichiers — filtre
+  en direct sur le chemin (`RefreshCloudFilesList()`), la liste est triée
+  alphabétiquement. La sélection et les index restent alignés sur `_cloudFiles`
+  (triée) pour les actions (restauration / suppression / `.bak`).
 - **Liste des fichiers du compte** : manifest distant (`FetchCloudManifestPublicAsync`)
-  affiché avec taille + date (path, size, last_modified).
+  affiché avec taille + date (path, size, last_modified), tri alphabétique.
 - **Sauvegardes `.bak` par fichier** : `GET /api/cloud/list-backups` ; sélectionner un
   fichier filtre ses `.bak` (motif `{chemin}.{YYYYMMDD_HHMMSS}.bak`).
 - **Actions** :
