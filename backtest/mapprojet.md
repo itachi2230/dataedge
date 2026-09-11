@@ -275,19 +275,23 @@ Paramètres de sync (Settings > APPLICATION > SYNCHRONISATION CLOUD) : toggle
 Panneau de gestion du stockage distant (`SettingsView`, `PanelCloud`), alimenté par
 `RefreshCloudPanelAsync()` (3 appels en parallèle : storage + manifest + backups) :
 
-- **Résumé du stockage** : `GET /api/cloud/storage` → taille totale, nb fichiers,
-  taille/nombre des sauvegardes `.bak` (`TxtCloudStorage`).
-- **Recherche / filtrage** : champ texte au-dessus de la liste — filtre en direct
-  sur le chemin, appliqué aussi bien à la vue groupée qu'à la liste cachée (`_cloudFiles`).
-  (triée) pour les actions (restauration / suppression / `.bak`).
-- **Liste des fichiers groupée par dossier** : au lieu d'une liste plate, les fichiers
-  sont organisés par dossier (`data/`, `Notes/`, `etudes/`, `cacheimage/`, `metadata/`)
-  via `CloudFolderGroups` (ItemsControl avec Expanders). Chaque groupe affiche le
-  nombre de fichiers et la taille totale. Les classes `CloudFolderGroup` et
-  `CloudFileItem` (dans `SettingsView.xaml.cs`) structurent les données.
-  affiché avec taille + date (path, size, last_modified), tri alphabétique.
-- **Sauvegardes `.bak` par fichier** : `GET /api/cloud/list-backups` ; sélectionner un
-  fichier filtre ses `.bak` (motif `{chemin}.{YYYYMMDD_HHMMSS}.bak`).
+- **4 cartes de stats (grille 2×2)** : stockage total (`TxtCloudStorage`, `GET
+  /api/cloud/storage`), nombre de fichiers (`TxtCloudFileCount`), nombre de sauvegardes
+  `.bak` (`TxtCloudBackupCount`) et dernière synchro connue (`TxtCloudLastSync`, lue
+  dans la session locale `LastSyncDate`).
+- **Deux onglets internes (ToggleButtons `TabFiles` / `TabBackups`)** pour séparer les
+  contenus et éviter la surcharge de scroll :
+  - **FICHIERS** (`ViewFiles`) : barre de recherche/filtre en direct (`TxtCloudSearch`
+    → `RefreshCloudFilesList()`), en-têtes de colonnes (Nom / Taille / Date) et
+    `ListBox` stylisée `LvCloudFiles` remplie de `CloudFileItem` (classe
+    `CloudFileItem` dans `SettingsView.xaml.cs`), tri alphabétique sur `_cloudFiles`.
+    Chaque ligne porte son chemin complet (`FilePath`) : la sélection reste robuste
+    même quand le filtre est actif. Boutons d'action « Restaurer en local » /
+    « Supprimer du cloud ».
+  - **SAUVEGARDES** (`ViewBackups`) : liste `LstCloudBackups` alimentée par
+    `FillBackupsForSelection()` — filtré sur le fichier sélectionné (motif
+    `{chemin}.{YYYYMMDD_HHMMSS}.bak`) ou toutes les sauvegardes du compte triées par
+    date quand aucun fichier n'est sélectionné (`TxtBackupFilterInfo`).
 - **Actions** :
   - « Restaurer la version serveur en local » : écrase la copie locale corrompue/perdue
     par le téléchargement du fichier distant ;
@@ -296,7 +300,10 @@ Panneau de gestion du stockage distant (`SettingsView`, `PanelCloud`), alimenté
   - « Restaurer cette sauvegarde sur le serveur » : `POST /api/cloud/restore-backup`
     (copie le `.bak` sur le fichier principal serveur, `.bak` conservé ; relancer une
     synchro ensuite pour récupérer la version restaurée en local).
-- Hors connexion : message « Connectez-vous (onglet Compte Global) ».
+- **Paramètres de synchronisation** (dossiers exclus) : déplié dans un `Expander`
+  replié par défaut en bas de l'onglet CLOUD (`ChkSyncData/Etudes/Notes/CacheImage/
+  Metadata` → `ChkSyncFolder_Click`).
+- Hors connexion : cartes affichées à « Non connecté » / « 0 » / « Jamais ».
 
 ### Safe-Delete (suppression → backup .bak)
 

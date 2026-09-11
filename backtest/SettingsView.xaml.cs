@@ -40,19 +40,12 @@ namespace backtest
             if (bytes < 1024 * 1024) return (bytes / 1024.0).ToString("F1") + " Ko";
             return (bytes / 1024.0 / 1024.0).ToString("F2") + " Mo";
         }
-    }
 
-    /// <summary>
-    /// Groupe de fichiers du cloud par dossier (pour l-affichage groupe de l-onglet CLOUD).
-    /// </summary>
-    public class CloudFolderGroup
-    {
-        public string FolderName { get; set; }
-        public List<CloudFileItem> Files { get; set; } = new List<CloudFileItem>();
-        public bool IsExpanded { get; set; } = false;
-        public int FileCount => Files.Count;
-        public long TotalSize => Files.Sum(f => f.Size);
-        public string TotalSizeText => CloudFormatHelper.FormatBytes(TotalSize);
+        public static string FormatServerDate(long serverTime)
+        {
+            try { return DateTimeOffset.FromUnixTimeSeconds(serverTime).LocalDateTime.ToString("dd/MM/yyyy HH:mm"); }
+            catch { return "---"; }
+        }
     }
 
     public class CloudFileItem
@@ -62,6 +55,7 @@ namespace backtest
         public long Size { get; set; }
         public long LastModified { get; set; }
         public string SizeText => CloudFormatHelper.FormatBytes(Size);
+        public string DateText => CloudFormatHelper.FormatServerDate(LastModified);
     }
 
     public partial class SettingsView : UserControl
@@ -257,8 +251,6 @@ namespace backtest
         private List<CloudFileInfo> _cloudFiles = new List<CloudFileInfo>();
         private List<CloudBackupInfo> _cloudBackups = new List<CloudBackupInfo>();
         private List<CloudBackupInfo> _backupsForSelection = new List<CloudBackupInfo>();
-        private List<CloudFolderGroup> _folderGroups = new List<CloudFolderGroup>();
-        private string _selectedCloudFilePath = null;
 
         public void ShowCloudPanel()
         {
@@ -533,14 +525,16 @@ namespace backtest
         {
             if (string.IsNullOrEmpty(FxCloudService.CurrentToken))
             {
-                TxtCloudStorage.Text = "Connectez-vous (onglet Compte Global).";
-                LstCloudFiles.Items.Clear();
-                LstCloudBackups.Items.Clear();
+                TxtCloudStorage.Text = "Non connecté";
+                TxtCloudFileCount.Text = "0";
+                TxtCloudBackupCount.Text = "0";
+                TxtCloudLastSync.Text = "Jamais";
+                LvCloudFiles.Items.Clear();
+                FillBackupsForSelection();
                 return;
             }
 
             BtnCloudRefresh.IsEnabled = false;
-            TxtCloudStorage.Text = "Chargement...";
 
             var storageTask = _cloudService.GetCloudStorageInfoAsync();
             var filesTask = _cloudService.FetchCloudManifestPublicAsync();
@@ -549,17 +543,27 @@ namespace backtest
 
             var storage = storageTask.Result;
             TxtCloudStorage.Text = storage != null
-                ? FormatBytes(storage.total_bytes) + " — " + storage.file_count + " fichier(s)  |  Sauvegardes : "
-                    + FormatBytes(storage.backup_bytes) + " (" + storage.backup_count + ")"
-                : "Serveur inaccessible.";
+                ? FormatBytes(storage.total_bytes)
+                : "Inaccessible";
 
-            LstCloudFiles.Items.Clear();
+            // Dernière synchronisation connue (session locale).
+            try
+            {
+                var session = LoadSessionFromDisk();
+                TxtCloudLastSync.Text = (session != null && session.LastSyncDate.HasValue)
+                    ? session.LastSyncDate.Value.ToString("dd/MM/yyyy HH:mm")
+                    : "Jamais";
+            }
+            catch { TxtCloudLastSync.Text = "Jamais"; }
+
             _cloudFiles = filesTask.Result ?? new List<CloudFileInfo>();
             // Tri alphabétique pour une navigation plus lisible.
             _cloudFiles.Sort((a, b) => string.Compare(a.path, b.path, StringComparison.OrdinalIgnoreCase));
+            TxtCloudFileCount.Text = _cloudFiles.Count.ToString();
             RefreshCloudFilesList();
 
             _cloudBackups = backupsTask.Result ?? new List<CloudBackupInfo>();
+            TxtCloudBackupCount.Text = _cloudBackups.Count.ToString();
             FillBackupsForSelection();
 
             BtnCloudRefresh.IsEnabled = true;
@@ -567,60 +571,48 @@ namespace backtest
 
         // ==================================================================
         // Recherche / filtrage de la liste des fichiers du cloud.
-        // La sélection et les index restent alignés sur _cloudFiles (triée) :
-        // le filtre n'affiche qu'un sous-ensemble mais conserve les index
-        // d'origine pour les actions (restauration / suppression / .bak).
+        // Chaque ligne est un CloudFileItem porteur de son chemin complet :
+        // la sélection est donc robuste même quand le filtre est actif.
         // ==================================================================
         private void RefreshCloudFilesList()
         {
             string filter = (TxtCloudSearch.Text ?? "").Trim();
-            LstCloudFiles.Items.Clear();
+            LvCloudFiles.Items.Clear();
             foreach (var f in _cloudFiles)
             {
                 if (filter.Length > 0 && f.path.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                LstCloudFiles.Items.Add(f.path + "  -  " + FormatBytes(f.size) + "  -  " + FormatServerDate(f.last_modified));
+                int slash = f.path.LastIndexOf('/');
+                string fname = slash >= 0 ? f.path.Substring(slash + 1) : f.path;
+                LvCloudFiles.Items.Add(new CloudFileItem { FilePath = f.path, FileName = fname, Size = f.size, LastModified = f.last_modified });
             }
-            if (LstCloudFiles.Items.Count == 0)
-                LstCloudFiles.Items.Add(filter.Length > 0
-                    ? "- Aucun fichier ne correspond a \"" + filter + "\" -"
-                    : "- Aucun fichier sur le cloud -");
-
-            _folderGroups.Clear();
-            foreach (var f in _cloudFiles)
-            {
-                if (filter.Length > 0 && f.path.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                string folder = "";
-                int slash = f.path.IndexOf('/');
-                if (slash > 0) folder = f.path.Substring(0, slash);
-                else folder = "(racine)";
-                var grp = _folderGroups.FirstOrDefault(g => g.FolderName == folder);
-                if (grp == null) { grp = new CloudFolderGroup { FolderName = folder }; _folderGroups.Add(grp); }
-                grp.Files.Add(new CloudFileItem { FilePath = f.path, FileName = f.path.Substring(slash + 1), Size = f.size, LastModified = f.last_modified });
-            }
-            _folderGroups.Sort((a, b) => string.Compare(a.FolderName, b.FolderName, StringComparison.OrdinalIgnoreCase));
-            CloudFolderGroups.ItemsSource = null;
-            CloudFolderGroups.ItemsSource = _folderGroups;
+            if (LvCloudFiles.Items.Count > 0)
+                LvCloudFiles.SelectedIndex = 0;
         }
 
-        private void FolderGroupHeader_Click(object sender, RoutedEventArgs e)
+        private CloudFileItem SelectedCloudItem()
         {
-            if (sender is System.Windows.Controls.Button btn && btn.Tag is string folder)
-            {
-                var grp = _folderGroups.FirstOrDefault(g => g.FolderName == folder);
-                if (grp != null) { grp.IsExpanded = !grp.IsExpanded; CloudFolderGroups.ItemsSource = null; CloudFolderGroups.ItemsSource = _folderGroups; }
-            }
+            if (LvCloudFiles.SelectedItem is CloudFileItem it) return it;
+            return null;
         }
 
-        private void CloudFileItem_Click(object sender, RoutedEventArgs e)
+        // Bascule entre les onglets FICHIERS / SAUVEGARDES.
+        private void ShowFilesTab()
         {
-            if (sender is System.Windows.Controls.Button btn && btn.Tag is string filePath)
-            {
-                _selectedCloudFilePath = filePath;
-                for (int i = 0; i < _cloudFiles.Count; i++)
-                {
-                    if (_cloudFiles[i].path == filePath) { LstCloudFiles.SelectedIndex = i; return; }
-                }
-            }
+            TabFiles.IsChecked = true;
+            TabBackups.IsChecked = false;
+            ViewFiles.Visibility = Visibility.Visible;
+            ViewBackups.Visibility = Visibility.Collapsed;
+        }
+
+        private void TabFiles_Click(object sender, RoutedEventArgs e) => ShowFilesTab();
+
+        private void TabBackups_Click(object sender, RoutedEventArgs e)
+        {
+            TabBackups.IsChecked = true;
+            TabFiles.IsChecked = false;
+            ViewFiles.Visibility = Visibility.Collapsed;
+            ViewBackups.Visibility = Visibility.Visible;
+            FillBackupsForSelection();
         }
 
 
@@ -638,26 +630,38 @@ namespace backtest
             LstCloudBackups.Items.Clear();
             _backupsForSelection.Clear();
 
-            int sel = LstCloudFiles.SelectedIndex;
-            if (sel < 0 || sel >= _cloudFiles.Count)
+            CloudFileItem sel = SelectedCloudItem();
+            string path = sel != null ? sel.FilePath : null;
+
+            if (path == null)
             {
-                LstCloudBackups.Items.Add("— Sélectionnez un fichier ci-dessus —");
+                // Aucun fichier sélectionné : montrer toutes les sauvegardes du compte.
+                TxtBackupFilterInfo.Text = "Toutes les sauvegardes du compte :";
+                var all = new List<CloudBackupInfo>(_cloudBackups);
+                all.Sort((a, b) => a.last_modified < b.last_modified ? 1 : (a.last_modified > b.last_modified ? -1 : 0));
+                foreach (var b in all)
+                {
+                    _backupsForSelection.Add(b);
+                    LstCloudBackups.Items.Add($"{b.path}   —   {FormatBytes(b.size)}   —   {FormatServerDate(b.last_modified)}");
+                }
+                if (_backupsForSelection.Count == 0)
+                    LstCloudBackups.Items.Add("— Aucune sauvegarde sur le compte —");
                 return;
             }
 
-            string path = _cloudFiles[sel].path;
+            TxtBackupFilterInfo.Text = "Sauvegardes de \"" + path + "\" :";
             string prefix = path + ".";
             foreach (var b in _cloudBackups)
             {
                 if (!b.path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
                 _backupsForSelection.Add(b);
-                LstCloudBackups.Items.Add(b.path + "  —  " + FormatBytes(b.size) + "  —  " + FormatServerDate(b.last_modified));
+                LstCloudBackups.Items.Add($"{b.path}   —   {FormatBytes(b.size)}   —   {FormatServerDate(b.last_modified)}");
             }
             if (_backupsForSelection.Count == 0)
                 LstCloudBackups.Items.Add("— Aucune sauvegarde pour ce fichier —");
         }
 
-        private void LstCloudFiles_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void LvCloudFiles_SelectionChanged(object sender, SelectionChangedEventArgs e)
             => FillBackupsForSelection();
 
         private void BtnCloudTab_Click(object sender, RoutedEventArgs e) => ShowCloudPanel();
@@ -669,14 +673,14 @@ namespace backtest
         // locale — utile quand la copie locale est corrompue/perdue).
         private async void BtnCloudRestoreFile_Click(object sender, RoutedEventArgs e)
         {
-            int sel = LstCloudFiles.SelectedIndex;
-            if (sel < 0 || sel >= _cloudFiles.Count)
+            CloudFileItem item = SelectedCloudItem();
+            if (item == null)
             {
                 await ShowNotification("Sélectionnez d'abord un fichier", true);
                 return;
             }
 
-            string path = _cloudFiles[sel].path;
+            string path = item.FilePath;
             string localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path.Replace('/', Path.DirectorySeparatorChar));
 
             if (MessageBox.Show("Écraser la copie locale de \"" + path + "\" par la version du serveur ?",
@@ -691,14 +695,14 @@ namespace backtest
         // Supprime le fichier sélectionné du cloud (fichier + backups .bak).
         private async void BtnCloudDeleteFile_Click(object sender, RoutedEventArgs e)
         {
-            int sel = LstCloudFiles.SelectedIndex;
-            if (sel < 0 || sel >= _cloudFiles.Count)
+            CloudFileItem item = SelectedCloudItem();
+            if (item == null)
             {
                 await ShowNotification("Sélectionnez d'abord un fichier", true);
                 return;
             }
 
-            string path = _cloudFiles[sel].path;
+            string path = item.FilePath;
             if (MessageBox.Show("Supprimer \"" + path + "\" du cloud (et ses sauvegardes) ?\nLa copie locale est conservée.",
                 "Supprimer du cloud", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
