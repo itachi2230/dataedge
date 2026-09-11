@@ -11,6 +11,7 @@ using System.IO;
 using System.ComponentModel;
 using System.Collections.Specialized;
 using System.Linq; // Any/Count sur les rapports de synchro
+using System.Globalization; // Dates des notes hebdo / captures (TryParseExact)
 using System.Text.Json; // Intégré à .NET pour gérer le fichier local
 using System.Collections.Generic; // Listes fichiers/backups cloud
 using backtest.Services;
@@ -46,16 +47,222 @@ namespace backtest
             try { return DateTimeOffset.FromUnixTimeSeconds(serverTime).LocalDateTime.ToString("dd/MM/yyyy HH:mm"); }
             catch { return "---"; }
         }
+
+        /// <summary>
+        /// Traduit les phases techniques de la synchro en libellés lisibles
+        /// (partagé par la barre de progression des paramètres et du dashboard).
+        /// </summary>
+        public static string SyncPhaseLabel(string phase)
+        {
+            switch ((phase ?? "").Trim().ToLowerInvariant())
+            {
+                case "connecting...": return "Connexion au cloud…";
+                case "scanning...": return "Analyse des données…";
+                case "upload": return "Envoi vers le cloud…";
+                case "download": return "Récupération des données…";
+                case "cleanup": return "Nettoyage…";
+                case "done": return "Synchronisation terminée";
+                default: return string.IsNullOrEmpty(phase) ? "Synchronisation…" : phase;
+            }
+        }
     }
 
+    /// <summary>
+    /// Ligne affichée dans l'onglet CLOUD des paramètres.
+    /// En plus des données brutes (chemin/taille/date), chaque ligne porte une
+    /// catégorie métier et un libellé lisible pour l'utilisateur : le logiciel
+    /// gère tout seul les fichiers techniques (metadata/, cacheimage/…), tandis
+    /// que l'utilisateur ne connaît que ses stratégies, ses études et ses notes
+    /// hebdomadaires.
+    /// </summary>
     public class CloudFileItem
     {
+        public const string CatStrategie = "STRATEGIE";
+        public const string CatEtude = "ETUDE";
+        public const string CatNote = "NOTE";
+        public const string CatCapture = "CAPTURE";
+        public const string CatTechnique = "TECHNIQUE";
+
         public string FilePath { get; set; }
         public string FileName { get; set; }
         public long Size { get; set; }
         public long LastModified { get; set; }
         public string SizeText => CloudFormatHelper.FormatBytes(Size);
         public string DateText => CloudFormatHelper.FormatServerDate(LastModified);
+
+        // ---- Intitulés « métier » (ce que l'utilisateur comprend) ----
+        public string Category { get; set; }
+        public string CategoryLabel { get; set; }
+        public string DisplayName { get; set; }
+        public string SubLabel { get; set; }
+
+        /// <summary>Vrai pour les fichiers internes (metadata/…) masqués par défaut.</summary>
+        public bool IsTechnical { get; set; }
+
+        // Couleurs du badge de catégorie affiché dans la liste.
+        public Brush CategoryBrush => CloudDisplayHelper.GetCategoryBrush(Category);
+        public Brush CategoryTextBrush => CloudDisplayHelper.GetCategoryTextBrush(Category);
+    }
+
+    /// <summary>
+    /// Traduit les chemins internes du cloud en libellés compréhensibles :
+    ///   data/{Nom}.json                → stratégie « Nom »
+    ///   Notes/Notes_yyyyMMdd.etude     → « Semaine du … »
+    ///   etudes/{dossier}/{nom}.etude   → étude « dossier / nom »
+    ///   cacheimage/{ts}_{HTF|LTF}.png  → « Capture HTF/LTF · date »
+    ///   metadata/* et autres           → fichier technique (masqué par défaut)
+    /// </summary>
+    internal static class CloudDisplayHelper
+    {
+        private static readonly SolidColorBrush _cyan = new SolidColorBrush(Color.FromRgb(0, 213, 255));
+        private static readonly SolidColorBrush _purple = new SolidColorBrush(Color.FromRgb(179, 136, 255));
+        private static readonly SolidColorBrush _green = new SolidColorBrush(Color.FromRgb(105, 240, 174));
+        private static readonly SolidColorBrush _amber = new SolidColorBrush(Color.FromRgb(255, 215, 64));
+        private static readonly SolidColorBrush _gray = new SolidColorBrush(Color.FromRgb(90, 90, 90));
+
+        public static string GetCategoryLabel(string category)
+        {
+            switch (category)
+            {
+                case CloudFileItem.CatStrategie: return "STRATÉGIE";
+                case CloudFileItem.CatEtude: return "ÉTUDE";
+                case CloudFileItem.CatNote: return "NOTE";
+                case CloudFileItem.CatCapture: return "CAPTURE";
+                default: return "SYSTÈME";
+            }
+        }
+
+        public static Brush GetCategoryBrush(string category)
+        {
+            switch (category)
+            {
+                case CloudFileItem.CatStrategie: return _cyan;
+                case CloudFileItem.CatEtude: return _purple;
+                case CloudFileItem.CatNote: return _green;
+                case CloudFileItem.CatCapture: return _amber;
+                default: return _gray;
+            }
+        }
+
+        public static Brush GetCategoryTextBrush(string category)
+            => category == CloudFileItem.CatTechnique ? Brushes.White : Brushes.Black;
+
+        /// <summary>Construit une ligne lisible à partir du chemin distant brut.</summary>
+        public static CloudFileItem BuildCloudItem(string remotePath, long size, long lastModified)
+        {
+            string p = remotePath ?? "";
+            string lower = p.ToLowerInvariant();
+            string fname = p;
+            int slash = p.LastIndexOf('/');
+            if (slash >= 0) fname = p.Substring(slash + 1);
+            string baseName = fname;
+            int dot = fname.LastIndexOf('.');
+            if (dot > 0) baseName = fname.Substring(0, dot);
+
+            var item = new CloudFileItem
+            {
+                FilePath = p,
+                FileName = fname,
+                Size = size,
+                LastModified = lastModified
+            };
+
+            if (lower.StartsWith("data/"))
+            {
+                // data/{Nom}.json → stratégie (le JSON contient la stratégie + son journal)
+                item.Category = CloudFileItem.CatStrategie;
+                item.DisplayName = string.IsNullOrEmpty(baseName) ? "Stratégie" : baseName;
+                item.SubLabel = "Stratégie de trading + journal";
+            }
+            else if (lower.StartsWith("etudes/"))
+            {
+                // etudes/{dossier}/{nom}.etude → étude
+                string rel = p.Substring("etudes/".Length);
+                string folder = rel;
+                slash = rel.LastIndexOf('/');
+                if (slash >= 0) folder = rel.Substring(0, slash);
+                item.Category = CloudFileItem.CatEtude;
+                item.DisplayName = baseName;
+                item.SubLabel = !string.IsNullOrEmpty(folder) ? "Étude · " + folder.Trim('/') : "Étude";
+            }
+            else if (lower.StartsWith("notes/"))
+            {
+                // Notes/Notes_yyyyMMdd.etude → note hebdomadaire (semaine nommée sur le lundi)
+                DateTime? d = ParseNoteDate(baseName);
+                item.Category = CloudFileItem.CatNote;
+                item.DisplayName = d.HasValue ? "Semaine du " + d.Value.ToString("dd/MM/yyyy") : baseName;
+                item.SubLabel = "Note hebdomadaire";
+            }
+            else if (lower.StartsWith("cacheimage/"))
+            {
+                // cacheimage/{yyyyMMddHHmmss}_{HTF|LTF}.png → capture d'écran de trade
+                var cap = ParseCapture(baseName);
+                item.Category = CloudFileItem.CatCapture;
+                item.DisplayName = cap.HasValue
+                    ? "Capture " + cap.Value.type + " · " + cap.Value.date.ToString("dd/MM/yyyy HH:mm")
+                    : baseName;
+                item.SubLabel = "Capture d'écran de trade";
+            }
+            else
+            {
+                // metadata/ et tout le reste → géré automatiquement par le logiciel
+                item.Category = CloudFileItem.CatTechnique;
+                item.DisplayName = baseName;
+                item.SubLabel = "Fichier technique — géré automatiquement";
+                item.IsTechnical = true;
+            }
+
+            item.CategoryLabel = GetCategoryLabel(item.Category);
+            return item;
+        }
+
+        /// <summary>Date d'une note hebdo extraite de son nom (Notes_20260907 ou 20260907).</summary>
+        public static DateTime? ParseNoteDate(string fileName)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(fileName ?? "", "(?<d>\\d{8})");
+            if (m.Success && DateTime.TryParseExact(m.Groups["d"].Value, "yyyyMMdd",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime d))
+                return d;
+            return null;
+        }
+
+        /// <summary>Timestamp + type (HTF/LTF) d'une capture cacheimage extraits du nom.</summary>
+        public static (DateTime date, string type)? ParseCapture(string name)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(name ?? "",
+                "(?<ts>\\d{14})_(?<type>HTF|LTF)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success && DateTime.TryParseExact(m.Groups["ts"].Value, "yyyyMMddHHmmss",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime d))
+                return (d, m.Groups["type"].Value.ToUpperInvariant());
+            return null;
+        }
+
+        /// <summary>
+        /// Libellé lisible d'une sauvegarde .bak ({chemin}.{yyyyMMdd_HHmmss}.bak) :
+        /// « Nom (catégorie) — version du dd/MM/yyyy HH:mm — taille — date ».
+        /// </summary>
+        public static string BuildBackupLabel(CloudBackupInfo b)
+        {
+            string p = b.path ?? "";
+            string basePath = p;
+            if (basePath.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+                basePath = basePath.Substring(0, basePath.Length - 4);
+
+            string suffix = "";
+            var m = System.Text.RegularExpressions.Regex.Match(basePath, "\\.(\\d{8}_\\d{6})(?:_\\d+)?$");
+            if (m.Success)
+            {
+                basePath = basePath.Substring(0, m.Index);
+                if (DateTime.TryParseExact(m.Groups[1].Value, "yyyyMMdd_HHmmss",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime d))
+                    suffix = " — version du " + d.ToString("dd/MM/yyyy HH:mm");
+            }
+
+            var item = BuildCloudItem(basePath, b.size, b.last_modified);
+            string name = item.DisplayName ?? basePath;
+            return name + suffix + " ( " + item.SubLabel + " )   —   " + CloudFormatHelper.FormatBytes(b.size)
+                + "   —   " + CloudFormatHelper.FormatServerDate(b.last_modified);
+        }
     }
 
     public partial class SettingsView : UserControl
@@ -152,17 +359,17 @@ namespace backtest
             BorderSyncProgress.Visibility = Visibility.Visible;
             ProgSync.Value = 0;
             TxtSyncPercent.Text = "0%";
-            TxtSyncPhase.Text = "Preparation...";
+            TxtSyncPhase.Text = "Préparation…";
             TxtSyncCurrentFile.Text = "";
 
             var progress = new Progress<SyncProgressInfo>(p =>
             {
                 if (p.IsIndeterminate) { 
-                    TxtSyncPhase.Text = p.Phase;
+                    TxtSyncPhase.Text = CloudFormatHelper.SyncPhaseLabel(p.Phase);
                     ProgSync.IsIndeterminate = true;
                 } else {
                     ProgSync.IsIndeterminate = false;
-                    TxtSyncPhase.Text = p.Phase;
+                    TxtSyncPhase.Text = CloudFormatHelper.SyncPhaseLabel(p.Phase);
                     ProgSync.Value = p.PercentComplete;
                     TxtSyncPercent.Text = p.PercentComplete + "%";
                     if (!string.IsNullOrEmpty(p.CurrentFile)) TxtSyncCurrentFile.Text = p.CurrentFile;
@@ -283,7 +490,12 @@ namespace backtest
             if (folder == null) return;
 
             FxCloudService.SetCloudFolderSyncEnabled(folder, chk.IsChecked ?? true);
-            _ = ShowNotification(folder + " : synchronisation " + ((chk.IsChecked ?? true) ? "activée" : "désactivée") + ".");
+            string label = folder == "data" ? "Stratégies & journal"
+                : folder == "etudes" ? "Études"
+                : folder == "Notes" ? "Notes hebdomadaires"
+                : folder == "cacheimage" ? "Captures d'écran (trades)"
+                : "Fichiers techniques";
+            _ = ShowNotification(label + " : synchronisation " + ((chk.IsChecked ?? true) ? "activée" : "désactivée") + ".");
         }
 
 
@@ -559,7 +771,13 @@ namespace backtest
             _cloudFiles = filesTask.Result ?? new List<CloudFileInfo>();
             // Tri alphabétique pour une navigation plus lisible.
             _cloudFiles.Sort((a, b) => string.Compare(a.path, b.path, StringComparison.OrdinalIgnoreCase));
-            TxtCloudFileCount.Text = _cloudFiles.Count.ToString();
+            // Le compteur « ÉLÉMENTS » ne reflète que ce que l'utilisateur voit :
+            // les fichiers techniques (metadata/…) en sont exclus.
+            int visibleCount = 0;
+            foreach (var f in _cloudFiles)
+                if (!CloudDisplayHelper.BuildCloudItem(f.path, f.size, f.last_modified).IsTechnical)
+                    visibleCount++;
+            TxtCloudFileCount.Text = visibleCount.ToString();
             RefreshCloudFilesList();
 
             _cloudBackups = backupsTask.Result ?? new List<CloudBackupInfo>();
@@ -577,17 +795,54 @@ namespace backtest
         private void RefreshCloudFilesList()
         {
             string filter = (TxtCloudSearch.Text ?? "").Trim();
-            LvCloudFiles.Items.Clear();
+            bool showTech = ChkShowTechnical != null && ChkShowTechnical.IsChecked == true;
+
+            // 1. Traduit les chemins bruts du cloud en lignes « métier » lisibles.
+            var items = new List<CloudFileItem>();
             foreach (var f in _cloudFiles)
+                items.Add(CloudDisplayHelper.BuildCloudItem(f.path, f.size, f.last_modified));
+
+            // 2. Tri : Stratégies → Études → Notes → Captures → Système,
+            //    puis nom croissant (stratégies/études/…) et date décroissante
+            //    pour les notes et les captures.
+            int CatOrder(string c)
             {
-                if (filter.Length > 0 && f.path.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                int slash = f.path.LastIndexOf('/');
-                string fname = slash >= 0 ? f.path.Substring(slash + 1) : f.path;
-                LvCloudFiles.Items.Add(new CloudFileItem { FilePath = f.path, FileName = fname, Size = f.size, LastModified = f.last_modified });
+                switch (c)
+                {
+                    case CloudFileItem.CatStrategie: return 0;
+                    case CloudFileItem.CatEtude: return 1;
+                    case CloudFileItem.CatNote: return 2;
+                    case CloudFileItem.CatCapture: return 3;
+                    default: return 4;
+                }
+            }
+
+            items = items
+                .OrderBy(i => CatOrder(i.Category))
+                .ThenByDescending(i => (i.Category == CloudFileItem.CatNote || i.Category == CloudFileItem.CatCapture) ? i.LastModified : long.MinValue)
+                .ThenBy(i => i.DisplayName ?? "", StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // 3. Filtres : recherche libre + fichiers techniques masqués par défaut.
+            LvCloudFiles.Items.Clear();
+            foreach (var it in items)
+            {
+                if (!showTech && it.IsTechnical) continue;
+                if (filter.Length > 0)
+                {
+                    bool hit = (it.DisplayName ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+                        || (it.SubLabel ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+                        || (it.FilePath ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (!hit) continue;
+                }
+                LvCloudFiles.Items.Add(it);
             }
             if (LvCloudFiles.Items.Count > 0)
                 LvCloudFiles.SelectedIndex = 0;
         }
+
+        // Bascule « Afficher les fichiers techniques » : relance le filtre.
+        private void ChkShowTechnical_Click(object sender, RoutedEventArgs e) => RefreshCloudFilesList();
 
         private CloudFileItem SelectedCloudItem()
         {
@@ -635,27 +890,28 @@ namespace backtest
 
             if (path == null)
             {
-                // Aucun fichier sélectionné : montrer toutes les sauvegardes du compte.
-                TxtBackupFilterInfo.Text = "Toutes les sauvegardes du compte :";
+                // Aucun élément sélectionné : montrer toutes les versions du compte.
+                TxtBackupFilterInfo.Text = "Toutes les versions du compte :";
                 var all = new List<CloudBackupInfo>(_cloudBackups);
                 all.Sort((a, b) => a.last_modified < b.last_modified ? 1 : (a.last_modified > b.last_modified ? -1 : 0));
                 foreach (var b in all)
                 {
                     _backupsForSelection.Add(b);
-                    LstCloudBackups.Items.Add($"{b.path}   —   {FormatBytes(b.size)}   —   {FormatServerDate(b.last_modified)}");
+                    LstCloudBackups.Items.Add(CloudDisplayHelper.BuildBackupLabel(b));
                 }
                 if (_backupsForSelection.Count == 0)
                     LstCloudBackups.Items.Add("— Aucune sauvegarde sur le compte —");
                 return;
             }
 
-            TxtBackupFilterInfo.Text = "Sauvegardes de \"" + path + "\" :";
+            // Un fichier est sélectionné : montrer uniquement ses versions.
+            TxtBackupFilterInfo.Text = "Versions de \"" + (sel.DisplayName ?? path) + "\" :";
             string prefix = path + ".";
             foreach (var b in _cloudBackups)
             {
                 if (!b.path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
                 _backupsForSelection.Add(b);
-                LstCloudBackups.Items.Add($"{b.path}   —   {FormatBytes(b.size)}   —   {FormatServerDate(b.last_modified)}");
+                LstCloudBackups.Items.Add(CloudDisplayHelper.BuildBackupLabel(b));
             }
             if (_backupsForSelection.Count == 0)
                 LstCloudBackups.Items.Add("— Aucune sauvegarde pour ce fichier —");
@@ -682,13 +938,14 @@ namespace backtest
 
             string path = item.FilePath;
             string localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path.Replace('/', Path.DirectorySeparatorChar));
+            string label = item.DisplayName ?? path;
 
-            if (MessageBox.Show("Écraser la copie locale de \"" + path + "\" par la version du serveur ?",
+            if (MessageBox.Show("Réécrire la copie locale de \"" + label + "\" avec la version du cloud ?",
                 "Restaurer depuis le cloud", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
             bool ok = await _cloudService.DownloadFileAsync(path, localPath);
-            await ShowNotification(ok ? "Fichier restauré en local !" : "Erreur de téléchargement", !ok);
+            await ShowNotification(ok ? "« " + label + " » restauré en local !" : "Erreur de téléchargement", !ok);
             if (ok) FxCloudService.Log("Cloud: restauration locale de " + path);
         }
 
@@ -703,7 +960,8 @@ namespace backtest
             }
 
             string path = item.FilePath;
-            if (MessageBox.Show("Supprimer \"" + path + "\" du cloud (et ses sauvegardes) ?\nLa copie locale est conservée.",
+            string label = item.DisplayName ?? path;
+            if (MessageBox.Show("Supprimer \"" + label + "\" du cloud (et ses versions précédentes) ?\nLa copie locale reste sur votre PC.",
                 "Supprimer du cloud", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
 
@@ -728,7 +986,8 @@ namespace backtest
             }
 
             CloudBackupInfo backup = _backupsForSelection[sel];
-            if (MessageBox.Show("Restaurer \"" + backup.path + "\" comme version actuelle sur le serveur ?",
+            if (MessageBox.Show("Restaurer la version suivante comme version actuelle sur le serveur ?\n\n"
+                + CloudDisplayHelper.BuildBackupLabel(backup),
                 "Restaurer une sauvegarde", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 

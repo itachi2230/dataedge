@@ -185,6 +185,18 @@
                         </Button>
                     </StackPanel>
 
+                    <!-- Barre de progression de synchro (visible pendant une synchro lancée depuis le dashboard) -->
+                    <Border x:Name="BorderSyncProgressDash" Visibility="Collapsed" VerticalAlignment="Center" Margin="0,0,15,0"
+                            Background="#0A0A0A" BorderBrush="#1E1E1E" BorderThickness="1" CornerRadius="6" Padding="10,5" Width="180">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,3">
+                                <TextBlock x:Name="TxtDashSyncPhase" Text="Connexion au cloud…" Foreground="Cyan" FontSize="8" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="TxtDashSyncPercent" Text="" Foreground="Gray" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <ProgressBar x:Name="ProgDashSync" Height="4" Background="#111" Foreground="Cyan" BorderThickness="0" Maximum="100" Value="0"/>
+                        </StackPanel>
+                    </Border>
+
                     <Border x:Name="AccountBorder" 
             CornerRadius="20" 
             Padding="4,4,15,4" 

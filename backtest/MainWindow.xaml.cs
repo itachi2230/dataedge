@@ -826,10 +826,14 @@ namespace backtest
 
             try
             {
-                // Progression
+                // Progression : barre visible dans la barre de titre, à côté du bouton de synchro.
                 var progress = new Progress<SyncProgressInfo>(p =>
                 {
-                    if (!string.IsNullOrEmpty(p.Phase)) txtLastSync.Text = p.Phase;
+                    BorderSyncProgressDash.Visibility = Visibility.Visible;
+                    TxtDashSyncPhase.Text = CloudFormatHelper.SyncPhaseLabel(p.Phase);
+                    TxtDashSyncPercent.Text = p.PercentComplete + " %";
+                    ProgDashSync.IsIndeterminate = p.IsIndeterminate;
+                    ProgDashSync.Value = Math.Max(0, Math.Min(100, p.PercentComplete));
                 });
 
                 List<string> results = await _cloudService.FullSyncAsync(progress);
@@ -870,6 +874,9 @@ namespace backtest
             {
                 sb.Stop();
                 btn.IsEnabled = true;
+                BorderSyncProgressDash.Visibility = Visibility.Collapsed;
+                ProgDashSync.Value = 0;
+                ProgDashSync.IsIndeterminate = false;
             }
         }
 

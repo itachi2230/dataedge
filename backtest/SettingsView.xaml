@@ -54,8 +54,8 @@
 
             <Border Grid.Column="1" CornerRadius="20" Padding="40,20" Background="{StaticResource CardBg}" BorderThickness="1">
                 <Grid>
-                    <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="Both">
-                        <Grid x:Name="AccountGrid" MaxWidth="800" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" PanningMode="Both">
+                        <Grid x:Name="AccountGrid" MaxWidth="800" HorizontalAlignment="Stretch" VerticalAlignment="Top">
 
                             <StackPanel x:Name="PanelApp" Visibility="Visible">
                                 <TextBlock Text="CONFIGURATION SYSTÈME" Foreground="White" FontSize="24" Margin="0,0,0,10" FontWeight="Bold"/>
@@ -90,7 +90,7 @@
                             <StackPanel x:Name="PanelCloud" Visibility="Collapsed">
                                 <!-- ====== EN-TÊTE ====== -->
                                 <TextBlock Text="MON CLOUD" Foreground="White" FontSize="24" Margin="0,0,0,5" FontWeight="Bold"/>
-                                <TextBlock Text="Fichiers synchronisés, sauvegardes .bak et stockage distant." Foreground="Gray" FontSize="12" Margin="0,0,0,20"/>
+                                <TextBlock Text="Vos stratégies, études, notes hebdomadaires et captures : tout est sauvegardé automatiquement." Foreground="Gray" FontSize="12" Margin="0,0,0,12"/>
 
                                 <!-- ====== BARRE DE PROGRESSION SYNCHRO ====== -->
                                 <Border x:Name="BorderSyncProgress" Visibility="Collapsed" Background="#050505" BorderBrush="#1A1A1A" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,15">
@@ -105,7 +105,7 @@
                                 </Border>
 
                                 <!-- ====== STATS CARTES (grille 2x2) ====== -->
-                                <Grid Margin="0,0,0,20">
+                                <Grid Margin="0,0,0,12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
@@ -126,13 +126,13 @@
                                     </Border>
                                     <Border Grid.Row="0" Grid.Column="1" Background="#0A0A0A" BorderBrush="#1E1E1E" BorderThickness="1" CornerRadius="10" Padding="14" Margin="6,0,0,6">
                                         <StackPanel>
-                                            <TextBlock Foreground="#555" FontSize="9" FontWeight="Bold" Text="FICHIERS"/>
+                                            <TextBlock Foreground="#555" FontSize="9" FontWeight="Bold" Text="ÉLÉMENTS"/>
                                             <TextBlock x:Name="TxtCloudFileCount" Text="0" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,4,0,0"/>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Row="1" Grid.Column="0" Background="#0A0A0A" BorderBrush="#1E1E1E" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,6,6,0">
                                         <StackPanel>
-                                            <TextBlock Foreground="#555" FontSize="9" FontWeight="Bold" Text="SAUVEGARDES"/>
+                                            <TextBlock Foreground="#555" FontSize="9" FontWeight="Bold" Text="VERSIONS"/>
                                             <TextBlock x:Name="TxtCloudBackupCount" Text="0" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,4,0,0"/>
                                         </StackPanel>
                                     </Border>
@@ -143,13 +143,13 @@
                                         </StackPanel>
                                     </Border>
                                 </Grid>
-                                <!-- ====== ONGLETS FICHIERS / SAUVEGARDES ====== -->
+                                <!-- ====== ONGLETS VOS DONNÉES / VERSIONS ====== -->
                                 <Grid Margin="0,0,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <ToggleButton x:Name="TabFiles" Grid.Column="0" Content="📁  FICHIERS" IsChecked="True" Height="38"
+                                    <ToggleButton x:Name="TabFiles" Grid.Column="0" Content="📁  VOS DONNÉES" IsChecked="True" Height="38"
                                                   FontSize="11" FontWeight="Bold" Cursor="Hand" Click="TabFiles_Click">
                                         <ToggleButton.Style>
                                             <Style TargetType="ToggleButton">
@@ -170,7 +170,7 @@
                                             </Style>
                                         </ToggleButton.Style>
                                     </ToggleButton>
-                                    <ToggleButton x:Name="TabBackups" Grid.Column="1" Content="💾  SAUVEGARDES" IsChecked="False" Height="38"
+                                    <ToggleButton x:Name="TabBackups" Grid.Column="1" Content="🕘  VERSIONS" IsChecked="False" Height="38"
                                                   FontSize="11" FontWeight="Bold" Cursor="Hand" Click="TabBackups_Click">
                                         <ToggleButton.Style>
                                             <Style TargetType="ToggleButton">
@@ -192,7 +192,7 @@
                                         </ToggleButton.Style>
                                     </ToggleButton>
                                 </Grid>
-                                <!-- ====== VUE FICHIERS ====== -->
+                                <!-- ====== VUE VOS DONNÉES ====== -->
                                 <Border x:Name="ViewFiles" Background="#080808" BorderBrush="Cyan" BorderThickness="1,0,1,1" CornerRadius="0,0,10,10" Padding="14">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,12">
@@ -202,22 +202,28 @@
                                             </Grid.ColumnDefinitions>
                                             <TextBox x:Name="TxtCloudSearch" Style="{StaticResource CyberTextBox}" Height="36" FontSize="12"
                                                      VerticalContentAlignment="Center" TextChanged="TxtCloudSearch_TextChanged"/>
-                                            <TextBlock x:Name="TxtCloudSearchPlaceholder" Text="🔍  Rechercher un fichier..." Foreground="#555555" FontSize="12" Margin="8,0,0,0"
+                                            <TextBlock x:Name="TxtCloudSearchPlaceholder" Text="🔍  Rechercher une stratégie, une étude, une semaine…" Foreground="#555555" FontSize="12" Margin="8,0,0,0"
                                                        VerticalAlignment="Center" IsHitTestVisible="False"/>
                                             <Button x:Name="BtnCloudRefresh" Grid.Column="1" Content="RAFRAÎCHIR" Style="{StaticResource CyberButton}"
                                                     Height="36" Margin="10,0,0,0" Click="BtnCloudRefresh_Click" Width="110" FontSize="11"/>
                                         </Grid>
+                                        <StackPanel Margin="0,0,8,4">
+                                            <CheckBox x:Name="ChkShowTechnical" Content="Afficher les fichiers techniques (gérés automatiquement par le logiciel)"
+                                                      Foreground="#888" FontSize="10" Click="ChkShowTechnical_Click" Cursor="Hand"/>
+                                        </StackPanel>
                                         <Grid Margin="0,0,0,6">
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="80"/>
                                                 <ColumnDefinition Width="130"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="NOM DU FICHIER" Foreground="#444" FontSize="9" FontWeight="Bold" Grid.Column="0"/>
-                                            <TextBlock Text="TAILLE" Foreground="#444" FontSize="9" FontWeight="Bold" Grid.Column="1" HorizontalAlignment="Right"/>
-                                            <TextBlock Text="DATE" Foreground="#444" FontSize="9" FontWeight="Bold" Grid.Column="2" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="TYPE" Foreground="#444" FontSize="9" FontWeight="Bold" Grid.Column="0" Margin="0,0,8,0"/>
+                                            <TextBlock Text="ÉLÉMENT" Foreground="#444" FontSize="9" FontWeight="Bold" Grid.Column="1"/>
+                                            <TextBlock Text="TAILLE" Foreground="#444" FontSize="9" FontWeight="Bold" Grid.Column="2" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="DATE" Foreground="#444" FontSize="9" FontWeight="Bold" Grid.Column="3" HorizontalAlignment="Right"/>
                                         </Grid>
-                                        <ListBox x:Name="LvCloudFiles" Height="200" Background="Transparent" BorderThickness="0"
+                                        <ListBox x:Name="LvCloudFiles" Height="170" Background="Transparent" BorderThickness="0"
                                                  SelectionMode="Single" SelectionChanged="LvCloudFiles_SelectionChanged"
                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                             <ListBox.ItemContainerStyle>
@@ -252,19 +258,26 @@
                                                 <DataTemplate>
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="80"/>
                                                             <ColumnDefinition Width="130"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Text="{Binding FileName}" Foreground="#CCC" FontSize="11" Grid.Column="0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Text="{Binding SizeText}" Foreground="#555" FontSize="10" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{Binding DateText}" Foreground="#444" FontSize="10" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="0" Background="{Binding CategoryBrush}" CornerRadius="3" Padding="7,3" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding CategoryLabel}" Foreground="{Binding CategoryTextBrush}" FontSize="8" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                            <TextBlock Text="{Binding DisplayName}" Foreground="#CCC" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding SubLabel}" Foreground="#666" FontSize="9" TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="2" Text="{Binding SizeText}" Foreground="#555" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding DateText}" Foreground="#444" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ListBox.ItemTemplate>
                                         </ListBox>
 
-                                        <!-- Boutons d'action fichiers -->
+                                        <!-- Boutons d'action des données -->
                                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                             <Button x:Name="BtnCloudRestoreFile" Content="⬇  RESTAURER EN LOCAL" Style="{StaticResource CyberButton}"
                                                     Height="36" Margin="0,0,10,0" Click="BtnCloudRestoreFile_Click" FontSize="11"/>
@@ -275,14 +288,14 @@
                                 </Border>
     
 
-                                <!-- ====== VUE SAUVEGARDES ====== -->
+                                <!-- ====== VUE VERSIONS ====== -->
                                 <Border x:Name="ViewBackups" Visibility="Collapsed" Background="#080808" BorderBrush="Cyan" BorderThickness="1,0,1,1" CornerRadius="0,0,10,10" Padding="14">
                                     <StackPanel>
-                                        <TextBlock Text="Sauvegardes .bak disponibles" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Sélectionnez un fichier dans l'onglet Fichiers pour voir ses sauvegardes, ou visualisez toutes les sauvegardes ci-dessous."
+                                        <TextBlock Text="VERSIONS PRÉCÉDENTES" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Sélectionnez un élément dans l'onglet « Vos données » pour voir ses versions précédentes, ou visualisez toutes les versions ci-dessous."
                                                    Foreground="Gray" FontSize="10" Margin="0,0,0,12" TextWrapping="Wrap"/>
-                                        <TextBlock x:Name="TxtBackupFilterInfo" Text="Toutes les sauvegardes du compte :" Foreground="#666" FontSize="10" Margin="0,0,0,8" FontWeight="Bold"/>
-                                        <ListBox x:Name="LstCloudBackups" Height="180" Background="#050505" BorderBrush="#1E1E1E" BorderThickness="1"
+                                        <TextBlock x:Name="TxtBackupFilterInfo" Text="Toutes les versions du compte :" Foreground="#666" FontSize="10" Margin="0,0,0,8" FontWeight="Bold"/>
+                                        <ListBox x:Name="LstCloudBackups" Height="160" Background="#050505" BorderBrush="#1E1E1E" BorderThickness="1"
                                                  Foreground="White" FontSize="11" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                             <ListBox.ItemContainerStyle>
                                                 <Style TargetType="ListBoxItem">
@@ -319,17 +332,17 @@
                                 </Border>
 
                                 <!-- ====== PARAMÈTRES DE SYNCHRONISATION (repliés) ====== -->
-                                <Expander Margin="0,20,0,0" Background="#0A0A0A" BorderBrush="#1E1E1E" BorderThickness="1" Foreground="White"
+                                <Expander Margin="0,12,0,0" Background="#0A0A0A" BorderBrush="#1E1E1E" BorderThickness="1" Foreground="White"
                                           Header="Paramètres de synchronisation" FontSize="11" Cursor="Hand">
                                     <StackPanel Margin="10,10,10,10">
-                                        <TextBlock Text="Décochez un dossier pour l'exclure de la synchronisation (fichiers existants conservés côté serveur)."
+                                        <TextBlock Text="Décochez une catégorie pour l'exclure de la synchronisation (vos données existantes restent conservées côté serveur)."
                                                    Foreground="Gray" FontSize="10" Margin="0,0,0,12" TextWrapping="Wrap"/>
                                         <WrapPanel Orientation="Horizontal">
-                                            <CheckBox x:Name="ChkSyncData" Content="data" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
-                                            <CheckBox x:Name="ChkSyncEtudes" Content="etudes" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
-                                            <CheckBox x:Name="ChkSyncNotes" Content="Notes" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
-                                            <CheckBox x:Name="ChkSyncCacheImage" Content="cacheimage" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
-                                            <CheckBox x:Name="ChkSyncMetadata" Content="metadata" Foreground="White" Margin="0,0,0,8" Click="ChkSyncFolder_Click" FontSize="11"/>
+                                            <CheckBox x:Name="ChkSyncData" Content="Stratégies &amp; journal" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
+                                            <CheckBox x:Name="ChkSyncEtudes" Content="Études" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
+                                            <CheckBox x:Name="ChkSyncNotes" Content="Notes hebdomadaires" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
+                                            <CheckBox x:Name="ChkSyncCacheImage" Content="Captures d'écran (trades)" Foreground="White" Margin="0,0,24,8" Click="ChkSyncFolder_Click" FontSize="11"/>
+                                            <CheckBox x:Name="ChkSyncMetadata" Content="Fichiers techniques" Foreground="White" Margin="0,0,0,8" Click="ChkSyncFolder_Click" FontSize="11"/>
                                         </WrapPanel>
                                     </StackPanel>
                                 </Expander>

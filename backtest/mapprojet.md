@@ -255,8 +255,15 @@ FxCloudService.FullSyncAsync(IProgress<SyncProgressInfo> progress = null)
 
 > 📊 **Progression synchro** : `SyncProgressInfo` (Phase, FilesProcessed, TotalFiles,
 > PercentComplete, CurrentFile, IsIndeterminate) est reporté en temps réel à l'UI via
-> `Progress<T>`. La `ProgressBar` cyber (Settings > APPLICATION) affiche la phase en cours
-> (Connecting / Scanning / Upload / Download / Done) avec pourcentage et fichier courant.
+> `Progress<T>`. Les libellés de phases techniques (Connecting / Scanning / Upload /
+> Download / Done) sont **traduits en langage lisible** via
+> `CloudFormatHelper.SyncPhaseLabel()` (« Connexion au cloud… », « Envoi vers le
+> cloud… », « Récupération des données… », etc.). **Deux barres de progression** :
+> - Settings > APPLICATION : `BorderSyncProgress` (affichée pendant
+>   `BtnSyncNow_Click`), phase + pourcentage + fichier courant ;
+> - **Dashboard** : `BorderSyncProgressDash` — barre compacte dans la barre de titre
+>   à côté du bouton de synchro (`BtnSync_Click` dans `MainWindow`), affichée pendant
+>   la synchro et masquée en fin (`finally`), phase traduite + pourcentage.
 > Après une sync réussie, `loadStrategies()` et `ReloadCurrentWeekNotes()` sont appelés
 > automatiquement → le dashboard reflète les changements **sans redémarrage**.
 
@@ -275,35 +282,59 @@ Paramètres de sync (Settings > APPLICATION > SYNCHRONISATION CLOUD) : toggle
 Panneau de gestion du stockage distant (`SettingsView`, `PanelCloud`), alimenté par
 `RefreshCloudPanelAsync()` (3 appels en parallèle : storage + manifest + backups) :
 
+**UX « métier »** : l'utilisateur ne manipule jamais les chemins internes
+(`data/SMV.json`, `metadata/…`, `cacheimage/…`). Chaque ligne du cloud est traduite
+en libellé compréhensible via `CloudDisplayHelper` (dans `SettingsView.xaml.cs`) :
+- `data/{Nom}.json` → **STRATÉGIE** « Nom » ;
+- `etudes/{dossier}/{nom}.etude` → **ÉTUDE** « dossier / nom » ;
+- `Notes/Notes_yyyyMMdd.etude` → **NOTE** « Semaine du … » ;
+- `cacheimage/{ts}_{HTF|LTF}.png` → **CAPTURE** « Capture HTF/LTF · date » ;
+- `metadata/*` et autres → **SYSTÈME**, masqués par défaut (case
+  « Afficher les fichiers techniques » `ChkShowTechnical`, les confirmations et
+  notifications utilisent les libellés lisibles).
+
 - **4 cartes de stats (grille 2×2)** : stockage total (`TxtCloudStorage`, `GET
-  /api/cloud/storage`), nombre de fichiers (`TxtCloudFileCount`), nombre de sauvegardes
-  `.bak` (`TxtCloudBackupCount`) et dernière synchro connue (`TxtCloudLastSync`, lue
-  dans la session locale `LastSyncDate`).
+  /api/cloud/storage`), nombre d'éléments visibles (`TxtCloudFileCount`, exclut les
+  fichiers techniques via `IsTechnical`), nombre de versions `.bak`
+  (`TxtCloudBackupCount`) et dernière synchro connue (`TxtCloudLastSync`, lue dans la
+  session locale `LastSyncDate`).
 - **Deux onglets internes (ToggleButtons `TabFiles` / `TabBackups`)** pour séparer les
   contenus et éviter la surcharge de scroll :
-  - **FICHIERS** (`ViewFiles`) : barre de recherche/filtre en direct (`TxtCloudSearch`
-    → `RefreshCloudFilesList()`), en-têtes de colonnes (Nom / Taille / Date) et
-    `ListBox` stylisée `LvCloudFiles` remplie de `CloudFileItem` (classe
-    `CloudFileItem` dans `SettingsView.xaml.cs`), tri alphabétique sur `_cloudFiles`.
-    Chaque ligne porte son chemin complet (`FilePath`) : la sélection reste robuste
-    même quand le filtre est actif. Boutons d'action « Restaurer en local » /
-    « Supprimer du cloud ».
-  - **SAUVEGARDES** (`ViewBackups`) : liste `LstCloudBackups` alimentée par
-    `FillBackupsForSelection()` — filtré sur le fichier sélectionné (motif
-    `{chemin}.{YYYYMMDD_HHMMSS}.bak`) ou toutes les sauvegardes du compte triées par
-    date quand aucun fichier n'est sélectionné (`TxtBackupFilterInfo`).
+  - **VOS DONNÉES** (`ViewFiles`) : barre de recherche/filtre en direct (`TxtCloudSearch`
+    → `RefreshCloudFilesList()`, filtre sur libellé/sous-libellé/chemin), en-têtes
+    TYPE / ÉLÉMENT / TAILLE / DATE et `ListBox` stylisée `LvCloudFiles` remplie de
+    `CloudFileItem` (classe dans `SettingsView.xaml.cs` : catégorie + badge coloré +
+    `DisplayName` + `SubLabel`). Tri : Stratégies → Études → Notes → Captures →
+    Système (notes et captures par date décroissante). Chaque ligne porte son chemin
+    complet (`FilePath`) : la sélection reste robuste même quand le filtre est actif.
+    Boutons d'action « Restaurer en local » / « Supprimer du cloud ».
+  - **VERSIONS** (`ViewBackups`) : liste `LstCloudBackups` alimentée par
+    `FillBackupsForSelection()` — filtrée sur l'élément sélectionné (motif
+    `{chemin}.{YYYYMMDD_HHMMSS}.bak`) ou toutes les versions du compte triées par
+    date quand aucun élément n'est sélectionné (`TxtBackupFilterInfo`). Libellés
+    lisibles via `CloudDisplayHelper.BuildBackupLabel()` (« Nom — version du … »).
 - **Actions** :
-  - « Restaurer la version serveur en local » : écrase la copie locale corrompue/perdue
-    par le téléchargement du fichier distant ;
+  - « Restaurer en local » : réécrit la copie locale corrompue/perdue par la version
+    du cloud (confirmation en langage métier) ;
   - « Supprimer du cloud » : `POST /api/cloud/delete-file` (fichier + ses `.bak`, la
     copie locale est conservée) ;
-  - « Restaurer cette sauvegarde sur le serveur » : `POST /api/cloud/restore-backup`
+  - « Restaurer cette version sur le serveur » : `POST /api/cloud/restore-backup`
     (copie le `.bak` sur le fichier principal serveur, `.bak` conservé ; relancer une
     synchro ensuite pour récupérer la version restaurée en local).
 - **Paramètres de synchronisation** (dossiers exclus) : déplié dans un `Expander`
   replié par défaut en bas de l'onglet CLOUD (`ChkSyncData/Etudes/Notes/CacheImage/
-  Metadata` → `ChkSyncFolder_Click`).
+  Metadata` → `ChkSyncFolder_Click`), cases en **langage métier** (« Stratégies &
+  journal », « Études », « Notes hebdomadaires », « Captures d'écran (trades) »,
+  « Fichiers techniques »). Mapping des cases par identité de contrôle (`==`) :
+  le contrat config.txt (`sync_folder_*`) et `FxCloudService.SetCloudFolderSyncEnabled`
+  sont inchangés.
 - Hors connexion : cartes affichées à « Non connecté » / « 0 » / « Jamais ».
+- **Conteneur des paramètres** : le `ScrollViewer` du panneau droit
+  (`AccountGrid`) est en `VerticalScrollBarVisibility="Auto"` (scroll visible dès que le
+  contenu dépasse — plus aucune coupure du bas) et le contenu est aligné en haut
+  (`VerticalAlignment="Top"`). Le panneau CLOUD est compacté pour tenir sans scroll :
+  en-tête/cartes resserrées (marges 12) et listes `LvCloudFiles` (170 px) /
+  `LstCloudBackups` (160 px).
 
 ### Safe-Delete (suppression → backup .bak)
 
