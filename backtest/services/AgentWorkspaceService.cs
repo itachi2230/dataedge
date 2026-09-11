@@ -67,6 +67,7 @@ namespace backtest.Services
                     new AiToolParameter("name", "string", "Nom unique de la nouvelle stratégie."),
                     new AiToolParameter("description", "string", "Description de la stratégie (texte libre). Ne contient JAMAIS les champs de confluence.", false),
                     new AiToolParameter("custom_fields", "string", "Champs de confluence personnalisés à créer pour la stratégie : liste JSON de noms (ex: '[\"RSI\", \"TENDANCE\"]'), liste séparée par des virgules (ex: 'RSI, TENDANCE') ou objet JSON (ex: '{\"RSI\": \"\"}'). Optionnel, vide par défaut.", false)),
+                new AiToolDefinition("reload_application", "Redémarrer DataEdge pour recharger toutes les données à l'écran (stratégies, trades, études). À utiliser après une réparation ou une manipulation de fichiers, ou quand l'utilisateur dit que l'interface n'affiche pas des données pourtant réparées/ajoutées. L'application se ferme et se relance automatiquement.", true),
                 new AiToolDefinition("delete_strategy", "Supprimer une stratégie et ses données locales (action définitive).", true,
                     new AiToolParameter("name", "string", "Nom exact de la stratégie à supprimer.")),
                 new AiToolDefinition("add_journal_trade", "Ajouter un trade au JOURNAL d'une stratégie : réserve aux trades réellement exécutés saisis dans le journal du dashboard (avec profit en devise). Ne PAS utiliser pour les données de backtest : pour des trades de backtest (test/simulés sur le graphique), utiliser add_backtest_trade.", false,
@@ -174,10 +175,47 @@ namespace backtest.Services
             var profile = await GetProfileCachedAsync();
             var context = new
             {
-                profile = profile == null ? null : new { name = profile.FullName, email = profile.Email, bio = profile.Bio }
+                profile = profile == null ? null : new { name = profile.FullName, email = profile.Email, bio = profile.Bio },
+                storage_knowledge = StorageKnowledge
             };
             return JsonSerializer.Serialize(context);
         }
+
+        /// <summary>
+        /// Connaissances techniques INTERNES de l'agent sur le stockage des données
+        /// DataEdge (stratégies, registre, backups, cloud). Le modèle s'en sert pour
+        /// diagnostiquer et aider l'utilisateur à restaurer ses données, mais ne doit
+        /// JAMAIS expliquer ce fonctionnement technique à l'utilisateur : l'utilisateur
+        /// ne veut que la résolution de son problème.
+        /// </summary>
+        public const string StorageKnowledge =
+            "STOCKAGE DES DONNEES (connaissances internes — n'en parle JAMAIS à l'utilisateur en termes " +
+            "techniques : utilise-les seulement pour diagnostiquer et résoudre son problème).\n" +
+            "- Chaque stratégie = 1 fichier JSON dans data/ (ex: data/SMV.json) contenant : nom, description, " +
+            "champs de confluence personnalisés (ChampsCustomConfig), trades de backtest (Trades), trades du " +
+            "journal (Journal), statistiques calculées.\n" +
+            "- Le registre des noms est metadata/strategies.txt : noms séparés par '%' (ex: 'SMV%FOO%'). " +
+            "C'EST CE FICHIER qui est lu au démarrage pour charger les stratégies : s'il est vide, absent ou " +
+            "corrompu, l'application semble avoir perdu toutes les stratégies alors que les fichiers data/*.json " +
+            "existent toujours.\n" +
+            "- Suppressions et modifications sensibles créent des sauvegardes locales horodatées : " +
+            "data/<Nom>.json.<AAAAMMJJ_HHMMSS>.bak et metadata/strategies.txt.<AAAAMMJJ_HHMMSS>.bak " +
+            "(le contenu AVANT modification). Pour restaurer : retrouver le .bak le plus récent (list_local_folder " +
+            "sur data/ et metadata/), vérifier son contenu (read_local_file), puis remettre le contenu en place " +
+            "(stratégie : recopier le contenu du .bak dans le fichier principal via un fichier reconstruit + " +
+            "reload_application ; pour le registre, retirer de la liste '%' le nom à supprimer). " +
+            "Les trades d'une stratégie supprimée par erreur sont toujours présents dans son .bak JSON.\n" +
+            "- Cloud (fxdataedge.com) : sync automatique des dossiers data/, metadata/, etudes/, Notes/ ; " +
+            "chaque écrasement serveur crée un .bak distant ; l'utilisateur peut lister/restaurer les sauvegardes " +
+            "serveur dans Paramètres → onglet CLOUD (Lister les sauvegardes / Restaurer). Si des stratégies " +
+            "manquent, propose ce chemin en termes simples (« restaure ta sauvegarde via l'onglet CLOUD »).\n" +
+            "- Après TOUTE manipulation/réparation de fichiers, propose (ou fais) un reload_application pour " +
+            "recharger les données à l'écran.\n" +
+            "- Vocabulaire utilisateur recommandé : « je peux récupérer tes stratégies à partir d'une sauvegarde », " +
+            "« je répare la liste de tes stratégies », « je relance l'application pour appliquer » — jamais " +
+            "« strategies.txt », « registre », « JSON » ou autres détails d'implémentation, sauf si l'utilisateur " +
+            "est lui-même technique et le demande explicitement.";
+
 
         /// <summary>
         /// État du workspace renvoyé quand le modèle appelle get_workspace_snapshot :
@@ -268,6 +306,8 @@ namespace backtest.Services
                         return CreateStrategy(call.Arguments);
                     case "delete_strategy":
                         return DeleteStrategy(call.Arguments);
+                    case "reload_application":
+                        return ReloadApplication();
                     case "add_journal_trade":
                         return AddJournalTrade(call.Arguments);
                     case "add_backtest_trade":
@@ -378,6 +418,55 @@ namespace backtest.Services
             if (strategy == null) return AiToolResult.Error("Stratégie introuvable.");
             strategy.SupprimerStrategie();
             return AiToolResult.Success($"Stratégie supprimée: {strategy.Nom}");
+        }
+
+        /// <summary>
+        /// Tool reload_application : redémarre DataEdge pour recharger toutes les
+        /// données (les stratégies ne sont lues qu'au démarrage). Le redémarrage est
+        /// différé de ~2 s pour laisser le temps au résultat de l'outil de remonter
+        /// dans le flux SSE et au message de l'agent de s'afficher.
+        /// </summary>
+        private AiToolResult ReloadApplication()
+        {
+            try
+            {
+                string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+                {
+                    exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                    if (string.IsNullOrWhiteSpace(exePath)) return AiToolResult.Error("Impossible de localiser l'exécutable de l'application.");
+                }
+
+                var app = System.Windows.Application.Current;
+                if (app == null) return AiToolResult.Error("L'application n'est pas disponible pour le redémarrage.");
+
+                var dispatcher = app.Dispatcher;
+                Task.Run(async () =>
+                {
+                    await Task.Delay(2000);
+                    dispatcher.Invoke(() =>
+                    {
+                        try
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = exePath,
+                                UseShellExecute = true
+                            });
+                        }
+                        catch (Exception ex) { FxCloudService.Log("reload_application: lancement echoue: " + ex.Message); }
+                        finally { app.Shutdown(); }
+                    });
+                });
+
+                FxCloudService.Log("Cloud: reload_application -> redemarrage programme");
+                return AiToolResult.Success("L'application va se fermer et redémarrer dans 2 secondes pour recharger toutes les données.");
+            }
+            catch (Exception ex)
+            {
+                FxCloudService.Log("reload_application: " + ex.Message);
+                return AiToolResult.Error("Le redémarrage a échoué : " + ex.Message);
+            }
         }
 
         private AiToolResult AddJournalTrade(JsonElement arguments)

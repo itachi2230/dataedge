@@ -387,6 +387,7 @@ namespace backtest.Services
                 case "delete_week": return "Suppression de la note de la semaine";
                 case "create_strategy": return "Création de la stratégie";
                 case "delete_strategy": return "Suppression de la stratégie";
+                case "reload_application": return "Redémarrage de l'application";
                 case "add_journal_trade": return "Ajout du trade au journal";
                 case "get_economic_calendar": return "Lecture du calendrier économique";
                 case "get_fed_watch": return "Consultation FedWatch (taux Fed)";

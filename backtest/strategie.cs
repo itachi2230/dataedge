@@ -223,8 +223,22 @@ namespace backtest
             }
             if (File.Exists(strategiesFile))
             {
-                // Backup du registre des strategies avant modification
-                FxCloudService.SafeDeleteToLocalBackup(strategiesFile);
+                // IMPORTANT : strategies.txt est le registre charge au demarrage (liste des noms).
+                // Il ne doit JAMAIS etre renomme ni supprime : SafeDeleteToLocalBackup fait un
+                // File.Move, ce qui faisait disparaitre toutes les strategies. On retire
+                // uniquement le nom supprime puis on reecrit le fichier (la sync poussera
+                // automatiquement le nouveau contenu vers le serveur). Une copie .bak
+                // conserve la liste precedente, recuperable via l'onglet CLOUD.
+                try
+                {
+                    string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string backup = strategiesFile + "." + stamp + ".bak";
+                    int n = 1;
+                    while (File.Exists(backup)) backup = strategiesFile + "." + stamp + "_" + n++ + ".bak";
+                    File.Copy(strategiesFile, backup);
+                }
+                catch { /* la copie de sauvegarde ne doit pas bloquer la suppression */ }
+
                 string contenu = File.ReadAllText(strategiesFile);
                 File.WriteAllText(strategiesFile, contenu.Replace($"{Nom}%", string.Empty));
             }
